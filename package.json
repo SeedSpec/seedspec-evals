@@ -2,6 +2,11 @@
   "name": "seedspec-evals",
   "version": "0.1.0-alpha.1",
   "private": true,
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SeedSpec/seedspec-evals.git"
+  },
   "description": "Evaluation labs and Cloudflare Think harness for SeedSpec authoring and implementation.",
   "type": "module",
   "engines": {

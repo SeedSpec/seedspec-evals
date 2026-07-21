@@ -5,6 +5,8 @@
     "rootDir": "src",
     "outDir": "dist",
     "tsBuildInfoFile": "dist/.tsbuildinfo",
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
     "types": ["./worker-configuration.d.ts"]
   },
   "include": ["src/**/*.ts", "worker-configuration.d.ts"],

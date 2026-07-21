@@ -53,6 +53,8 @@ The Worker supports one-run submission plus a Workflow coordinator that fans out
 
 Think lifecycle hooks record observable assistant output, tool calls and results, usage, statuses, timing, and errors in the run Durable Object. A terminal export produces the same content-addressed trace shape used by desktop parity runners. Initial user material remains bound in the immutable envelope instead of being duplicated into every trace. Capture capabilities and limitations are explicit, and model reasoning is never stored.
 
+The Think workspace validator compiles the canonical manifest schema shipped by `@seedspec/protocol`, then applies the package-level reference, semantic, configuration-example, bundled-resource, and digest checks against Think's SQLite-backed workspace. It reports both the protocol-package version and the workspace-adapter version so the result is reproducible without pretending a local Node filesystem exists inside Workers.
+
 ## Model routing
 
 The Worker uses the `AI` binding and `workers-ai-provider` with a gateway ID. The model is a validated run configuration value such as `@cf/...`, `openai/...`, or `anthropic/...`. That provides a common AI SDK `LanguageModel` to Think while retaining AI Gateway logging and routing.

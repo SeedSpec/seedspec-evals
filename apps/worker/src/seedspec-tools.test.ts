@@ -47,10 +47,14 @@ const files = {
 };
 
 describe("Think SeedSpec workspace tools", () => {
-  it("checks manifest shape and referenced files without claiming canonical validation", async () => {
+  it("uses the canonical protocol schema and validates referenced files", async () => {
     await expect(checkPackage(fakeWorkspace(files), ".")).resolves.toMatchObject({
       ok: true,
-      canonicalRuntimeValidation: false,
+      canonicalManifestSchema: {
+        package: "@seedspec/protocol",
+        version: "0.1.0-alpha.2",
+      },
+      packageValidationAdapter: "think-workspace",
       manifest: { id: "dev.seedspec.test-package", kind: "application" },
     });
   });
@@ -62,6 +66,53 @@ describe("Think SeedSpec workspace tools", () => {
       ok: true,
       digest: `sha256:${sha256Hex(packageInput)}`,
       fileCount: 4,
+    });
+  });
+
+  it("rejects fields forbidden by the canonical manifest schema", async () => {
+    const invalid = { ...files, "seedspec.yaml": `${files["seedspec.yaml"]}\nunexpected: true\n` };
+    await expect(checkPackage(fakeWorkspace(invalid), ".")).resolves.toMatchObject({
+      ok: false,
+      errors: [expect.objectContaining({ code: "MANIFEST_SCHEMA_INVALID" })],
+    });
+  });
+
+  it("validates the example against its declared configuration schema", async () => {
+    const invalid = {
+      ...files,
+      "config.schema.json": JSON.stringify({
+        type: "object",
+        required: ["enabled"],
+        properties: { enabled: { type: "boolean" } },
+      }),
+      "config.example.yaml": "enabled: not-a-boolean\n",
+    };
+    await expect(checkPackage(fakeWorkspace(invalid), ".")).resolves.toMatchObject({
+      ok: false,
+      errors: [expect.objectContaining({ code: "CONFIGURATION_EXAMPLE_INVALID" })],
+    });
+  });
+
+  it("applies package semantics beyond JSON Schema", async () => {
+    const duplicateCapabilities = {
+      ...files,
+      "contract.md": "# Contract\n",
+      "seedspec.yaml": files["seedspec.yaml"].replace(
+        "  capabilities: []",
+        [
+          "  capabilities:",
+          "    - id: dev.seedspec.test-capability",
+          "      version: 1.0.0",
+          "      contract: contract.md",
+          "    - id: dev.seedspec.test-capability",
+          "      version: 1.0.0",
+          "      contract: contract.md",
+        ].join("\n"),
+      ),
+    };
+    await expect(checkPackage(fakeWorkspace(duplicateCapabilities), ".")).resolves.toMatchObject({
+      ok: false,
+      errors: [expect.objectContaining({ code: "MANIFEST_SEMANTICS_INVALID" })],
     });
   });
 });

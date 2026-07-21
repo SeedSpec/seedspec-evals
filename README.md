@@ -25,6 +25,8 @@ The first scenario corpus covers a sparse application, a feature for an existing
 - `skills` — evaluator guidance delivered to capable agents
 - `docs` — architecture, lifecycle, and experiment notes
 
+This alpha is distributed as a repository. Its workspace packages are intentionally private and are not published to npm. A public eval library or CLI should be published only when external consumers need a stable programmatic interface rather than a clone-and-run lab.
+
 ## Safety posture
 
 Model execution is opt-in. The initial harness disables Think's workspace shell, does not expose network or browser tools, does not persist model reasoning, and restricts each run to a dedicated Durable Object workspace. Local validation and Worker dry runs do not call a model.

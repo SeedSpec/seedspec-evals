@@ -1,9 +1,12 @@
 import type { WorkspaceLike } from "@cloudflare/think";
+import seedSpecManifestSchema from "@seedspec/protocol/schemas/v0.1/seedspec.schema.json" with { type: "json" };
+import { Ajv2020, type ErrorObject } from "ajv/dist/2020.js";
 import { tool, type ToolSet } from "ai";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 
 const PROTOCOL_VERSION = "0.1";
+const PROTOCOL_PACKAGE_VERSION = "0.1.0-alpha.2";
 const TOOL_FORMAT_VERSION = "0.1.0-alpha.1";
 const KINDS = ["solution", "application", "feature", "workflow", "automation", "configuration", "integration"] as const;
 const AREAS = [
@@ -15,17 +18,23 @@ const AREAS = [
   "agent-ready-handoff",
 ] as const;
 
+type Diagnostic = { code: string; path: string; message: string };
+type Reference = { label: string; path: string; expected: "file" | "exists" };
+type ValidationResult = {
+  ok: boolean;
+  check: string;
+  toolFormatVersion: string;
+  protocolVersion: string;
+  canonicalManifestSchema: { package: string; version: string; schemaId: string };
+  packageValidationAdapter: string;
+  errors: Diagnostic[];
+  warnings: Diagnostic[];
+  next: string[];
+};
+
 const RootSchema = z.string().max(500).default(".").refine(isSafeRoot, "root must be a safe relative workspace path");
-const ManifestSchema = z.object({
-  protocol_version: z.literal(PROTOCOL_VERSION),
-  id: z.string().regex(/^[a-z0-9]+(?:\.[a-z0-9][a-z0-9-]*){2,}$/),
-  name: z.string().min(1).max(100),
-  version: z.string().regex(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/),
-  kind: z.union([z.enum(KINDS), z.string().regex(/^[a-z0-9]+(?:\.[a-z0-9][a-z0-9-]*){2,}$/)]),
-  definition: z.object({ entrypoint: z.string().min(1) }),
-  configuration: z.object({ schema: z.string().min(1), example: z.string().min(1), guide: z.string().min(1).optional() }),
-  provides: z.object({ capabilities: z.array(z.unknown()) }),
-}).passthrough();
+const protocolAjv = createAjv();
+const validateCanonicalManifest = protocolAjv.compile<Record<string, unknown>>(seedSpecManifestSchema);
 
 const KIND_LENSES: Record<string, readonly string[]> = {
   solution: ["compound outcome and boundary", "participants, dependencies, and authority", "coordination and failure behavior", "evidence the overall outcome works"],
@@ -40,7 +49,7 @@ const KIND_LENSES: Record<string, readonly string[]> = {
 export function createSeedSpecTools(workspace: WorkspaceLike, stage: "authorship" | "implementation"): ToolSet {
   const shared = {
     seedspec_package_check: tool({
-      description: "Run a deterministic SeedSpec 0.1 workspace preflight: manifest shape, references, paths, and configuration parseability. This is not the canonical Node runtime validator.",
+      description: "Validate a SeedSpec 0.1 package in the Think workspace using the canonical @seedspec/protocol manifest schema plus package references, semantics, configuration, resources, and digest checks.",
       inputSchema: z.strictObject({ root: RootSchema }),
       execute: async ({ root }) => checkPackage(workspace, root),
     }),
@@ -71,12 +80,15 @@ export function createSeedSpecTools(workspace: WorkspaceLike, stage: "authorship
 }
 
 export async function checkPackage(workspace: WorkspaceLike, root: string): Promise<unknown> {
-  const errors: Array<{ code: string; path: string; message: string }> = [];
-  const warnings: Array<{ code: string; path: string; message: string }> = [];
+  const errors: Diagnostic[] = [];
+  const warnings: Diagnostic[] = [];
   const manifestPath = joinRoot(root, "seedspec.yaml");
   const source = await workspace.readFile(manifestPath);
   if (source === null) {
     return result(false, [{ code: "MANIFEST_MISSING", path: manifestPath, message: "seedspec.yaml was not found." }], warnings);
+  }
+  if (new TextEncoder().encode(source).byteLength > 256 * 1024) {
+    return result(false, [{ code: "MANIFEST_TOO_LARGE", path: manifestPath, message: "seedspec.yaml exceeds 256 KiB." }], warnings);
   }
   let input: unknown;
   try {
@@ -84,37 +96,44 @@ export async function checkPackage(workspace: WorkspaceLike, root: string): Prom
   } catch {
     return result(false, [{ code: "MANIFEST_YAML_INVALID", path: manifestPath, message: "seedspec.yaml is not valid YAML." }], warnings);
   }
-  const parsed = ManifestSchema.safeParse(input);
-  if (!parsed.success) {
-    for (const issue of parsed.error.issues) {
-      errors.push({ code: "MANIFEST_SHAPE_INVALID", path: `${manifestPath}:${issue.path.join(".")}`, message: issue.message });
-    }
+  if (!isRecord(input) || !validateCanonicalManifest(input)) {
+    errors.push(...formatAjvErrors(validateCanonicalManifest.errors, manifestPath, "MANIFEST_SCHEMA_INVALID"));
     return result(false, errors, warnings);
   }
-  const references = collectReferences(parsed.data);
+  const manifest = input;
+  errors.push(...manifestSemanticErrors(manifest).map((message) => ({ code: "MANIFEST_SEMANTICS_INVALID", path: manifestPath, message })));
+  const references = collectReferences(manifest);
   for (const reference of references) {
-    if (!isSafePackagePath(reference)) {
-      errors.push({ code: "PATH_NOT_PORTABLE", path: reference, message: "Referenced paths must be normalized, portable, relative paths." });
+    if (!isSafePackagePath(reference.path)) {
+      errors.push({ code: "PATH_NOT_PORTABLE", path: reference.path, message: `${reference.label} must be a normalized, portable, relative path.` });
       continue;
     }
-    const stat = await workspace.stat(joinRoot(root, reference));
-    if (stat === null) errors.push({ code: "REFERENCE_MISSING", path: reference, message: "The referenced package file does not exist." });
-    else if (stat.type !== "file") errors.push({ code: "REFERENCE_NOT_FILE", path: reference, message: "The referenced package entry is not a regular file." });
+    const stat = await workspace.stat(joinRoot(root, reference.path));
+    if (stat === null) errors.push({ code: "REFERENCE_MISSING", path: reference.path, message: `${reference.label} does not exist.` });
+    else if (reference.expected === "file" && stat.type !== "file") errors.push({ code: "REFERENCE_NOT_FILE", path: reference.path, message: `${reference.label} must reference a regular file.` });
   }
-  for (const configPath of [parsed.data.configuration.schema, parsed.data.configuration.example]) {
-    const content = await workspace.readFile(joinRoot(root, configPath));
-    if (content === null) continue;
-    try { parseYamlOrJson(content, configPath); }
-    catch { errors.push({ code: "CONFIG_DOCUMENT_INVALID", path: configPath, message: "The configuration document cannot be parsed as YAML or JSON." }); }
-  }
-  if (!KINDS.includes(parsed.data.kind as (typeof KINDS)[number])) {
+  errors.push(...await configurationErrors(workspace, root, manifest));
+  errors.push(...await implementationResourceErrors(workspace, root, manifest));
+  const kind = manifest["kind"];
+  if (typeof kind === "string" && !KINDS.includes(kind as (typeof KINDS)[number])) {
     warnings.push({ code: "CUSTOM_KIND_GUIDANCE_LIMITED", path: "seedspec.yaml:kind", message: "The custom kind is valid as a hint, but bundled kind-aware guidance falls back to solution." });
   }
-  return { ...result(errors.length === 0, errors, warnings), manifest: { id: parsed.data.id, version: parsed.data.version, kind: parsed.data.kind }, referencedFiles: references.length };
+  const packageDigest = await digestPackage(workspace, root);
+  if (!isRecord(packageDigest) || packageDigest["ok"] !== true) {
+    const digestCode = isRecord(packageDigest) && typeof packageDigest["code"] === "string" ? packageDigest["code"] : "unknown";
+    errors.push({ code: "PACKAGE_DIGEST_FAILED", path: root, message: `Package digest failed: ${digestCode}.` });
+  }
+  return {
+    ...result(errors.length === 0, errors, warnings),
+    manifest: { id: manifest["id"], version: manifest["version"], kind },
+    referencedEntries: references.length,
+    digest: isRecord(packageDigest) ? packageDigest["digest"] ?? null : null,
+  };
 }
 
 export async function digestPackage(workspace: WorkspaceLike, root: string): Promise<unknown> {
-  const prefix = root === "." ? "" : `${root}/`;
+  const normalizedRoot = root === "." ? "." : root.replace(/\/+$/, "");
+  const prefix = normalizedRoot === "." ? "" : `${normalizedRoot}/`;
   const entries = await workspace.glob(`${prefix}**/*`);
   const files = entries.filter((entry) => entry.type === "file");
   const unsupported = entries.filter((entry) => entry.type === "symlink");
@@ -140,13 +159,15 @@ export async function digestPackage(workspace: WorkspaceLike, root: string): Pro
 async function kindLint(workspace: WorkspaceLike, root: string): Promise<unknown> {
   const source = await workspace.readFile(joinRoot(root, "seedspec.yaml"));
   if (source === null) return { ok: false, diagnostics: [{ code: "MANIFEST_MISSING", severity: "error", message: "seedspec.yaml was not found." }] };
-  let manifest: z.infer<typeof ManifestSchema>;
-  try { manifest = ManifestSchema.parse(parseYaml(source)); }
-  catch { return { ok: false, diagnostics: [{ code: "MANIFEST_INVALID", severity: "error", message: "The manifest must pass package preflight before kind lint." }] }; }
-  const kind = KINDS.includes(manifest.kind as (typeof KINDS)[number]) ? manifest.kind : "solution";
+  let manifest: unknown;
+  try { manifest = parseYaml(source); }
+  catch { return { ok: false, diagnostics: [{ code: "MANIFEST_INVALID", severity: "error", message: "The manifest must pass package validation before kind lint." }] }; }
+  if (!isRecord(manifest) || !validateCanonicalManifest(manifest)) return { ok: false, diagnostics: [{ code: "MANIFEST_INVALID", severity: "error", message: "The manifest must pass package validation before kind lint." }] };
+  const declaredKind = typeof manifest["kind"] === "string" ? manifest["kind"] : "solution";
+  const kind = KINDS.includes(declaredKind as (typeof KINDS)[number]) ? declaredKind : "solution";
   return {
     ok: true,
-    kind: manifest.kind,
+    kind: declaredKind,
     effectiveLens: kind,
     diagnostics: [],
     review: (KIND_LENSES[kind] ?? KIND_LENSES["solution"]!).map((concern) => ({ concern, expectedAssessment: ["established", "unclear", "materially missing", "not material"] })),
@@ -175,40 +196,217 @@ function auditGuidance(area: (typeof AREAS)[number], kind: string, target: strin
       "Inspect package sources before proposing changes; do not invent details to make the package look mature.",
       "Keep speculative work out of the distributable package until the author confirms it.",
       "Ask only questions that materially change behavior, authority, data treatment, accounting, portability, or observable success.",
-      "Use package check, kind lint, and digest before claiming the pass is complete; record limitations of this workspace preflight.",
+      "Use package validation, kind lint, and digest before claiming the pass is complete; record exact tool and protocol-package versions.",
     ],
     objectives: objectives[area],
   };
 }
 
-function result(ok: boolean, errors: unknown[], warnings: unknown[]): { ok: boolean; check: string; toolFormatVersion: string; protocolVersion: string; canonicalRuntimeValidation: false; errors: unknown[]; warnings: unknown[]; next: string[] } {
-  return { ok, check: "seedspec-workspace-preflight", toolFormatVersion: TOOL_FORMAT_VERSION, protocolVersion: PROTOCOL_VERSION, canonicalRuntimeValidation: false, errors, warnings, next: ok ? ["Run canonical `seedspec validate`, `seedspec lint`, and `seedspec digest` outside Think before publication."] : ["Correct deterministic preflight errors, then rerun this tool."] };
+function result(ok: boolean, errors: Diagnostic[], warnings: Diagnostic[]): ValidationResult {
+  return {
+    ok,
+    check: "seedspec-think-workspace-validator",
+    toolFormatVersion: TOOL_FORMAT_VERSION,
+    protocolVersion: PROTOCOL_VERSION,
+    canonicalManifestSchema: {
+      package: "@seedspec/protocol",
+      version: PROTOCOL_PACKAGE_VERSION,
+      schemaId: seedSpecManifestSchema.$id,
+    },
+    packageValidationAdapter: "think-workspace",
+    errors,
+    warnings,
+    next: ok ? ["Use kind lint and the authoring audit as appropriate; run the portable digest before recording completion."] : ["Correct deterministic validation errors, then rerun this tool."],
+  };
 }
 
-function collectReferences(manifest: z.infer<typeof ManifestSchema>): string[] {
-  const record = manifest as Record<string, unknown>;
-  const references = new Set<string>([manifest.definition.entrypoint, manifest.configuration.schema, manifest.configuration.example]);
-  if (manifest.configuration.guide !== undefined) references.add(manifest.configuration.guide);
-  const components = asRecord(record["components"]);
-  for (const value of Object.values(components)) if (typeof value === "string") references.add(value);
-  const profiles = Array.isArray(record["implementation_profiles"]) ? record["implementation_profiles"] : [];
+function collectReferences(manifest: Record<string, unknown>): Reference[] {
+  const definition = asRecord(manifest["definition"]);
+  const configuration = asRecord(manifest["configuration"]);
+  const references: Reference[] = [
+    { label: "definition.entrypoint", path: String(definition["entrypoint"]), expected: "file" },
+    { label: "configuration.schema", path: String(configuration["schema"]), expected: "file" },
+    { label: "configuration.example", path: String(configuration["example"]), expected: "file" },
+  ];
+  if (typeof configuration["guide"] === "string") references.push({ label: "configuration.guide", path: configuration["guide"], expected: "file" });
+  const components = asRecord(manifest["components"]);
+  for (const [name, value] of Object.entries(components)) if (typeof value === "string") references.push({ label: `components.${name}`, path: value, expected: "exists" });
+  const profiles = asRecordArray(manifest["implementation_profiles"]);
   for (const profile of profiles) {
-    const guidance = asRecord(profile)["guidance"];
-    if (typeof guidance === "string") references.add(guidance);
+    const guidance = profile["guidance"];
+    if (typeof guidance === "string") references.push({ label: `implementation_profiles.${String(profile["id"])}.guidance`, path: guidance, expected: "file" });
   }
-  const artifacts = Array.isArray(record["artifacts"]) ? record["artifacts"] : [];
+  for (const capability of asRecordArray(asRecord(manifest["provides"])["capabilities"])) {
+    if (typeof capability["contract"] === "string") references.push({ label: `provides.capabilities.${String(capability["id"])}.contract`, path: capability["contract"], expected: "file" });
+  }
+  const artifacts = asRecordArray(manifest["artifacts"]);
   for (const artifact of artifacts) {
-    const path = asRecord(artifact)["path"];
-    if (typeof path === "string") references.add(path);
+    const path = artifact["path"];
+    if (typeof path === "string") references.push({ label: `artifacts.${String(artifact["id"])}.path`, path, expected: "exists" });
   }
-  return [...references].sort();
+  return references.toSorted((left, right) => compareUtf8(left.path, right.path));
 }
 
-function asRecord(value: unknown): Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
-function parseYamlOrJson(source: string, path: string): unknown { return path.endsWith(".json") ? JSON.parse(source) : parseYaml(source); }
+async function configurationErrors(workspace: WorkspaceLike, root: string, manifest: Record<string, unknown>): Promise<Diagnostic[]> {
+  const errors: Diagnostic[] = [];
+  const configuration = asRecord(manifest["configuration"]);
+  const schemaPath = String(configuration["schema"]);
+  const examplePath = String(configuration["example"]);
+  const schemaSource = await workspace.readFile(joinRoot(root, schemaPath));
+  const exampleSource = await workspace.readFile(joinRoot(root, examplePath));
+  if (schemaSource === null || exampleSource === null) return errors;
+  let configurationSchema: unknown;
+  try { configurationSchema = JSON.parse(schemaSource) as unknown; }
+  catch { return [{ code: "CONFIGURATION_SCHEMA_INVALID", path: schemaPath, message: "The configuration schema must be valid JSON." }]; }
+  if (!isRecord(configurationSchema)) return [{ code: "CONFIGURATION_SCHEMA_INVALID", path: schemaPath, message: "The configuration schema must be a JSON object." }];
+  let validateConfiguration;
+  try { validateConfiguration = createAjv().compile(configurationSchema); }
+  catch (error) { return [{ code: "CONFIGURATION_SCHEMA_INVALID", path: schemaPath, message: error instanceof Error ? error.message : "The configuration schema could not be compiled." }]; }
+  let example: unknown;
+  try { example = parseYaml(exampleSource); }
+  catch { return [{ code: "CONFIGURATION_EXAMPLE_INVALID", path: examplePath, message: "The example configuration is not valid YAML." }]; }
+  if (!isRecord(example)) return [{ code: "CONFIGURATION_EXAMPLE_INVALID", path: examplePath, message: "The example configuration must be a YAML mapping." }];
+  if (!validateConfiguration(example)) errors.push(...formatAjvErrors(validateConfiguration.errors, examplePath, "CONFIGURATION_EXAMPLE_INVALID"));
+  return errors;
+}
+
+function manifestSemanticErrors(manifest: Record<string, unknown>): string[] {
+  const details: string[] = [];
+  const required = asRecordArray(asRecord(manifest["requires"])["capabilities"]);
+  const provided = asRecordArray(asRecord(manifest["provides"])["capabilities"]);
+  for (const id of duplicateIds(required)) details.push(`requires.capabilities repeats ${id}`);
+  for (const id of duplicateIds(provided)) details.push(`provides.capabilities repeats ${id}`);
+  for (const id of duplicateIds(asRecordArray(manifest["decisions"]))) details.push(`decisions repeats ${id}`);
+
+  const resources = asRecordArray(asRecord(manifest["implementation_resources"])["resources"]);
+  const resourceIds = new Set(resources.map((resource) => String(resource["id"])));
+  const profiles = asRecordArray(manifest["implementation_profiles"]);
+  for (const id of duplicateIds(profiles)) details.push(`implementation_profiles repeats ${id}`);
+  for (const profile of profiles) {
+    const profileId = String(profile["id"]);
+    const conditions = [...asRecordArray(profile["prerequisites"]), ...asRecordArray(profile["blockers"])];
+    for (const id of duplicateIds(conditions)) details.push(`implementation_profiles.${profileId} repeats condition ${id}`);
+    for (const resourceId of stringArray(profile["implementation_resources"])) {
+      if (!resourceIds.has(resourceId)) details.push(`implementation_profiles.${profileId} references unknown implementation resource ${resourceId}`);
+    }
+  }
+
+  const artifacts = asRecordArray(manifest["artifacts"]);
+  const artifactIds = new Set(artifacts.map((artifact) => String(artifact["id"])));
+  for (const id of duplicateIds(artifacts)) details.push(`artifacts repeats ${id}`);
+  for (const relationship of asRecordArray(manifest["relationships"])) {
+    const from = String(relationship["from"]);
+    const to = String(relationship["to"]);
+    if (!artifactIds.has(from)) details.push(`relationships references unknown source artifact ${from}`);
+    if (!artifactIds.has(to)) details.push(`relationships references unknown target artifact ${to}`);
+  }
+
+  const conflicts = asRecord(manifest["conflicts"]);
+  const packageConflicts = asRecordArray(conflicts["packages"]);
+  if (packageConflicts.some((conflict) => conflict["id"] === manifest["id"])) details.push("a package cannot conflict with itself");
+  for (const id of duplicateIds(packageConflicts)) details.push(`conflicts.packages repeats ${id}`);
+  for (const id of duplicateIds(asRecordArray(conflicts["capabilities"]))) details.push(`conflicts.capabilities repeats ${id}`);
+  return [...new Set(details)];
+}
+
+async function implementationResourceErrors(workspace: WorkspaceLike, root: string, manifest: Record<string, unknown>): Promise<Diagnostic[]> {
+  const declaration = asRecord(manifest["implementation_resources"]);
+  if (Object.keys(declaration).length === 0) return [];
+  const errors: Diagnostic[] = [];
+  const resources = asRecordArray(declaration["resources"]);
+  const catalogs = asRecordArray(declaration["catalogs"]);
+  for (const id of duplicateIds(resources)) errors.push({ code: "IMPLEMENTATION_RESOURCE_INVALID", path: "seedspec.yaml:implementation_resources.resources", message: `Resource ID repeats: ${id}.` });
+  for (const id of duplicateIds(catalogs)) errors.push({ code: "IMPLEMENTATION_RESOURCE_INVALID", path: "seedspec.yaml:implementation_resources.catalogs", message: `Catalog ID repeats: ${id}.` });
+  if (declaration["additional_guidance"] === "none" && catalogs.length > 0) errors.push({ code: "IMPLEMENTATION_RESOURCE_INVALID", path: "seedspec.yaml:implementation_resources", message: "Catalogs require additional_guidance: agent-delegated." });
+  for (const catalog of catalogs) {
+    const url = catalog["url"];
+    if (typeof url === "string" && !isSafeHttpsUrl(url)) errors.push({ code: "IMPLEMENTATION_RESOURCE_URL_INVALID", path: `seedspec.yaml:implementation_resources.catalogs.${String(catalog["id"])}`, message: "Catalog URLs must use public HTTPS endpoints." });
+  }
+  for (const resource of resources) {
+    const id = String(resource["id"]);
+    const canonical = asRecord(resource["canonical"]);
+    if (typeof canonical["manifest_url"] === "string" && !isSafeHttpsUrl(canonical["manifest_url"])) errors.push({ code: "IMPLEMENTATION_RESOURCE_URL_INVALID", path: `seedspec.yaml:implementation_resources.resources.${id}.canonical`, message: "Canonical manifest URLs must use public HTTPS endpoints." });
+    const bundled = asRecord(resource["bundled"]);
+    if (Object.keys(bundled).length === 0) continue;
+    const bundlePath = String(bundled["path"]).replace(/\/+$/, "");
+    const bundleStat = await workspace.stat(joinRoot(root, bundlePath));
+    if (bundleStat === null || bundleStat.type !== "directory") {
+      errors.push({ code: "IMPLEMENTATION_RESOURCE_BUNDLE_INVALID", path: bundlePath, message: `Bundled resource ${id} must reference a directory.` });
+      continue;
+    }
+    if (bundled["compatibility"] === "exact" && bundled["version"] !== resource["version"]) errors.push({ code: "IMPLEMENTATION_RESOURCE_BUNDLE_INVALID", path: bundlePath, message: `Bundled resource ${id} declares exact compatibility with a different version.` });
+    const entrypoint = String(resource["entrypoint"]);
+    const entrypointPath = joinRoot(joinRoot(root, bundlePath), entrypoint);
+    const entrypointStat = await workspace.stat(entrypointPath);
+    if (entrypointStat === null || entrypointStat.type !== "file") errors.push({ code: "IMPLEMENTATION_RESOURCE_BUNDLE_INVALID", path: entrypointPath, message: `Bundled resource ${id} entrypoint must reference a file.` });
+    else if (resource["kind"] === "skill") {
+      if (entrypoint.split("/").at(-1) !== "SKILL.md") errors.push({ code: "IMPLEMENTATION_RESOURCE_SKILL_INVALID", path: entrypointPath, message: `Skill resource ${id} entrypoint must be named SKILL.md.` });
+      const skillSource = await workspace.readFile(entrypointPath);
+      if (skillSource !== null && !hasValidSkillFrontmatter(skillSource)) errors.push({ code: "IMPLEMENTATION_RESOURCE_SKILL_INVALID", path: entrypointPath, message: `Skill resource ${id} requires YAML frontmatter with non-empty name and description.` });
+    }
+    const digest = await digestPackage(workspace, joinRoot(root, bundlePath));
+    const actualDigest = isRecord(digest) ? digest["digest"] : null;
+    if (actualDigest !== bundled["digest"]) errors.push({ code: "IMPLEMENTATION_RESOURCE_DIGEST_MISMATCH", path: bundlePath, message: `Bundled resource ${id} digest does not match its contents.` });
+  }
+  return errors;
+}
+
+function createAjv(): Ajv2020 {
+  const ajv = new Ajv2020({ allErrors: true, strict: false });
+  ajv.addFormat("uri", { type: "string", validate: isAbsoluteUri });
+  return ajv;
+}
+
+function formatAjvErrors(errors: ErrorObject[] | null | undefined, path: string, code: string): Diagnostic[] {
+  return (errors ?? []).map((error) => ({
+    code,
+    path: `${path}${error.instancePath || "/"}`,
+    message: `${error.message ?? "schema validation failed"}${typeof error.params["additionalProperty"] === "string" ? ` (${error.params["additionalProperty"]})` : ""}`,
+  }));
+}
+
+function duplicateIds(items: Record<string, unknown>[]): string[] {
+  const seen = new Set<string>();
+  const duplicate = new Set<string>();
+  for (const item of items) {
+    const id = String(item["id"]);
+    if (seen.has(id)) duplicate.add(id);
+    seen.add(id);
+  }
+  return [...duplicate];
+}
+
+function hasValidSkillFrontmatter(source: string): boolean {
+  if (!source.startsWith("---\n")) return false;
+  const end = source.indexOf("\n---", 4);
+  if (end === -1) return false;
+  try {
+    const frontmatter: unknown = parseYaml(source.slice(4, end));
+    return isRecord(frontmatter) && typeof frontmatter["name"] === "string" && frontmatter["name"].trim().length > 0 && typeof frontmatter["description"] === "string" && frontmatter["description"].trim().length > 0;
+  } catch { return false; }
+}
+
+function isSafeHttpsUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    if (url.protocol !== "https:" || host === "localhost" || host.endsWith(".localhost") || host === "::1" || host === "[::1]") return false;
+    return !/^(?:10\.|127\.|169\.254\.|192\.168\.|172\.(?:1[6-9]|2[0-9]|3[01])\.)/.test(host);
+  } catch { return false; }
+}
+
+function isAbsoluteUri(value: string): boolean {
+  try { return new URL(value).protocol.length > 1; }
+  catch { return false; }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
+function asRecord(value: unknown): Record<string, unknown> { return isRecord(value) ? value : {}; }
+function asRecordArray(value: unknown): Record<string, unknown>[] { return Array.isArray(value) ? value.filter(isRecord) : []; }
+function stringArray(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []; }
 function isSafeRoot(root: string): boolean { return root === "." || isSafePackagePath(root); }
 function isSafePackagePath(path: string): boolean { return /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*\/?$/.test(path) && !path.includes("\\") && !path.includes("\0"); }
-function joinRoot(root: string, path: string): string { return root === "." ? path : `${root}/${path}`; }
+function joinRoot(root: string, path: string): string { const normalizedRoot = root === "." ? "." : root.replace(/\/+$/, ""); return normalizedRoot === "." ? path : `${normalizedRoot}/${path}`; }
 function compareUtf8(left: string, right: string): number { const encoder = new TextEncoder(); const a = encoder.encode(left); const b = encoder.encode(right); for (let index = 0; index < Math.min(a.length, b.length); index += 1) { const delta = (a[index] ?? 0) - (b[index] ?? 0); if (delta !== 0) return delta; } return a.length - b.length; }
 function findCaseCollisions(paths: string[]): string[] { const seen = new Map<string, string>(); const collisions = new Set<string>(); for (const path of paths) { const key = path.toLowerCase(); const previous = seen.get(key); if (previous !== undefined && previous !== path) { collisions.add(previous); collisions.add(path); } else seen.set(key, path); } return [...collisions].sort(); }
 async function sha256Bytes(bytes: Uint8Array): Promise<string> { const digest = await crypto.subtle.digest("SHA-256", Uint8Array.from(bytes).buffer); return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join(""); }

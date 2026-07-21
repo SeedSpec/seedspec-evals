@@ -96,7 +96,7 @@ export async function createExperimentPlan(options: PlanOptions): Promise<Experi
               version: HARNESS_VERSION,
               configuration: { bash: false, network: false, reasoningPersistence: false },
             },
-            { name: "seedspec-package-check", version: HARNESS_VERSION, configuration: { protocolVersion: "0.1", canonicalRuntimeValidation: false } },
+            { name: "seedspec-package-check", version: HARNESS_VERSION, configuration: { protocolVersion: "0.1", protocolPackage: "@seedspec/protocol@0.1.0-alpha.2", adapter: "think-workspace" } },
             { name: "seedspec-package-digest", version: HARNESS_VERSION, configuration: { algorithm: "seedspec-package-sha256-v1" } },
             ...(options.stage === "authorship" ? [
               { name: "seedspec-kind-lint", version: HARNESS_VERSION },
