@@ -1,0 +1,4 @@
+interface:
+  display_name: "Evaluate SeedSpec Implementation"
+  short_description: "Score an implementation against packaged intent"
+  default_prompt: "Use $evaluate-seedspec-implementation to assess this realization of a SeedSpec package."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Evaluate SeedSpec Authorship"
+  short_description: "Assess whether authoring produced a stronger package"
+  default_prompt: "Use $evaluate-seedspec-authorship to assess this SeedSpec authoring run."

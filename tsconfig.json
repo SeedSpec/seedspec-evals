@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/eval-core" },
+    { "path": "packages/case-library" },
+    { "path": "packages/harness" },
+    { "path": "packages/evaluators" },
+    { "path": "packages/cli" },
+    { "path": "apps/worker" }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@seedspec/eval-worker",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "cf-typegen": "wrangler types",
+    "dev": "wrangler dev",
+    "deploy:dry": "wrangler deploy --dry-run --outdir dist/worker"
+  },
+  "dependencies": {
+    "@cloudflare/think": "0.13.0",
+    "@seedspec/eval-core": "0.1.0-alpha.1",
+    "@seedspec/eval-harness": "0.1.0-alpha.1",
+    "agents": "0.17.4",
+    "ai": "6.0.233",
+    "workers-ai-provider": "3.3.1",
+    "zod": "4.4.3"
+  },
+  "devDependencies": { "wrangler": "4.112.0" }
+}

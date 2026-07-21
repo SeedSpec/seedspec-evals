@@ -1,0 +1,33 @@
+{
+  "name": "seedspec-evals",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "description": "Evaluation labs and Cloudflare Think harness for SeedSpec authoring and implementation.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "typecheck": "tsc -b --pretty false",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "worker:types": "npm run cf-typegen --workspace @seedspec/eval-worker",
+    "worker:dry-run": "npm run deploy:dry --workspace @seedspec/eval-worker",
+    "check": "npm run typecheck && npm run lint && npm test && npm run worker:dry-run",
+    "eval": "node packages/cli/dist/index.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.10.1",
+    "eslint": "10.7.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.65.0",
+    "vitest": "4.1.10"
+  }
+}

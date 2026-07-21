@@ -1,0 +1,6 @@
+# Generate a random local service token of at least 32 characters.
+SEEDSPEC_EVAL_API_TOKEN=replace-with-a-random-local-token-at-least-32-characters
+
+# Model execution uses the Cloudflare AI binding and AI Gateway unified billing.
+# No provider API key is required for that path. Add future service credentials
+# here only for local development, and never commit .dev.vars.

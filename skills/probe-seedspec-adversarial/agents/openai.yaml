@@ -1,0 +1,4 @@
+interface:
+  display_name: "Probe SeedSpec Adversarially"
+  short_description: "Test unsafe and nonconformant SeedSpec inputs"
+  default_prompt: "Use $probe-seedspec-adversarial to test this SeedSpec input for unsafe behavior."
