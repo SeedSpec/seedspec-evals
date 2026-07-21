@@ -13,6 +13,9 @@
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["SeedSpecEvalAgent"] }
   ],
+  "workflows": [
+    { "binding": "EVAL_MATRIX", "name": "seedspec-eval-matrix", "class_name": "SeedSpecEvalMatrixWorkflow" }
+  ],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,

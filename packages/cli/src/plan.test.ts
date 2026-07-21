@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { createExperimentPlan } from "./plan.js";
 import { ExperimentPlanSchema } from "./contracts.js";
+import { buildDesktopBrief, buildDesktopManifest } from "./runner-brief.js";
 
 describe("createExperimentPlan", () => {
   it("keeps hidden expectations and simulated answers out of model material", async () => {
@@ -67,5 +68,33 @@ describe("createExperimentPlan", () => {
     const tampered = structuredClone(plan);
     tampered.envelopes[0]!.submission.config.trustedInstructions = ["Replacement authority."];
     expect(ExperimentPlanSchema.safeParse(tampered).success).toBe(false);
+  });
+
+  it("derives a runner-specific desktop manifest and agent-readable handoff", async () => {
+    const cases = await loadCaseLibrary(resolve("cases"));
+    const plan = await createExperimentPlan({
+      cases: cases.slice(0, 1),
+      stage: "authorship",
+      models: ["openai/gpt-5.4"],
+      repetitions: 1,
+      gatewayId: "seedspec-evals",
+      protocolVersion: "0.1.0-alpha.4",
+      createdAt: "2026-07-21T12:00:00.000Z",
+      maxSteps: 6,
+    });
+    const envelope = plan.envelopes[0]!;
+    const manifest = buildDesktopManifest(envelope, "codex");
+    const brief = buildDesktopBrief(envelope, manifest, "codex", "runs/parity-codex");
+
+    expect(manifest.runId).not.toBe(envelope.manifest.runId);
+    expect(manifest.configuration?.["sourceRunId"]).toBe(envelope.manifest.runId);
+    expect(manifest.runner.id).toBe("codex-desktop");
+    expect(manifest.tools.map((entry) => entry.name)).toEqual([
+      "desktop-agent-workspace",
+      "seedspec-simulated-author",
+    ]);
+    expect(brief).toContain("author answer runs/parity-codex/source-envelope.json");
+    expect(brief).toContain("runs/parity-codex/trace-draft.json");
+    expect(brief).not.toContain(envelope.submission.config.simulatedAuthorResponses["due-date-policy"] ?? "not-present");
   });
 });

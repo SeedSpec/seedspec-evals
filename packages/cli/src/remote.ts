@@ -1,4 +1,4 @@
-import type { ExecutionEnvelope } from "./contracts.js";
+import type { ExecutionEnvelope, ExperimentPlan } from "./contracts.js";
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 
@@ -35,6 +35,30 @@ export async function cancelRemoteSubmission(
     `/v1/runs/${encodeURIComponent(runId)}/submissions/${encodeURIComponent(submissionId)}`,
     { method: "DELETE" },
   );
+}
+
+export async function exportRemoteTrace(endpoint: string, runId: string): Promise<unknown> {
+  return requestJson(endpoint, `/v1/runs/${encodeURIComponent(runId)}/trace`, { method: "GET" });
+}
+
+export async function startRemoteMatrix(endpoint: string, plan: ExperimentPlan): Promise<unknown> {
+  return requestJson(endpoint, "/v1/matrices", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ plan, confirmModelExecution: true }),
+  });
+}
+
+export async function inspectRemoteMatrix(endpoint: string, planId: string): Promise<unknown> {
+  return requestJson(endpoint, `/v1/matrices/${encodeURIComponent(planId)}`, { method: "GET" });
+}
+
+export async function cancelRemoteMatrix(endpoint: string, plan: ExperimentPlan): Promise<unknown> {
+  return requestJson(endpoint, `/v1/matrices/${encodeURIComponent(plan.planId)}`, {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ plan }),
+  });
 }
 
 async function requestJson(endpoint: string, path: string, init: RequestInit): Promise<unknown> {

@@ -17,6 +17,7 @@ import {
   canTransitionRunState,
   computeArtifactId,
   computeRunId,
+  createTrace,
   createArtifact,
   createRunManifest,
   createRunnableCaseView,
@@ -27,6 +28,7 @@ import {
   parseRunManifest,
   sha256Hex,
   stableJson,
+  TraceSchema,
 } from "../src/index.js";
 
 const DIGEST_A = `sha256:${"a".repeat(64)}` as const;
@@ -428,5 +430,43 @@ describe("congruency and adversarial findings", () => {
       assessment: "resisted",
       summary: "The injected instruction did not cross the trust boundary.",
     }).assessment).toBe("resisted");
+  });
+});
+
+describe("observable traces", () => {
+  it("content-addresses observable events and rejects hidden reasoning fields", () => {
+    const runId = createRunManifest(manifestBody()).runId;
+    const trace = createTrace({
+      schemaVersion: 1,
+      runId,
+      runner,
+      model,
+      startedAt: NOW,
+      finishedAt: LATER,
+      status: "succeeded",
+      capture: {
+        messages: "full",
+        toolCalls: "names-only",
+        toolResults: "digests",
+        timing: "event",
+        usage: "tokens",
+        artifacts: "paths-and-digests",
+        reasoning: "not-collected",
+      },
+      events: [{
+        sequence: 0,
+        timestamp: NOW,
+        kind: "status",
+        actor: "runner",
+        name: "run-started",
+        data: {},
+      }],
+      limitations: [],
+      redactions: [],
+    });
+
+    expect(TraceSchema.parse(trace).traceId).toMatch(/^trace_[a-f0-9]{64}$/);
+    expect(TraceSchema.safeParse({ ...trace, reasoning: "private thoughts" }).success).toBe(false);
+    expect(TraceSchema.safeParse({ ...trace, events: [{ ...trace.events[0], sequence: 1 }] }).success).toBe(false);
   });
 });

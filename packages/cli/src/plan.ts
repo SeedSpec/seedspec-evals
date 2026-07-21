@@ -90,11 +90,19 @@ export async function createExperimentPlan(options: PlanOptions): Promise<Experi
             routing: { gateway: options.gatewayId },
           },
           harness: { name: "seedspec-eval-harness", version: HARNESS_VERSION },
-          tools: [{
-            name: "think-workspace",
-            version: HARNESS_VERSION,
-            configuration: { bash: false, network: false, reasoningPersistence: false },
-          }],
+          tools: [
+            {
+              name: "think-workspace",
+              version: HARNESS_VERSION,
+              configuration: { bash: false, network: false, reasoningPersistence: false },
+            },
+            { name: "seedspec-package-check", version: HARNESS_VERSION, configuration: { protocolVersion: "0.1", canonicalRuntimeValidation: false } },
+            { name: "seedspec-package-digest", version: HARNESS_VERSION, configuration: { algorithm: "seedspec-package-sha256-v1" } },
+            ...(options.stage === "authorship" ? [
+              { name: "seedspec-kind-lint", version: HARNESS_VERSION },
+              { name: "seedspec-audit-guidance", version: HARNESS_VERSION, configuration: { areas: 6 } },
+            ] : []),
+          ],
           evaluators: [
             { id: "seedspec-eval-deterministic", kind: "deterministic", version: EVALUATION_VERSION },
             { id: `seedspec-${options.stage}-rubric`, kind: "rubric", version: EVALUATION_VERSION },

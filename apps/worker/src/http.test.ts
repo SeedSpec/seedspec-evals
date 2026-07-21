@@ -27,6 +27,10 @@ describe("Worker HTTP helpers", () => {
       "DELETE",
     ]);
     expect(matchApiRoute("/v1/runs/not-a-run/config")).toBeNull();
+    expect(matchApiRoute(`/v1/runs/${RUN_ID}/trace`)).toEqual({ kind: "run-trace", runId: RUN_ID });
+    const planId = `plan_${"c".repeat(64)}`;
+    expect(matchApiRoute("/v1/matrices")).toEqual({ kind: "matrices" });
+    expect(matchApiRoute(`/v1/matrices/${planId}`)).toEqual({ kind: "matrix", planId });
   });
 
   it("validates and defaults submission listing queries", () => {

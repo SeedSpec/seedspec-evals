@@ -4,6 +4,7 @@ import {
   JsonObjectSchema,
   RunManifestSchema,
   RunIdSchema,
+  contentId,
   sha256Hex,
   stableJson,
   type JsonValue,
@@ -23,6 +24,7 @@ const MAX_TRUSTED_INSTRUCTION_BYTES = 32 * 1024;
 const MAX_UNTRUSTED_MATERIAL_BYTES = 256 * 1024;
 const MAX_SIMULATED_AUTHOR_RESPONSE_BYTES = 128 * 1024;
 const MAX_METADATA_BYTES = 16 * 1024;
+export const MAX_MATRIX_PLAN_BYTES = 900 * 1024;
 
 const utf8Length = (value: string): number => new TextEncoder().encode(value).byteLength;
 
@@ -140,6 +142,78 @@ export const SubmitRunRequestSchema = z
     }
   });
 
+export const ExecutionEnvelopeSchema = z
+  .strictObject({
+    schemaVersion: z.literal(1),
+    manifest: RunManifestSchema,
+    submission: z.strictObject({
+      config: RunAgentConfigSchema,
+      idempotencyKey: IdempotencyKeySchema,
+      metadata: JsonObjectSchema.optional(),
+    }),
+  })
+  .superRefine((envelope, context) => {
+    const bound = SubmitRunRequestSchema.safeParse({
+      manifest: envelope.manifest,
+      ...envelope.submission,
+    });
+    if (!bound.success) {
+      context.addIssue({
+        code: "custom",
+        message: "submission inputs must be bound to the immutable run manifest",
+        path: ["submission"],
+      });
+    }
+  });
+
+export const ExperimentPlanSchema = z
+  .strictObject({
+    schemaVersion: z.literal(1),
+    planId: z.string().regex(/^plan_[a-f0-9]{64}$/),
+    createdAt: z.iso.datetime({ offset: true }),
+    envelopes: z.array(ExecutionEnvelopeSchema).min(1).max(10_000),
+  })
+  .superRefine((plan, context) => {
+    const body = { createdAt: plan.createdAt, envelopes: plan.envelopes };
+    const expected = contentId("plan", body as unknown as JsonValue);
+    if (plan.planId !== expected) {
+      context.addIssue({
+        code: "custom",
+        message: "planId does not match the experiment plan content",
+        path: ["planId"],
+      });
+    }
+  });
+
+export const MatrixStartRequestSchema = z
+  .strictObject({
+    plan: ExperimentPlanSchema,
+    confirmModelExecution: z.literal(true),
+  })
+  .superRefine((request, context) => {
+    if (request.plan.envelopes.length > 100) {
+      context.addIssue({
+        code: "custom",
+        message: "a matrix execution may contain at most 100 runs",
+        path: ["plan", "envelopes"],
+      });
+    }
+    if (utf8Length(JSON.stringify(request.plan)) > MAX_MATRIX_PLAN_BYTES) {
+      context.addIssue({
+        code: "custom",
+        message: "the matrix plan exceeds the Workflow payload safety limit",
+        path: ["plan"],
+      });
+    }
+  });
+
+export const MatrixPlanRequestSchema = z
+  .strictObject({ plan: ExperimentPlanSchema })
+  .refine((request) => utf8Length(JSON.stringify(request.plan)) <= MAX_MATRIX_PLAN_BYTES, {
+    message: "the matrix plan exceeds the Workflow payload safety limit",
+    path: ["plan"],
+  });
+
 function addManifestBindingIssues(
   request: {
     manifest: z.infer<typeof RunManifestSchema>;
@@ -246,6 +320,10 @@ export const ListSubmissionsQuerySchema = z.strictObject({
 export type RunAgentConfig = z.infer<typeof RunAgentConfigSchema>;
 export type ConfigureRunRequest = z.infer<typeof ConfigureRunRequestSchema>;
 export type SubmitRunRequest = z.infer<typeof SubmitRunRequestSchema>;
+export type ExecutionEnvelope = z.infer<typeof ExecutionEnvelopeSchema>;
+export type ExperimentPlan = z.infer<typeof ExperimentPlanSchema>;
+export type MatrixStartRequest = z.infer<typeof MatrixStartRequestSchema>;
+export type MatrixPlanRequest = z.infer<typeof MatrixPlanRequestSchema>;
 export type SubmissionStatus = z.infer<typeof SubmissionStatusSchema>;
 export type ListSubmissionsQuery = z.infer<typeof ListSubmissionsQuerySchema>;
 

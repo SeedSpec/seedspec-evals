@@ -1,5 +1,7 @@
 import {
   HARNESS_VERSION,
+  MatrixPlanRequestSchema,
+  MatrixStartRequestSchema,
   parseConfigureRunRequest,
   parseSubmitRunRequest,
 } from "@seedspec/eval-harness";
@@ -8,6 +10,7 @@ import { getAgentByName } from "agents";
 import type { SeedSpecEvalAgent } from "./agent.js";
 import {
   HttpError,
+  MAX_MATRIX_REQUEST_BODY_BYTES,
   authenticateRequest,
   allowedMethodsForRoute,
   matchApiRoute,
@@ -19,6 +22,7 @@ import {
 import { errorClass, structuredLog } from "./logging.js";
 
 export { SeedSpecEvalAgent } from "./agent.js";
+export { SeedSpecEvalMatrixWorkflow } from "./matrix-workflow.js";
 
 type AgentStub = DurableObjectStub<SeedSpecEvalAgent>;
 
@@ -68,7 +72,7 @@ async function resolveAgent(env: Env, runId: string): Promise<AgentStub> {
 async function handleRunRoute(
   request: Request,
   env: Env,
-  route: Exclude<ApiRoute, { kind: "service-health" }>,
+  route: Extract<ApiRoute, { runId: string }>,
   requestId: string,
 ): Promise<Response> {
   const agent = await resolveAgent(env, route.runId);
@@ -77,6 +81,16 @@ async function handleRunRoute(
     if (request.method !== "GET") return methodNotAllowed(requestId, ["GET"]);
     const health = await agent.getRunHealth();
     return jsonResponse({ ok: true, health });
+  }
+
+  if (route.kind === "run-trace") {
+    if (request.method !== "GET") return methodNotAllowed(requestId, ["GET"]);
+    const result = await agent.exportRunTrace();
+    if (!result.ok || result.traceJson === null) {
+      const code = result.error?.code ?? "trace_unavailable";
+      return errorResponse(requestId, code === "trace_not_final" ? 409 : 404, code, result.error?.message ?? "The trace is unavailable.");
+    }
+    return jsonResponse({ ok: true, trace: JSON.parse(result.traceJson) as unknown });
   }
 
   if (route.kind === "run-config") {
@@ -158,6 +172,53 @@ async function handleRunRoute(
   });
 }
 
+async function handleMatrixRoute(
+  request: Request,
+  env: Env,
+  route: Extract<ApiRoute, { kind: "matrices" | "matrix" }>,
+  requestId: string,
+): Promise<Response> {
+  if (route.kind === "matrices") {
+    if (request.method !== "POST") return methodNotAllowed(requestId, ["POST"]);
+    const parsed = MatrixStartRequestSchema.safeParse(await readBoundedJson(request, MAX_MATRIX_REQUEST_BODY_BYTES));
+    if (!parsed.success) return errorResponse(requestId, 400, "invalid_matrix_request", "The matrix plan is invalid or model execution was not explicitly confirmed.");
+    const instances = await env.EVAL_MATRIX.createBatch([{ id: parsed.data.plan.planId, params: parsed.data }]);
+    const status = await instances[0]?.status();
+    return jsonResponse({ ok: true, planId: parsed.data.plan.planId, workflow: publicWorkflowStatus(status) }, 202);
+  }
+
+  if (request.method === "GET") {
+    const instance = await env.EVAL_MATRIX.get(route.planId);
+    return jsonResponse({ ok: true, planId: route.planId, workflow: publicWorkflowStatus(await instance.status()) });
+  }
+  if (request.method !== "DELETE") return methodNotAllowed(requestId, ["GET", "DELETE"]);
+  const parsed = MatrixPlanRequestSchema.safeParse(await readBoundedJson(request, MAX_MATRIX_REQUEST_BODY_BYTES));
+  if (!parsed.success || parsed.data.plan.planId !== route.planId) {
+    return errorResponse(requestId, 400, "invalid_matrix_request", "Cancellation requires the matching immutable plan.");
+  }
+  const instance = await env.EVAL_MATRIX.get(route.planId);
+  await instance.terminate();
+  let childCancellations = 0;
+  await Promise.all(parsed.data.plan.envelopes.map(async (envelope) => {
+    const agent = await resolveAgent(env, envelope.manifest.runId);
+    const active = await agent.listRunSubmissions({ status: ["pending", "running"], limit: 100 });
+    await Promise.all(active.map(async (submission) => {
+      await agent.cancelRunSubmission(submission.submissionId);
+      childCancellations += 1;
+    }));
+  }));
+  return jsonResponse({ ok: true, planId: route.planId, cancellationRequested: true, childCancellations });
+}
+
+function publicWorkflowStatus(status: unknown): unknown {
+  if (typeof status !== "object" || status === null) return { status: "unknown" };
+  const value = status as Record<string, unknown>;
+  return {
+    status: typeof value["status"] === "string" ? value["status"] : "unknown",
+    ...(value["output"] === undefined ? {} : { output: value["output"] }),
+  };
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const requestId = crypto.randomUUID();
@@ -202,7 +263,9 @@ export default {
             { "www-authenticate": "Bearer" },
           );
         } else {
-          response = await handleRunRoute(request, env, route, requestId);
+          response = route.kind === "matrices" || route.kind === "matrix"
+            ? await handleMatrixRoute(request, env, route, requestId)
+            : await handleRunRoute(request, env, route, requestId);
         }
       }
     } catch (error) {

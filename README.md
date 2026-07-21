@@ -52,8 +52,28 @@ node packages/cli/dist/index.js experiment plan \
 
 The plan command writes immutable execution envelopes beneath `runs/`, which is ignored by Git. Submitting one envelope is a separate operation and requires `--confirm-model-execution`.
 
+## Run the same experiment in Codex, Claude Code, and Think
+
+Generate a copy/paste brief for a clean Codex desktop task:
+
+```sh
+node packages/cli/dist/index.js runner brief runs/<plan>.json --runner codex --stdout
+```
+
+For Claude Code, replace `codex` with `claude-code`. The brief carries the reviewed case, shared trusted instructions, requested model, required outputs, simulated-author boundary, and portable observable-trace contract. Select the same underlying model and snapshot. If it is unavailable, create a new run identity for the actual model rather than calling the run matched.
+
+Run the matching Think matrix only after reviewing the plan:
+
+```sh
+node packages/cli/dist/index.js matrix start runs/<plan>.json \
+  --endpoint <worker-url> \
+  --confirm-model-execution
+```
+
+Think stores observable execution events durably with the run. Codex and Claude Code write the same trace shape from the generated brief. Traces include messages, tool activity, timing, usage when available, artifacts, errors, redactions, and capture limitations; hidden reasoning is never collected. See [the parity-runner and trace instructions](docs/runners.md) for the full copy/paste workflow.
+
 The three bundled evaluator skills cover authorship value, implementation fidelity and congruency, and adversarial probing. They emit evidence-linked, machine-readable judgments while keeping deterministic failures separate from rubric scores.
 
 Copy `apps/worker/.dev.vars.example` only when you are ready to test authenticated remote operation. Never commit `.dev.vars`.
 
-See [the full lab plan](docs/labs.md), [execution architecture](docs/architecture.md), [CLI contract](docs/cli.md), and [open decisions](docs/open-decisions.md).
+See [the full lab plan](docs/labs.md), [execution architecture](docs/architecture.md), [parity runners and traces](docs/runners.md), [CLI contract](docs/cli.md), and [open decisions](docs/open-decisions.md).

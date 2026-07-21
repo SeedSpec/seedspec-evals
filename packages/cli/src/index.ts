@@ -4,14 +4,23 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 import { loadCaseFile, loadCaseLibrary } from "@seedspec/eval-case-library";
-import { RunIdSchema, type EvaluationStage } from "@seedspec/eval-core";
+import { RunIdSchema, TraceBodySchema, createTrace, parseTrace, type EvaluationStage } from "@seedspec/eval-core";
 import { SubmissionIdSchema } from "@seedspec/eval-harness";
 import { Command, InvalidArgumentError } from "commander";
 
 import { ExecutionEnvelopeSchema, ExperimentPlanSchema, type ExecutionEnvelope } from "./contracts.js";
 import { CLI_DOCS } from "./docs.js";
 import { createExperimentPlan } from "./plan.js";
-import { cancelRemoteSubmission, inspectRemoteRun, submitEnvelope } from "./remote.js";
+import {
+  cancelRemoteMatrix,
+  cancelRemoteSubmission,
+  exportRemoteTrace,
+  inspectRemoteMatrix,
+  inspectRemoteRun,
+  startRemoteMatrix,
+  submitEnvelope,
+} from "./remote.js";
+import { buildDesktopBrief, buildDesktopManifest, type DesktopRunner } from "./runner-brief.js";
 
 const CLI_VERSION = "0.1.0-alpha.1";
 const program = new Command();
@@ -143,6 +152,115 @@ run.command("cancel")
     output({ ok: true, runId, submissionId, response }, `Cancellation requested for ${submissionId}.`);
   });
 
+run.command("trace")
+  .argument("<run-id>")
+  .requiredOption("--endpoint <url>", "deployed or local Worker endpoint")
+  .option("--out <file>", "trace output path")
+  .action(async (runId: string, options: { endpoint: string; out?: string }) => {
+    assertRunId(runId);
+    const response = await exportRemoteTrace(options.endpoint, runId);
+    const trace = extractTrace(response);
+    const outPath = resolve(options.out ?? `runs/${runId}/trace.json`);
+    await mkdir(dirname(outPath), { recursive: true });
+    await writeFile(outPath, `${JSON.stringify(trace, null, 2)}\n`, "utf8");
+    output({ ok: true, runId, traceId: trace.traceId, path: outPath }, `Exported observable trace ${trace.traceId} to ${outPath}. Hidden reasoning was not collected.`);
+  });
+
+const matrix = program.command("matrix").description("Coordinate a reviewed plan through Cloudflare Workflows.");
+
+matrix.command("start")
+  .argument("<plan>", "experiment plan JSON")
+  .requiredOption("--endpoint <url>", "deployed or local Worker endpoint")
+  .option("--confirm-model-execution", "explicitly authorize all model calls in the plan")
+  .action(async (file: string, options: { endpoint: string; confirmModelExecution?: boolean }) => {
+    if (options.confirmModelExecution !== true) throw new Error("Matrix execution was not started. Review the plan, then re-run with --confirm-model-execution.");
+    const plan = ExperimentPlanSchema.parse(JSON.parse(await readFile(resolve(file), "utf8")) as unknown);
+    const response = await startRemoteMatrix(options.endpoint, plan);
+    output({ ok: true, planId: plan.planId, runs: plan.envelopes.length, response }, `Started matrix ${plan.planId} with ${String(plan.envelopes.length)} durable run${plan.envelopes.length === 1 ? "" : "s"}.`);
+  });
+
+matrix.command("status")
+  .argument("<plan-id>")
+  .requiredOption("--endpoint <url>", "deployed or local Worker endpoint")
+  .action(async (planId: string, options: { endpoint: string }) => {
+    assertPlanId(planId);
+    const response = await inspectRemoteMatrix(options.endpoint, planId);
+    output({ ok: true, planId, response }, JSON.stringify(response, null, 2));
+  });
+
+matrix.command("cancel")
+  .argument("<plan>", "matching immutable experiment plan JSON")
+  .requiredOption("--endpoint <url>", "deployed or local Worker endpoint")
+  .action(async (file: string, options: { endpoint: string }) => {
+    const plan = ExperimentPlanSchema.parse(JSON.parse(await readFile(resolve(file), "utf8")) as unknown);
+    const response = await cancelRemoteMatrix(options.endpoint, plan);
+    output({ ok: true, planId: plan.planId, response }, `Cancellation requested for matrix ${plan.planId} and its active child runs.`);
+  });
+
+const runner = program.command("runner").description("Prepare parity runs for agent desktop environments.");
+
+runner.command("brief")
+  .argument("<plan-or-envelope>", "JSON plan or execution envelope")
+  .requiredOption("--runner <runner>", "codex or claude-code", parseDesktopRunner)
+  .option("--run <run-id>", "select one run from a plan")
+  .option("--out <directory>", "runner kit directory")
+  .option("--stdout", "print the complete copy/paste brief")
+  .action(async (file: string, options: { runner: DesktopRunner; run?: string; out?: string; stdout?: boolean }) => {
+    const input = JSON.parse(await readFile(resolve(file), "utf8")) as unknown;
+    const envelope = selectEnvelope(input, options.run);
+    const manifest = buildDesktopManifest(envelope, options.runner);
+    const outputDirectory = options.out ?? `runs/${manifest.runId}`;
+    const brief = buildDesktopBrief(envelope, manifest, options.runner, outputDirectory);
+    const directory = resolve(outputDirectory);
+    await mkdir(directory, { recursive: true });
+    await Promise.all([
+      writeFile(resolve(directory, "handoff.md"), `${brief}\n`, "utf8"),
+      writeFile(resolve(directory, "run-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8"),
+      writeFile(resolve(directory, "source-envelope.json"), `${JSON.stringify(envelope, null, 2)}\n`, "utf8"),
+    ]);
+    output(
+      { ok: true, runner: options.runner, runId: manifest.runId, sourceRunId: envelope.manifest.runId, path: directory, brief },
+      options.stdout === true ? brief : `Prepared a ${options.runner} runner kit in ${directory}. Paste handoff.md into a clean agent task using the requested model.`,
+    );
+  });
+
+const author = program.command("author").description("Expose pre-declared simulated author responses one question at a time.");
+
+author.command("answer")
+  .argument("<plan-or-envelope>", "JSON plan or execution envelope")
+  .requiredOption("--question <id>", "exact pre-declared question ID")
+  .option("--run <run-id>", "select one run from a plan")
+  .action(async (file: string, options: { question: string; run?: string }) => {
+    const input = JSON.parse(await readFile(resolve(file), "utf8")) as unknown;
+    const envelope = selectEnvelope(input, options.run);
+    const responses = envelope.submission.config.simulatedAuthorResponses;
+    const answered = Object.prototype.hasOwnProperty.call(responses, options.question);
+    const response = { answered, questionId: options.question, answer: answered ? responses[options.question] ?? null : null };
+    output({ ok: true, ...response }, answered ? `Simulated author (${options.question}): ${response.answer ?? ""}` : `The simulated author has no pre-declared answer for ${options.question}.`);
+  });
+
+const trace = program.command("trace").description("Finalize and validate portable observable run traces.");
+
+trace.command("finalize")
+  .argument("<draft>", "trace body JSON without traceId")
+  .option("--out <file>", "final trace output; defaults beside the draft")
+  .action(async (file: string, options: { out?: string }) => {
+    const inputPath = resolve(file);
+    const body = TraceBodySchema.parse(JSON.parse(await readFile(inputPath, "utf8")) as unknown);
+    const finalized = createTrace(body);
+    const defaultOut = inputPath.endsWith("-draft.json") ? inputPath.replace(/-draft\.json$/, ".json") : resolve(dirname(inputPath), "trace.json");
+    const outPath = resolve(options.out ?? defaultOut);
+    await writeFile(outPath, `${JSON.stringify(finalized, null, 2)}\n`, "utf8");
+    output({ ok: true, traceId: finalized.traceId, runId: finalized.runId, path: outPath }, `Finalized observable trace ${finalized.traceId} at ${outPath}.`);
+  });
+
+trace.command("validate")
+  .argument("<trace>", "final trace JSON")
+  .action(async (file: string) => {
+    const parsed = parseTrace(JSON.parse(await readFile(resolve(file), "utf8")) as unknown);
+    output({ ok: true, traceId: parsed.traceId, runId: parsed.runId }, `Validated trace ${parsed.traceId}. Reasoning capture is explicitly ${parsed.capture.reasoning}.`);
+  });
+
 program.command("docs")
   .argument("[topic]", "architecture, lifecycle, labs, cli, or safety", "cli")
   .action((topic: string) => {
@@ -181,6 +299,20 @@ function parseStage(value: string): EvaluationStage {
 
 function assertRunId(value: string): void {
   if (!RunIdSchema.safeParse(value).success) throw new Error("Invalid run ID.");
+}
+
+function assertPlanId(value: string): void {
+  if (!/^plan_[a-f0-9]{64}$/.test(value)) throw new Error("Invalid plan ID.");
+}
+
+function parseDesktopRunner(value: string): DesktopRunner {
+  if (value !== "codex" && value !== "claude-code") throw new InvalidArgumentError("must be codex or claude-code");
+  return value;
+}
+
+function extractTrace(response: unknown): ReturnType<typeof parseTrace> {
+  if (typeof response !== "object" || response === null || !("trace" in response)) throw new Error("Remote trace response is invalid.");
+  return parseTrace(response.trace);
 }
 
 function selectEnvelope(input: unknown, runId?: string): ExecutionEnvelope {

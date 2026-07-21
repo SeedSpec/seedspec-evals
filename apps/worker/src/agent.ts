@@ -1,4 +1,9 @@
 import {
+  createTrace,
+  type JsonObject,
+  type TraceEvent,
+} from "@seedspec/eval-core";
+import {
   Think,
   type ChatErrorContext,
   type ChatResponseResult,
@@ -8,6 +13,7 @@ import {
 } from "@cloudflare/think";
 import {
   DEFAULT_MAX_STEPS,
+  HARNESS_VERSION,
   buildTrustedSystemPrompt,
   buildUntrustedUserMessage,
   conflictingRunConfigFields,
@@ -27,8 +33,17 @@ import { createWorkersAI } from "workers-ai-provider";
 import { z } from "zod";
 
 import { errorClass, structuredLog } from "./logging.js";
+import { createSeedSpecTools, digestPackage } from "./seedspec-tools.js";
 
-const ACTIVE_TOOLS = ["read", "write", "edit", "list", "find", "grep", "ask_author"];
+const WORKSPACE_TOOLS = ["read", "write", "edit", "list", "find", "grep"];
+
+type TraceRow = {
+  event_at: string;
+  kind: TraceEvent["kind"];
+  actor: TraceEvent["actor"];
+  name: string | null;
+  data_json: string;
+};
 
 function toSubmissionInspection(submission: ThinkSubmissionInspection): SubmissionInspection {
   const inspection: SubmissionInspection = {
@@ -72,7 +87,9 @@ export class SeedSpecEvalAgent extends Think<Env> {
   }
 
   override getTools(): ToolSet {
+    const config = this.requireRunConfig();
     return {
+      ...createSeedSpecTools(this.workspace, config.stage),
       ask_author: tool({
         description:
           "Ask one pre-declared clarification question. Use the exact questionId; unavailable questions return no answer.",
@@ -93,6 +110,11 @@ export class SeedSpecEvalAgent extends Think<Env> {
 
   override beforeTurn(): TurnConfig {
     const config = this.requireRunConfig();
+    this.appendTraceEvent("status", "runner", "turn-started", {
+      stage: config.stage,
+      model: config.model,
+      maxSteps: config.maxSteps,
+    });
     structuredLog("info", "eval.turn.started", {
       runId: config.runId,
       caseId: config.caseId,
@@ -102,7 +124,13 @@ export class SeedSpecEvalAgent extends Think<Env> {
       maxSteps: config.maxSteps,
     });
     return {
-      activeTools: ACTIVE_TOOLS,
+      activeTools: [
+        ...WORKSPACE_TOOLS,
+        "ask_author",
+        "seedspec_package_check",
+        "seedspec_package_digest",
+        ...(config.stage === "authorship" ? ["seedspec_kind_lint", "seedspec_audit_guidance"] : []),
+      ],
       maxSteps: config.maxSteps,
       sendReasoning: false,
     };
@@ -114,10 +142,34 @@ export class SeedSpecEvalAgent extends Think<Env> {
       runId: config?.runId ?? this.name,
       stepNumber: context.stepNumber,
       finishReason: context.finishReason,
-      inputTokens: context.usage.inputTokens,
-      outputTokens: context.usage.outputTokens,
-      totalTokens: context.usage.totalTokens,
+      inputTokens: context.usage.inputTokens ?? null,
+      outputTokens: context.usage.outputTokens ?? null,
+      totalTokens: context.usage.totalTokens ?? null,
       toolCallCount: context.toolCalls.length,
+    });
+    if (context.text.length > 0) {
+      this.appendTraceEvent("message", "assistant", "step-text", { stepNumber: context.stepNumber, text: context.text });
+    }
+    for (const call of context.toolCalls) {
+      this.appendTraceEvent("tool-call", "assistant", call.toolName, {
+        stepNumber: context.stepNumber,
+        input: toJsonValue(call.input),
+      });
+    }
+    for (const result of context.toolResults) {
+      this.appendTraceEvent("tool-result", "tool", result.toolName, {
+        stepNumber: context.stepNumber,
+        output: toJsonValue("output" in result ? result.output : null),
+      });
+    }
+    this.appendTraceEvent("usage", "runner", "step-usage", {
+      stepNumber: context.stepNumber,
+      finishReason: context.finishReason,
+      inputTokens: context.usage.inputTokens ?? null,
+      outputTokens: context.usage.outputTokens ?? null,
+      totalTokens: context.usage.totalTokens ?? null,
+      cachedInputTokens: context.usage.cachedInputTokens ?? null,
+      reasoningTokens: context.usage.reasoningTokens ?? null,
     });
   }
 
@@ -130,6 +182,12 @@ export class SeedSpecEvalAgent extends Think<Env> {
       continuation: result.continuation,
       partCount: result.message.parts.length,
     });
+    this.appendTraceEvent(
+      result.status === "error" ? "error" : "status",
+      "runner",
+      `turn-${result.status}`,
+      { requestId: result.requestId, continuation: result.continuation, partCount: result.message.parts.length },
+    );
   }
 
   override onChatError(error: unknown, context?: ChatErrorContext): unknown {
@@ -140,6 +198,12 @@ export class SeedSpecEvalAgent extends Think<Env> {
       stage: context?.stage,
       messagesPersisted: context?.messagesPersisted,
       classification: context?.classification,
+      errorClass: errorClass(error),
+    });
+    this.appendTraceEvent("error", "runner", "turn-error", {
+      requestId: context?.requestId ?? null,
+      stage: context?.stage ?? null,
+      classification: context?.classification ?? null,
       errorClass: errorClass(error),
     });
     return error;
@@ -155,6 +219,11 @@ export class SeedSpecEvalAgent extends Think<Env> {
       createdAt: submission.createdAt,
       startedAt: submission.startedAt,
       completedAt: submission.completedAt,
+    });
+    this.appendTraceEvent("status", "runner", "submission-status", {
+      submissionId: submission.submissionId,
+      status: submission.status,
+      requestId: submission.requestId ?? null,
     });
   }
 
@@ -236,7 +305,7 @@ export class SeedSpecEvalAgent extends Think<Env> {
   }
 
   async listRunSubmissions(options: {
-    status?: SubmissionStatus;
+    status?: SubmissionStatus | SubmissionStatus[];
     limit: number;
   }): Promise<SubmissionInspection[]> {
     const submissions = await this.listSubmissions(options);
@@ -251,6 +320,62 @@ export class SeedSpecEvalAgent extends Think<Env> {
     }
     const current = await this.inspectSubmission(submissionId);
     return current === null ? null : toSubmissionInspection(current);
+  }
+
+  async exportRunTrace(): Promise<{ ok: boolean; traceJson: string | null; error: { code: string; message: string } | null }> {
+    const config = this.getConfig<RunAgentConfig>();
+    if (config === null) return { ok: false, traceJson: null, error: { code: "run_not_configured", message: "The run is not configured." } };
+    const submissions = await this.listSubmissions({ limit: 100 });
+    const latest = submissions.toSorted((left, right) => right.createdAt - left.createdAt)[0];
+    if (latest === undefined || latest.status === "pending" || latest.status === "running") {
+      return { ok: false, traceJson: null, error: { code: "trace_not_final", message: "A final trace is available after the run reaches a terminal state." } };
+    }
+    const rows = this.readTraceRows();
+    const startedAt = new Date(latest.startedAt ?? latest.createdAt).toISOString();
+    const finishedAt = new Date(latest.completedAt ?? Date.now()).toISOString();
+    const lowerBound = Date.parse(startedAt);
+    const upperBound = Date.parse(finishedAt);
+    const events: TraceEvent[] = rows.map((row, sequence) => ({
+      sequence,
+      timestamp: new Date(Math.min(upperBound, Math.max(lowerBound, Date.parse(row.event_at)))).toISOString(),
+      kind: row.kind,
+      actor: row.actor,
+      ...(row.name === null ? {} : { name: row.name }),
+      data: parseTraceData(row.data_json),
+    }));
+    const artifactSummary = summarizeArtifactDigest(await digestPackage(this.workspace, "."));
+    events.push({
+      sequence: events.length,
+      timestamp: finishedAt,
+      kind: "artifact",
+      actor: "runner",
+      name: "workspace-digest",
+      data: artifactSummary,
+    });
+    const status = latest.status === "completed"
+      ? "succeeded"
+      : latest.status === "aborted"
+        ? "cancelled"
+        : latest.status === "skipped"
+          ? "rejected"
+          : "failed";
+    return {
+      ok: true,
+      error: null,
+      traceJson: JSON.stringify(createTrace({
+        schemaVersion: 1,
+        runId: config.runId,
+        runner: { id: "cloudflare-think", kind: "agent", version: HARNESS_VERSION, environment: { runtime: "cloudflare-workers", runtimeVersion: "2026-07-21" } },
+        model: { provider: providerForModel(config.model), modelId: config.model, parameters: {}, routing: { gateway: config.gatewayId } },
+        startedAt,
+        finishedAt,
+        status,
+        capture: { messages: "partial", toolCalls: "full", toolResults: "full", timing: "event", usage: "tokens", artifacts: "digests", reasoning: "not-collected" },
+        events,
+        limitations: ["The user input is represented by the immutable run envelope rather than duplicated in the trace.", "Artifact contents remain in the durable workspace; the trace records observable tool events and final export metadata."],
+        redactions: [],
+      })),
+    };
   }
 
   private initializeConfig(config: RunAgentConfig): RpcResult<ConfigureRunResult> {
@@ -298,4 +423,54 @@ export class SeedSpecEvalAgent extends Think<Env> {
     if (config === null) throw new Error("Run configuration has not been initialized.");
     return config;
   }
+
+  private appendTraceEvent(kind: TraceEvent["kind"], actor: TraceEvent["actor"], name: string, data: JsonObject): void {
+    this.ensureTraceTable();
+    void this.sql`INSERT INTO seedspec_eval_trace_events (event_at, kind, actor, name, data_json)
+      VALUES (${new Date().toISOString()}, ${kind}, ${actor}, ${name}, ${JSON.stringify(data)})`;
+  }
+
+  private readTraceRows(): TraceRow[] {
+    this.ensureTraceTable();
+    return this.sql<TraceRow>`SELECT event_at, kind, actor, name, data_json FROM seedspec_eval_trace_events ORDER BY sequence ASC`;
+  }
+
+  private ensureTraceTable(): void {
+    void this.sql`CREATE TABLE IF NOT EXISTS seedspec_eval_trace_events (
+      sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_at TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      actor TEXT NOT NULL,
+      name TEXT,
+      data_json TEXT NOT NULL
+    )`;
+  }
+}
+
+function providerForModel(model: string): string {
+  if (model.startsWith("@cf/")) return "cloudflare";
+  return (model.split("/", 1)[0] ?? "unknown").replaceAll(".", "-");
+}
+
+function toJsonValue(value: unknown): JsonObject[string] {
+  try { return JSON.parse(JSON.stringify(value)) as JsonObject[string]; }
+  catch { return "[unserializable]"; }
+}
+
+function parseTraceData(value: string): JsonObject {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed as JsonObject : {};
+  } catch { return {}; }
+}
+
+function summarizeArtifactDigest(value: unknown): JsonObject {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return { available: false };
+  const record = value as Record<string, unknown>;
+  return {
+    available: record["ok"] === true,
+    digest: typeof record["digest"] === "string" ? record["digest"] : null,
+    fileCount: typeof record["fileCount"] === "number" ? record["fileCount"] : null,
+    errorCode: typeof record["code"] === "string" ? record["code"] : null,
+  };
 }

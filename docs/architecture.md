@@ -8,10 +8,11 @@ The first release separates deterministic protocol work from model-driven work.
 - The Cloudflare harness extends Think instead of implementing a second agent loop.
 - One Think Durable Object instance represents one run. Instance names are derived from run IDs, never from a shared mutable global.
 - Cloudflare AI Gateway is the model routing boundary. A run records the exact model identifier and gateway name used.
-- One-off turns use Think's durable submission ledger. Multi-step matrix orchestration will use Cloudflare Workflows after the single-run lifecycle is proven.
+- One-off turns use Think's durable submission ledger. Cloudflare Workflows coordinates reviewed matrices and their terminal child states.
 - The harness has no embedded model and is meant to be called by the CLI, another capable agent, or a future hosted authoring product.
 - Run routes require a service bearer token and fail closed when it is not configured. This is an initial service boundary; multi-user hosting still requires caller identity and per-run authorization.
 - Every execution request carries its content-addressed run manifest. The boundary verifies the manifest ID and binds the trusted instructions, untrusted source material, simulated author answers, model, gateway, and limits to it before Think receives a turn.
+- Think stores an observable-event ledger beside the durable run. Codex and Claude Code use runner-specific manifests and the same trace contract. Hidden reasoning is outside the contract.
 
 ## Data flow
 
@@ -27,7 +28,7 @@ case + runner + model + protocol/tool versions
  deterministic checks     Think run instance
                                 |
                                 v
-                      isolated workspace + ledger
+                 isolated workspace + observable ledger
                                 |
                                 v
                         captured run artifacts
@@ -48,7 +49,9 @@ The runner-facing case projection excludes hidden expectations and simulated aut
 
 The manifest is an execution commitment, not descriptive metadata added after a run. Its ID covers the complete manifest body. Digests in that body cover every model-facing payload that is stored in the execution configuration. The CLI validates the binding when reading a plan, and the Worker validates it again at the service and Durable Object boundaries. A changed prompt, source document, simulated answer, model, gateway, or step limit is a different run and must receive a different manifest and run ID.
 
-The initial Worker supports one-run submission and inspection. A later Workflow coordinator should fan out a matrix of cases, models, and repetitions, wait for terminal states, run evaluators, and persist the aggregate experiment record. This keeps orchestration deterministic while leaving reasoning to Think agents.
+The Worker supports one-run submission plus a Workflow coordinator that fans out up to 100 reviewed envelopes, submits each idempotently, and waits for terminal states. Evaluation and aggregate experiment records remain separate stages; the coordinator does not turn model output into a score.
+
+Think lifecycle hooks record observable assistant output, tool calls and results, usage, statuses, timing, and errors in the run Durable Object. A terminal export produces the same content-addressed trace shape used by desktop parity runners. Initial user material remains bound in the immutable envelope instead of being duplicated into every trace. Capture capabilities and limitations are explicit, and model reasoning is never stored.
 
 ## Model routing
 

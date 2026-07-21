@@ -6,6 +6,7 @@ import {
 } from "@seedspec/eval-harness";
 
 export const MAX_REQUEST_BODY_BYTES = 384 * 1024;
+export const MAX_MATRIX_REQUEST_BODY_BYTES = 1024 * 1024;
 
 export class HttpError extends Error {
   constructor(
@@ -37,8 +38,11 @@ export function authenticateRequest(request: Request, expectedToken: string | nu
 
 export type ApiRoute =
   | { kind: "service-health" }
+  | { kind: "matrices" }
+  | { kind: "matrix"; planId: string }
   | { kind: "run-health"; runId: string }
   | { kind: "run-config"; runId: string }
+  | { kind: "run-trace"; runId: string }
   | { kind: "submissions"; runId: string }
   | { kind: "submission"; runId: string; submissionId: string };
 
@@ -46,7 +50,12 @@ export function allowedMethodsForRoute(route: ApiRoute): string[] {
   switch (route.kind) {
     case "service-health":
     case "run-health":
+    case "run-trace":
       return ["GET"];
+    case "matrices":
+      return ["POST"];
+    case "matrix":
+      return ["GET", "DELETE"];
     case "run-config":
       return ["GET", "PUT"];
     case "submissions":
@@ -60,6 +69,12 @@ export function matchApiRoute(pathname: string): ApiRoute | null {
   if (pathname === "/health" || pathname === "/healthz") return { kind: "service-health" };
 
   const segments = pathname.split("/").filter(Boolean);
+  if (segments[0] === "v1" && segments[1] === "matrices") {
+    if (segments.length === 2) return { kind: "matrices" };
+    const planId = decodePathSegment(segments[2] ?? "");
+    if (segments.length === 3 && /^plan_[a-f0-9]{64}$/.test(planId)) return { kind: "matrix", planId };
+    return null;
+  }
   if (segments[0] !== "v1" || segments[1] !== "runs" || segments.length < 4) return null;
 
   const runId = decodePathSegment(segments[2] ?? "");
@@ -67,6 +82,7 @@ export function matchApiRoute(pathname: string): ApiRoute | null {
 
   if (segments.length === 4 && segments[3] === "health") return { kind: "run-health", runId };
   if (segments.length === 4 && segments[3] === "config") return { kind: "run-config", runId };
+  if (segments.length === 4 && segments[3] === "trace") return { kind: "run-trace", runId };
   if (segments[3] !== "submissions") return null;
   if (segments.length === 4) return { kind: "submissions", runId };
   if (segments.length !== 5) return null;
@@ -86,7 +102,7 @@ export function parseListSubmissionsQuery(url: URL): ListSubmissionsQuery | null
   return parsed.success ? parsed.data : null;
 }
 
-export async function readBoundedJson(request: Request): Promise<unknown> {
+export async function readBoundedJson(request: Request, maxBytes = MAX_REQUEST_BODY_BYTES): Promise<unknown> {
   const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
   const mediaType = contentType.split(";", 1)[0]?.trim();
   if (mediaType !== "application/json") {
@@ -94,7 +110,7 @@ export async function readBoundedJson(request: Request): Promise<unknown> {
   }
 
   const declaredLength = request.headers.get("content-length");
-  if (declaredLength !== null && Number(declaredLength) > MAX_REQUEST_BODY_BYTES) {
+  if (declaredLength !== null && Number(declaredLength) > maxBytes) {
     throw new HttpError(413, "body_too_large", "The request body exceeds the size limit.");
   }
   if (request.body === null) throw new HttpError(400, "invalid_json", "A JSON body is required.");
@@ -108,7 +124,7 @@ export async function readBoundedJson(request: Request): Promise<unknown> {
       const chunk = await reader.read();
       if (chunk.done) break;
       bytesRead += chunk.value.byteLength;
-      if (bytesRead > MAX_REQUEST_BODY_BYTES) {
+      if (bytesRead > maxBytes) {
         await reader.cancel("request body too large");
         throw new HttpError(413, "body_too_large", "The request body exceeds the size limit.");
       }
