@@ -42,6 +42,7 @@ import {
   assertExternalRunnerDirectory,
   createDesktopControl,
   desktopRunnerWrapper,
+  finalizeDesktopRunner,
   preflightDesktopRunner,
 } from "./runner-control.js";
 import { createVariantComparison } from "@seedspec/evaluators";
@@ -290,6 +291,21 @@ runner.command("preflight")
     ].join("\n");
     output({ ok: result.ready, ...result }, message);
     if (!result.ready) process.exitCode = 1;
+  });
+
+runner.command("finalize")
+  .argument("<run-directory>", "completed isolated desktop runner directory")
+  .action(async (runDirectory: string) => {
+    const result = await finalizeDesktopRunner(runDirectory);
+    output(
+      { ok: true, ...result },
+      [
+        `Finalized observable trace ${result.traceId} at ${result.tracePath}.`,
+        result.normalizedPaths.length === 0
+          ? "Evidence sidecars were already in their canonical locations."
+          : `Normalized misplaced evidence sidecars: ${result.normalizedPaths.join(", ")}.`,
+      ].join("\n"),
+    );
   });
 
 const author = program.command("author").description("Expose pre-declared simulated author responses one question at a time.");

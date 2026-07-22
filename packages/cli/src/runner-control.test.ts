@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
@@ -11,6 +11,7 @@ import {
   answerDesktopAuthorQuestion,
   assertExternalRunnerDirectory,
   createDesktopControl,
+  finalizeDesktopRunner,
   preflightDesktopRunner,
 } from "./runner-control.js";
 
@@ -79,5 +80,39 @@ describe("desktop runner control boundary", () => {
       id: "response-isolation",
       passed: false,
     }));
+
+    await rm(resolve(runDirectory, "accidental-leak.txt"));
+    await mkdir(resolve(runDirectory, "workspace"));
+    await Promise.all([
+      writeFile(resolve(runDirectory, "workspace", "instructions.md"), "Implementation instructions.\n", "utf8"),
+      writeFile(resolve(runDirectory, "workspace", "report.md"), "Evidence report.\n", "utf8"),
+      writeFile(resolve(runDirectory, "workspace", "trace-draft.json"), `${JSON.stringify({
+        schemaVersion: 1,
+        runId: desktopManifest.runId,
+        sourceRunId: executionEnvelope.manifest.runId,
+        variant: "source-only",
+        runner: desktopManifest.runner,
+        model: desktopManifest.model,
+        startedAt: "2026-07-22T12:00:00.000Z",
+        finishedAt: "2026-07-22T12:00:01.000Z",
+        status: "succeeded",
+        capture: {
+          messages: "partial",
+          toolCalls: "full",
+          toolResults: "digests",
+          timing: "event",
+          usage: "unavailable",
+          artifacts: "paths-and-digests",
+          reasoning: "not-collected",
+        },
+        events: [],
+        limitations: ["Test fixture."],
+        redactions: [],
+      }, null, 2)}\n`, "utf8"),
+    ]);
+    const finalized = await finalizeDesktopRunner(runDirectory);
+    expect(finalized.normalizedPaths).toEqual(["report.md", "trace-draft.json"]);
+    await expect(readFile(resolve(runDirectory, "trace.json"), "utf8")).resolves.toContain(finalized.traceId);
+    await expect(readFile(resolve(runDirectory, "workspace", "report.md"), "utf8")).rejects.toThrow();
   });
 });

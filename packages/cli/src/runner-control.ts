@@ -1,10 +1,12 @@
 import { randomBytes } from "node:crypto";
-import { chmod, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, relative, resolve } from "node:path";
 
 import {
   RunManifestSchema,
+  TraceBodySchema,
+  createTrace,
   sha256Hex,
   stableJson,
   type RunManifest,
@@ -124,6 +126,58 @@ export type RunnerPreflightResult = {
   readonly sourceRunId: string | null;
   readonly checks: ReadonlyArray<{ id: string; passed: boolean; message: string }>;
 };
+
+export async function finalizeDesktopRunner(runDirectory: string): Promise<{
+  readonly runId: string;
+  readonly traceId: string;
+  readonly tracePath: string;
+  readonly normalizedPaths: readonly string[];
+}> {
+  const directory = resolve(runDirectory);
+  const source = DesktopSourceEnvelopeSchema.parse(
+    JSON.parse(await readFile(resolve(directory, "source-envelope.json"), "utf8")) as unknown,
+  );
+  const manifest = RunManifestSchema.parse(
+    JSON.parse(await readFile(resolve(directory, "run-manifest.json"), "utf8")) as unknown,
+  );
+  if (manifest.runId !== source.desktopRunId) {
+    throw new Error("Runner source and manifest identities do not match.");
+  }
+  const normalizedPaths: string[] = [];
+  for (const path of ["report.md", "trace-draft.json"] as const) {
+    const rootPath = resolve(directory, path);
+    const misplacedPath = resolve(directory, "workspace", path);
+    const rootPresent = await pathExists(rootPath);
+    const misplacedPresent = await pathExists(misplacedPath);
+    if (rootPresent && misplacedPresent) {
+      throw new Error(`Both ${path} and workspace/${path} exist; refusing to choose or overwrite evidence.`);
+    }
+    if (!rootPresent && !misplacedPresent) {
+      throw new Error(`Required run evidence is missing: ${path}`);
+    }
+    if (misplacedPresent) {
+      await rename(misplacedPath, rootPath);
+      normalizedPaths.push(path);
+    }
+  }
+  if (!await pathExists(resolve(directory, "workspace", "instructions.md"))) {
+    throw new Error("Required evaluated deliverable is missing: workspace/instructions.md");
+  }
+  const traceBody = TraceBodySchema.parse(
+    JSON.parse(await readFile(resolve(directory, "trace-draft.json"), "utf8")) as unknown,
+  );
+  if (
+    traceBody.runId !== source.desktopRunId ||
+    traceBody.sourceRunId !== source.sourceRunId ||
+    traceBody.variant !== source.variant
+  ) {
+    throw new Error("Trace identity does not match the runner source envelope.");
+  }
+  const trace = createTrace(traceBody);
+  const tracePath = resolve(directory, "trace.json");
+  await writeFile(tracePath, `${JSON.stringify(trace, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+  return { runId: trace.runId, traceId: trace.traceId, tracePath, normalizedPaths };
+}
 
 export async function preflightDesktopRunner(
   runDirectory: string,
@@ -249,7 +303,7 @@ export function desktopRunnerWrapper(cliEntryPath: string): string {
     'const commands = {',
     '  preflight: ["runner", "preflight", "."],',
     '  answer: ["author", "answer", "source-envelope.json", ...rest],',
-    '  "finalize-trace": ["trace", "finalize", "trace-draft.json"],',
+    '  "finalize-trace": ["runner", "finalize", "."],',
     '};',
     'const args = commands[action];',
     'if (args === undefined) {',

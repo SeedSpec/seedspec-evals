@@ -45,7 +45,10 @@ export function buildDesktopBrief(
   runtime: { readonly seedSpecCliEntry?: string } = {},
 ): string {
   const config = envelope.submission.config;
-  const sharedInstructions = buildTrustedInstructionList(config);
+  const sharedInstructions = buildTrustedInstructionList(config).map((instruction) =>
+    instruction === "Use only the tools exposed for this turn and keep all artifacts inside the run workspace."
+      ? "Use only the tools exposed for this turn. Put evaluated deliverables under workspace/ and put the evidence sidecars report.md and trace-draft.json at this isolated project's root."
+      : instruction);
   const traceModel = config.variant === "source-only"
     ? {
         ...manifest.model,
@@ -86,14 +89,15 @@ export function buildDesktopBrief(
     `${sharedInstructions.length + 2}. ${config.variant === "source-only" ? "Record the runner and model versions exposed by the environment." : "Use only the SeedSpec CLI capabilities allowed by this variant. Record exact commands and versions."}`,
     `${sharedInstructions.length + 3}. Record observable messages, tool calls/results, timing, usage when exposed, artifact paths/digests, errors, redactions, and capture limitations.`,
     `${sharedInstructions.length + 4}. When a material clarification is needed, call the simulated author through: \`${runnerControl} answer --question <question-id>\`. The broker exposes only that answer. Do not inspect control storage or invent an unavailable answer.`,
-    `${sharedInstructions.length + 5}. Put every evaluated deliverable under \`${workspacePath}\`; do not write evaluated output elsewhere in this isolated project.`,
+    `${sharedInstructions.length + 5}. Put every evaluated deliverable under \`${workspacePath}/\`; do not write evaluated output elsewhere in this isolated project.`,
+    `${sharedInstructions.length + 6}. Evidence sidecars are not evaluated deliverables: write \`${reportPath}\` and \`${tracePath}\` at the isolated project root, never under \`${workspacePath}/\`.`,
     ...(config.variant === "source-only" ? [
-      `${sharedInstructions.length + 6}. Use only the supplied case material, explicit author answers, and ordinary capabilities of this environment.`,
+      `${sharedInstructions.length + 7}. Use only the supplied case material, explicit author answers, and ordinary capabilities of this environment.`,
     ] : [
-      `${sharedInstructions.length + 6}. Use the frozen local SeedSpec CLI through \`${seedSpecCli}\`. Begin by recording \`${seedSpecCli} version --json\`.`,
+      `${sharedInstructions.length + 7}. Use the frozen local SeedSpec CLI through \`${seedSpecCli}\`. Begin by recording \`${seedSpecCli} version --json\`.`,
       config.variant === "seedspec-scaffold"
-        ? `${sharedInstructions.length + 7}. Use \`seedspec init\` and deterministic validation, but do not use \`seedspec audit\`, guided authoring skills, or authoring audit documentation.`
-        : `${sharedInstructions.length + 7}. Use the complete SeedSpec guided authoring audit and record each audit area consulted.`,
+        ? `${sharedInstructions.length + 8}. Use \`seedspec init\` and deterministic validation, but do not use \`seedspec audit\`, guided authoring skills, or authoring audit documentation.`
+        : `${sharedInstructions.length + 8}. Use the complete SeedSpec guided authoring audit and record each audit area consulted.`,
     ]),
     "",
     "## Untrusted case material",
@@ -104,9 +108,9 @@ export function buildDesktopBrief(
     "",
     "## Required outputs",
     "",
-    `1. Produce the requested output in \`${workspacePath}\`.`,
-    `2. Write a concise evidence report to \`${reportPath}\`.`,
-    `3. Write a trace body (without \`traceId\`) to \`${tracePath}\` using the evaluation trace contract. Use run ID \`${manifest.runId}\`, sourceRunId \`${envelope.manifest.runId}\`, runner ID \`${manifest.runner.id}\`, and \`reasoning: not-collected\`.`,
+    `1. Produce the requested evaluated output at \`${workspacePath}/instructions.md\`.`,
+    `2. Write a concise evidence report at the project root: \`./${reportPath}\`.`,
+    `3. Write a trace body (without \`traceId\`) at the project root: \`./${tracePath}\`. Use run ID \`${manifest.runId}\`, sourceRunId \`${envelope.manifest.runId}\`, runner ID \`${manifest.runner.id}\`, and \`reasoning: not-collected\`.`,
     `4. Finalize it with: \`${runnerControl} finalize-trace\`.` ,
     "5. State exactly what your environment could not capture. Do not fabricate events or token usage.",
     "",
