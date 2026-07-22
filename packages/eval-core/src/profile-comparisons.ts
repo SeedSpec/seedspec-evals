@@ -27,6 +27,7 @@ const ComparisonProfileReferenceSchema = z.strictObject({
   profileId: z.string().regex(/^profile_[a-f0-9]{64}$/),
   runId: RunIdSchema,
   variant: EvaluationVariantSchema,
+  treatment: IdentifierSchema.optional(),
 });
 
 const DecisionObservationSchema = z.discriminatedUnion("status", [
@@ -35,6 +36,7 @@ const DecisionObservationSchema = z.discriminatedUnion("status", [
     profileId: z.string().regex(/^profile_[a-f0-9]{64}$/),
     runId: RunIdSchema,
     variant: EvaluationVariantSchema,
+    treatment: IdentifierSchema.optional(),
     decisionId: IdentifierSchema,
     expectedLatitude: z.enum(["fixed", "preferred", "delegated", "open", "unresolved"]),
     alignment: z.enum(["aligned", "authorized-variation", "deviation", "ambient", "not-observed", "unknown"]),
@@ -48,6 +50,7 @@ const DecisionObservationSchema = z.discriminatedUnion("status", [
     profileId: z.string().regex(/^profile_[a-f0-9]{64}$/),
     runId: RunIdSchema,
     variant: EvaluationVariantSchema,
+    treatment: IdentifierSchema.optional(),
   }),
 ]);
 
@@ -57,6 +60,7 @@ const ObligationObservationSchema = z.discriminatedUnion("status", [
     profileId: z.string().regex(/^profile_[a-f0-9]{64}$/),
     runId: RunIdSchema,
     variant: EvaluationVariantSchema,
+    treatment: IdentifierSchema.optional(),
     obligationId: IdentifierSchema,
     coverage: z.enum(["covered", "partial", "uncovered", "not-applicable", "unknown"]),
     distinguishing: z.enum(["yes", "no", "unknown"]),
@@ -67,6 +71,7 @@ const ObligationObservationSchema = z.discriminatedUnion("status", [
     profileId: z.string().regex(/^profile_[a-f0-9]{64}$/),
     runId: RunIdSchema,
     variant: EvaluationVariantSchema,
+    treatment: IdentifierSchema.optional(),
   }),
 ]);
 
@@ -94,6 +99,7 @@ const ProfileComparisonBodySchema = z.strictObject({
     profileId: z.string().regex(/^profile_[a-f0-9]{64}$/),
     runId: RunIdSchema,
     variant: EvaluationVariantSchema,
+    treatment: IdentifierSchema.optional(),
     decisionIds: z.array(IdentifierSchema).max(10_000),
     obligationIds: z.array(IdentifierSchema).max(10_000),
   })).min(2).max(1_000),
@@ -101,6 +107,7 @@ const ProfileComparisonBodySchema = z.strictObject({
     profileId: z.string().regex(/^profile_[a-f0-9]{64}$/),
     runId: RunIdSchema,
     variant: EvaluationVariantSchema,
+    treatment: IdentifierSchema.optional(),
     metrics: ProcessMetricsSchema.optional(),
   })).min(2).max(1_000),
   notes: z.array(z.string().trim().min(1).max(4_000)).min(1).max(32),
@@ -221,7 +228,13 @@ function profileReference(profile: EvaluationProfile): {
   profileId: string;
   runId: string;
   variant: NonNullable<EvaluationProfile["subject"]["variant"]>;
+  treatment?: string;
 } {
   if (profile.subject.runId === undefined || profile.subject.variant === undefined) throw new Error("Run identity is required.");
-  return { profileId: profile.profileId, runId: profile.subject.runId, variant: profile.subject.variant };
+  return {
+    profileId: profile.profileId,
+    runId: profile.subject.runId,
+    variant: profile.subject.variant,
+    ...(profile.subject.treatment === undefined ? {} : { treatment: profile.subject.treatment }),
+  };
 }

@@ -33,7 +33,7 @@ describe("desktop runner control boundary", () => {
       models: ["openai/gpt-5.6-sol"],
       repetitions: 1,
       gatewayId: "seedspec-evals",
-      protocolVersion: "0.1.0-alpha.3",
+      protocolVersion: "0.1.0-alpha.4",
       createdAt: "2026-07-22T12:00:00.000Z",
       maxSteps: 6,
     });
@@ -114,6 +114,20 @@ describe("desktop runner control boundary", () => {
     expect(finalized.normalizedPaths).toEqual(["report.md", "trace-draft.json"]);
     await expect(readFile(resolve(runDirectory, "trace.json"), "utf8")).resolves.toContain(finalized.traceId);
     await expect(readFile(resolve(runDirectory, "workspace", "report.md"), "utf8")).rejects.toThrow();
+
+    await writeFile(resolve(runDirectory, "workspace", "instructions.md"), protectedAnswer, "utf8");
+    const completed = await preflightDesktopRunner(runDirectory, resolve("."), {
+      workingDirectory: runDirectory,
+      controlDirectory,
+    });
+    expect(completed.ready).toBe(false);
+    expect(completed.checks).toContainEqual(expect.objectContaining({
+      id: "clean-output",
+      passed: false,
+    }));
+    const responseIsolation = completed.checks.find(({ id }) => id === "response-isolation");
+    expect(responseIsolation?.passed).toBe(true);
+    expect(responseIsolation?.message).toContain("legitimate authored output");
   });
 
   it("finalizes the case's declared deliverables without requiring a broker-specific instructions file", async () => {
@@ -125,7 +139,7 @@ describe("desktop runner control boundary", () => {
       models: ["openai/gpt-5.6-sol"],
       repetitions: 1,
       gatewayId: "seedspec-evals",
-      protocolVersion: "0.1.0-alpha.3",
+      protocolVersion: "0.1.0-alpha.4",
       createdAt: "2026-07-22T12:00:00.000Z",
       maxSteps: 6,
     });

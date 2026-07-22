@@ -292,7 +292,7 @@ export async function preflightDesktopRunner(
       : `Evaluated output already exists: ${presentOutputs.join(", ")}. Generate a fresh run identity.`,
   });
 
-  if (control !== null) {
+  if (control !== null && presentOutputs.length === 0) {
     const leakedFiles = await filesContainingResponses(directory, Object.values(control.simulatedAuthorResponses));
     checks.push({
       id: "response-isolation",
@@ -300,6 +300,12 @@ export async function preflightDesktopRunner(
       message: leakedFiles.length === 0
         ? "No protected author response is present in runner-visible files."
         : `Protected author responses appear in ${String(leakedFiles.length)} runner-visible file(s). Generate a new kit.`,
+    });
+  } else if (control !== null) {
+    checks.push({
+      id: "response-isolation",
+      passed: true,
+      message: "Pre-run response isolation is not re-evaluated after output exists; legitimate authored output may contain answers obtained through the broker.",
     });
   } else {
     checks.push({ id: "response-isolation", passed: false, message: "Response isolation could not be verified without the author control." });

@@ -120,44 +120,44 @@ export function formatProfileComparison(comparison: ProfileComparison): string {
     "",
     "## Decision axes",
     "",
-    "| Axis | Materiality | Variant | Latitude | Alignment | Selected by | Confidence |",
+    "| Axis | Materiality | Treatment / variant | Latitude | Alignment | Selected by | Confidence |",
     "|---|---|---|---|---|---|---:|",
   ];
   for (const axis of comparison.decisionAxes) {
     for (const observation of axis.observations) {
       lines.push(observation.status === "missing"
-        ? `| ${axis.caseAxisId} | ${axis.materiality} | ${observation.variant} | missing | missing | — | — |`
-        : `| ${axis.caseAxisId} | ${axis.materiality} | ${observation.variant} | ${observation.expectedLatitude} | ${observation.alignment} | ${observation.selectedBy.join(", ") || "—"} | ${observation.confidence.toFixed(2)} |`);
+        ? `| ${axis.caseAxisId} | ${axis.materiality} | ${observation.treatment ?? observation.variant} | missing | missing | — | — |`
+        : `| ${axis.caseAxisId} | ${axis.materiality} | ${observation.treatment ?? observation.variant} | ${observation.expectedLatitude} | ${observation.alignment} | ${observation.selectedBy.join(", ") || "—"} | ${observation.confidence.toFixed(2)} |`);
     }
   }
   lines.push(
     "",
     "## Obligation axes",
     "",
-    "| Axis | Importance | Variant | Coverage | Distinguishing evidence | Confidence |",
+    "| Axis | Importance | Treatment / variant | Coverage | Distinguishing evidence | Confidence |",
     "|---|---|---|---|---|---:|",
   );
   for (const axis of comparison.obligationAxes) {
     for (const observation of axis.observations) {
       lines.push(observation.status === "missing"
-        ? `| ${axis.caseAxisId} | ${axis.importance} | ${observation.variant} | missing | missing | — |`
-        : `| ${axis.caseAxisId} | ${axis.importance} | ${observation.variant} | ${observation.coverage} | ${observation.distinguishing} | ${observation.confidence.toFixed(2)} |`);
+        ? `| ${axis.caseAxisId} | ${axis.importance} | ${observation.treatment ?? observation.variant} | missing | missing | — |`
+        : `| ${axis.caseAxisId} | ${axis.importance} | ${observation.treatment ?? observation.variant} | ${observation.coverage} | ${observation.distinguishing} | ${observation.confidence.toFixed(2)} |`);
     }
   }
   lines.push(
     "",
     "## Process capture",
     "",
-    "| Variant | Turns | Input tokens | Cached input | Output tokens | Duration |",
+    "| Treatment / variant | Turns | Input tokens | Cached input | Output tokens | Duration |",
     "|---|---:|---:|---:|---:|---:|",
   );
   for (const entry of comparison.process) {
     const metrics = entry.metrics;
-    lines.push(`| ${entry.variant} | ${metric(metrics?.turns.total)} | ${metric(metrics?.tokens.input)} | ${metric(metrics?.tokens.cachedInputRead)} | ${metric(metrics?.tokens.output)} | ${metric(metrics?.durationMs, " ms")} |`);
+    lines.push(`| ${entry.treatment ?? entry.variant} | ${metric(metrics?.turns.total)} | ${metric(metrics?.tokens.input)} | ${metric(metrics?.tokens.cachedInputRead)} | ${metric(metrics?.tokens.output)} | ${metric(metrics?.durationMs, " ms")} |`);
   }
   lines.push("", "## Subject-specific records", "");
   for (const entry of comparison.unmatched) {
-    lines.push(`- ${entry.variant}: ${String(entry.decisionIds.length)} additional decisions; ${String(entry.obligationIds.length)} additional obligations.`);
+    lines.push(`- ${entry.treatment ?? entry.variant}: ${String(entry.decisionIds.length)} additional decisions; ${String(entry.obligationIds.length)} additional obligations.`);
   }
   lines.push("", ...comparison.notes.map((note) => `- ${note}`));
   return lines.join("\n");
@@ -173,6 +173,7 @@ export function formatEvaluationProfile(profile: EvaluationProfile): string {
     `Evaluation profile: ${profile.profileId}`,
     `Stage: ${profile.subject.stage}`,
     ...(profile.subject.variant === undefined ? [] : [`Variant: ${profile.subject.variant}`]),
+    ...(profile.subject.treatment === undefined ? [] : [`Treatment: ${profile.subject.treatment}`]),
     ...(profile.subject.runId === undefined ? [] : [`Run: ${profile.subject.runId}`]),
     ...(profile.subject.package === undefined ? [] : [`Package digest: ${profile.subject.package.digest}`]),
     "",
@@ -325,6 +326,9 @@ export async function buildRunProfileBrief(options: {
     stage: manifest.target.stage,
     runId: manifest.runId,
     variant: manifest.variant,
+    ...(typeof manifest.configuration?.["treatmentId"] === "string"
+      ? { treatment: manifest.configuration["treatmentId"] }
+      : {}),
     case: manifest.case,
     ...(packageReference === undefined ? {} : {
       ...(packageKind === undefined ? {} : { kind: packageKind }),
@@ -384,6 +388,7 @@ export async function buildRunProfileBrief(options: {
       "Additional subject-specific records may omit caseAxisId, but they cannot replace or duplicate a case axis.",
       "Use package-author for the human or organization author, authoring-agent for the agent that shaped a specification, implementing-agent for the agent that realized it, and evaluation-case only for evaluator-only expectations.",
       "A case expectation may establish evaluation alignment but was not authority available to the subject unless the source or author answers also supplied it.",
+      "For authorship, a request to complete or improve a specification is not blanket delegation of material product policy. Use ambient when the authoring agent selected a material product choice without attributable authority, and use not-observed only when the authored material contains no choice to compare.",
       "Do not estimate tokens, cache activity, turns, timing, technical outcomes, or provenance that the envelope and cited files do not establish.",
     ],
   });
@@ -439,6 +444,7 @@ function profileBrief(options: {
     "Produce a descriptive profile, not a winner or quality grade. Establish the decision surface, expected and observed provenance where evidence permits, obligation-to-evidence coverage, structural ownership, process measurements, technical findings, and limitations.",
     "",
     "Do not reward author control over intentional agent latitude. Classify a decision as ambient only when a material choice lacks attributable authority; a deliberately delegated or open choice is not ambient. Preserve unknown and mixed attribution and include confidence.",
+    ...(options.stage === "authorship" ? ["A request to complete or improve a specification is not blanket delegation of material product policy. Compare authored choices at the authorship stage; do not mark them not-observed merely because no implementation exists.", ""] : []),
     "",
     "## Evidence",
     "",

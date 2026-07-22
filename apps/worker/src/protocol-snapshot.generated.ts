@@ -2,9 +2,9 @@
 export const FROZEN_PROTOCOL_SNAPSHOT = {
   "schemaVersion": 1,
   "package": "@seedspec/protocol",
-  "version": "0.1.0-alpha.3",
+  "version": "0.1.0-alpha.4",
   "sourceRepository": "git+https://github.com/SeedSpec/seedspec.git",
-  "sourceCommit": "1804926c42a47bc4624e59743fde9ccb19b37620",
-  "sourceDigest": "sha256:9eb0feb988f806161d27f7f4c10502a6afbaca398b3184678c70d18bb52aa159",
+  "sourceCommit": "e1e76df02dd4e45a68bf5c288eae4a6264dbcc0b",
+  "sourceDigest": "sha256:c8e38bbf7c66a214eda0bae79cde85398b807baadb55e5a2e334de49ee0c8fd2",
   "sourceDirectory": "packages/protocol"
 } as const;

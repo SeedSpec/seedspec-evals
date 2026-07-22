@@ -114,7 +114,7 @@
           "enum": ["skill", "instructions", "verification", "tool", "target-profile"]
         },
         "description": { "type": "string", "minLength": 1 },
-        "usage": { "enum": ["required", "recommended", "available"] },
+        "usage": { "enum": ["expected", "recommended", "available"] },
         "entrypoint": { "$ref": "#/$defs/relativePath" },
         "version": { "$ref": "#/$defs/semver" },
         "update_policy": { "enum": ["exact", "latest-compatible", "latest"] },

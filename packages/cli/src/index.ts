@@ -11,6 +11,7 @@ import {
   TraceBodySchema,
   createTrace,
   parseTrace,
+  sha256Hex,
   variantsForStage,
   type EvaluationStage,
   type EvaluationVariant,
@@ -37,6 +38,7 @@ import {
   validateDecisionLedgerFile,
 } from "./profile.js";
 import { createExperimentPlan } from "./plan.js";
+import { createSkillExperimentPlan, SKILL_TREATMENTS } from "./skill-plan.js";
 import { runCodexProfileEvaluator } from "./profile-runner.js";
 import {
   cancelRemoteMatrix,
@@ -64,6 +66,7 @@ const CLI_ENTRY_PATH = fileURLToPath(import.meta.url);
 const EVALUATION_REPOSITORY_ROOT = resolve(dirname(CLI_ENTRY_PATH), "../../..");
 const DEFAULT_DESKTOP_RUNNER_ROOT = resolve(EVALUATION_REPOSITORY_ROOT, "../..", "agent-eval-runs");
 const SEEDSPEC_CLI_ENTRY = resolve(EVALUATION_REPOSITORY_ROOT, "../seedspec/packages/cli/bin/seedspec.js");
+const SHAPE_SOLUTION_INTENT_SKILL = resolve(EVALUATION_REPOSITORY_ROOT, "../seedspec/skills/shape-solution-intent/SKILL.md");
 const program = new Command();
 
 program
@@ -108,7 +111,7 @@ experiment.command("plan")
   .option("--variant <variant...>", "evaluation variant(s); defaults to every standard variant for the stage")
   .option("--repetitions <count>", "runs per case/model", parsePositiveInteger, 1)
   .option("--gateway <id>", "Cloudflare AI Gateway ID", "seedspec-evals")
-  .option("--protocol-version <version>", "frozen SeedSpec protocol package version", "0.1.0-alpha.3")
+  .option("--protocol-version <version>", "frozen SeedSpec protocol package version", "0.1.0-alpha.4")
   .option("--max-steps <count>", "maximum Think steps per turn", parsePositiveInteger, 6)
   .option("--authored-input <directory>", "authored workspace to content-address and deliver to implementation runners")
   .option("--out <file>", "plan output path")
@@ -158,6 +161,51 @@ experiment.command("plan")
       `Planned ${String(plan.envelopes.length)} model run${plan.envelopes.length === 1 ? "" : "s"} across ${String(variants.length)} evaluation variant${variants.length === 1 ? "" : "s"} in ${outPath}.\nNo model was called. Review the plan, then submit an envelope with --confirm-model-execution.`);
   });
 
+experiment.command("skill-plan")
+  .description("Create a controlled same-output authoring-skill treatment matrix.")
+  .option("--root <directory>", "case library root", "cases")
+  .option("--case <id...>", "case IDs to include", ["sparse-neighborhood-tool-lending"])
+  .requiredOption("--model <model...>", "AI Gateway model slug(s)")
+  .option("--repetitions <count>", "runs per case/model/treatment", parsePositiveInteger, 1)
+  .option("--gateway <id>", "Cloudflare AI Gateway ID", "seedspec-evals")
+  .option("--protocol-version <version>", "frozen SeedSpec protocol package version", "0.1.0-alpha.4")
+  .option("--max-steps <count>", "maximum Think steps per turn", parsePositiveInteger, 8)
+  .option("--skill <file>", "shape-solution-intent SKILL.md", SHAPE_SOLUTION_INTENT_SKILL)
+  .option("--out <file>", "plan output path")
+  .action(async (options: {
+    root: string;
+    case: string[];
+    model: string[];
+    repetitions: number;
+    gateway: string;
+    protocolVersion: string;
+    maxSteps: number;
+    skill: string;
+    out?: string;
+  }) => {
+    const allCases = await loadCaseLibrary(resolve(options.root));
+    const selected = allCases.filter((entry) => options.case.includes(entry.case.id));
+    const missing = options.case.filter((id) => !selected.some((entry) => entry.case.id === id));
+    if (missing.length > 0) throw new Error(`Unknown case IDs: ${missing.join(", ")}`);
+    const createdAt = new Date().toISOString();
+    const plan = await createSkillExperimentPlan({
+      cases: selected,
+      models: options.model,
+      repetitions: options.repetitions,
+      gatewayId: options.gateway,
+      protocolVersion: options.protocolVersion,
+      createdAt,
+      maxSteps: options.maxSteps,
+      skillPath: resolve(options.skill),
+    });
+    const defaultPath = `runs/${createdAt.replaceAll(/[:.]/g, "-")}-skill-${plan.planId.slice(0, 17)}.json`;
+    const outPath = resolve(options.out ?? defaultPath);
+    await mkdir(dirname(outPath), { recursive: true });
+    await writeFile(outPath, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
+    output({ ok: true, planId: plan.planId, runs: plan.envelopes.length, treatments: SKILL_TREATMENTS, path: outPath },
+      `Planned ${String(plan.envelopes.length)} controlled authoring-skill runs across ${String(SKILL_TREATMENTS.length)} same-output treatments in ${outPath}.\nNo model was called. Generate isolated runner kits before execution.`);
+  });
+
 experiment.command("inspect")
   .argument("<plan>", "experiment plan JSON")
   .action(async (file: string) => {
@@ -169,10 +217,13 @@ experiment.command("inspect")
       variant: manifest.variant,
       model: manifest.model.modelId,
       repetition: manifest.repetition,
+      treatment: typeof manifest.configuration?.["treatmentId"] === "string"
+        ? manifest.configuration["treatmentId"]
+        : undefined,
     }));
     output({ ok: true, planId: plan.planId, runs }, [
       `Plan ${plan.planId}:`,
-      ...runs.map((run) => `- ${run.runId} — ${run.caseId} / ${run.variant} / ${run.model} / repetition ${String(run.repetition)}`),
+      ...runs.map((run) => `- ${run.runId} — ${run.caseId} / ${run.treatment ?? run.variant} / ${run.model} / repetition ${String(run.repetition)}`),
     ].join("\n"));
   });
 
@@ -290,6 +341,7 @@ runner.command("brief")
       writeFile(resolve(directory, "source-envelope.json"), `${JSON.stringify(sourceEnvelope, null, 2)}\n`, "utf8"),
       writeFile(resolve(directory, "runner-control.mjs"), desktopRunnerWrapper(CLI_ENTRY_PATH), { encoding: "utf8", mode: 0o700 }),
     ]);
+    await materializeSkillExperimentGuidance(envelope, directory);
     if (envelope.submission.config.authoredInput !== undefined) {
       await materializeAuthoredInput(envelope.submission.config.authoredInput, resolve(directory, "input", "authored"), { readOnly: true });
     }
@@ -626,6 +678,23 @@ function assertPlanId(value: string): void {
 function parseDesktopRunner(value: string): DesktopRunner {
   if (value !== "codex" && value !== "claude-code") throw new InvalidArgumentError("must be codex or claude-code");
   return value;
+}
+
+async function materializeSkillExperimentGuidance(
+  envelope: ExecutionEnvelope,
+  directory: string,
+): Promise<void> {
+  const treatment = envelope.manifest.configuration?.["treatmentId"];
+  if (treatment !== "skill-guidance" && treatment !== "skill-and-audit") return;
+  const expectedDigest = envelope.manifest.configuration?.["skillDigest"];
+  const source = await readFile(SHAPE_SOLUTION_INTENT_SKILL, "utf8");
+  const actualDigest = `sha256:${sha256Hex(source)}`;
+  if (typeof expectedDigest !== "string" || expectedDigest !== actualDigest) {
+    throw new Error(`Skill forward-test guidance digest mismatch: expected ${typeof expectedDigest === "string" ? expectedDigest : "<invalid>"}, found ${actualDigest}.`);
+  }
+  const target = resolve(directory, "guidance", "shape-solution-intent", "SKILL.md");
+  await mkdir(dirname(target), { recursive: true });
+  await writeFile(target, source, { encoding: "utf8", flag: "wx" });
 }
 
 function extractTrace(response: unknown): ReturnType<typeof parseTrace> {

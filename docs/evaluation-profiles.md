@@ -28,6 +28,13 @@ choice without attributable authority. An agent selecting a deliberately
 delegated or open choice is authorized variation, not ambient decisioning. A
 larger package-author share is therefore not inherently a stronger result.
 
+At authorship, a general request to complete or improve a specification is not
+blanket delegation of every material product policy. An authoring-agent choice
+without attributable authority remains ambient even when it happens to match an
+evaluator-only expectation. `not-observed` means the authored material contains
+no choice to compare at that stage; it does not mean that implementation has not
+started.
+
 Reference implementations require the same care. Their decisions are
 normative, preferred, or illustrative only when package evidence establishes
 that influence. Inclusion alone does not silently make every code choice part

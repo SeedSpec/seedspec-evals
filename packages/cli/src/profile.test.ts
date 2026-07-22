@@ -68,7 +68,7 @@ describe("evaluation profile CLI helpers", () => {
       models: ["openai/example"],
       repetitions: 1,
       gatewayId: "seedspec-evals",
-      protocolVersion: "0.1.0-alpha.3",
+      protocolVersion: "0.1.0-alpha.4",
       createdAt: "2026-07-22T12:00:00.000Z",
       maxSteps: 6,
     });
@@ -173,7 +173,7 @@ describe("evaluation profile CLI helpers", () => {
       models: ["openai/example"],
       repetitions: 1,
       gatewayId: "seedspec-evals",
-      protocolVersion: "0.1.0-alpha.3",
+      protocolVersion: "0.1.0-alpha.4",
       createdAt: "2026-07-22T12:00:00.000Z",
       maxSteps: 6,
       authoredInput,

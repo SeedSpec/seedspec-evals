@@ -4,10 +4,50 @@ import { loadCaseLibrary } from "@seedspec/eval-case-library";
 import { describe, expect, it } from "vitest";
 
 import { createExperimentPlan } from "./plan.js";
+import { createSkillExperimentPlan, SKILL_TREATMENTS } from "./skill-plan.js";
 import { ExperimentPlanSchema } from "./contracts.js";
 import { buildDesktopBrief, buildDesktopManifest } from "./runner-brief.js";
 
 describe("createExperimentPlan", () => {
+  it("creates a same-output skill treatment matrix with identical author access", async () => {
+    const cases = await loadCaseLibrary(resolve("cases"));
+    const selected = cases.filter(({ case: evaluationCase }) =>
+      evaluationCase.id === "sparse-neighborhood-tool-lending");
+    const plan = await createSkillExperimentPlan({
+      cases: selected,
+      models: ["openai/gpt-5.6-sol"],
+      repetitions: 1,
+      gatewayId: "seedspec-evals",
+      protocolVersion: "0.1.0-alpha.4",
+      createdAt: "2026-07-22T12:00:00.000Z",
+      maxSteps: 8,
+      skillPath: resolve("../seedspec/skills/shape-solution-intent/SKILL.md"),
+    });
+
+    expect(plan.envelopes).toHaveLength(SKILL_TREATMENTS.length);
+    expect(plan.envelopes.map(({ manifest }) => manifest.configuration?.["treatmentId"]))
+      .toEqual(SKILL_TREATMENTS);
+    expect(new Set(plan.envelopes.map(({ manifest }) => manifest.variant)))
+      .toEqual(new Set(["seedspec-guided"]));
+    expect(plan.envelopes.every(({ submission }) =>
+      Object.keys(submission.config.simulatedAuthorResponses).length === 3)).toBe(true);
+
+    const skillEnvelope = plan.envelopes.find(({ manifest }) =>
+      manifest.configuration?.["treatmentId"] === "skill-guidance")!;
+    const skillManifest = buildDesktopManifest(skillEnvelope, "codex");
+    const skillBrief = buildDesktopBrief(skillEnvelope, skillManifest, "codex");
+    expect(skillManifest.tools.map(({ name }) => name)).toContain("shape-solution-intent");
+    expect(skillManifest.tools.find(({ name }) => name === "seedspec-cli")?.configuration?.["guidedAudit"])
+      .toBe(false);
+    expect(skillBrief).toContain("guidance/shape-solution-intent/SKILL.md");
+
+    const combinedEnvelope = plan.envelopes.find(({ manifest }) =>
+      manifest.configuration?.["treatmentId"] === "skill-and-audit")!;
+    const combinedManifest = buildDesktopManifest(combinedEnvelope, "codex");
+    expect(combinedManifest.tools.find(({ name }) => name === "seedspec-cli")?.configuration?.["guidedAudit"])
+      .toBe(true);
+  });
+
   it("creates one isolated run for every standard authorship variant", async () => {
     const cases = await loadCaseLibrary(resolve("cases"));
     const plan = await createExperimentPlan({
@@ -17,7 +57,7 @@ describe("createExperimentPlan", () => {
       models: ["openai/gpt-5.6-sol"],
       repetitions: 1,
       gatewayId: "seedspec-evals",
-      protocolVersion: "0.1.0-alpha.3",
+      protocolVersion: "0.1.0-alpha.4",
       createdAt: "2026-07-21T12:00:00.000Z",
       maxSteps: 6,
     });
@@ -52,7 +92,7 @@ describe("createExperimentPlan", () => {
       models: ["@cf/moonshotai/kimi-k2.6"],
       repetitions: 1,
       gatewayId: "seedspec-evals",
-      protocolVersion: "0.1.0-alpha.3",
+      protocolVersion: "0.1.0-alpha.4",
       createdAt: "2026-07-21T12:00:00.000Z",
       maxSteps: 6,
     });
@@ -78,7 +118,7 @@ describe("createExperimentPlan", () => {
       models: ["@cf/moonshotai/kimi-k2.6", "openai/gpt-4.1-mini"],
       repetitions: 2,
       gatewayId: "seedspec-evals",
-      protocolVersion: "0.1.0-alpha.3",
+      protocolVersion: "0.1.0-alpha.4",
       createdAt: "2026-07-21T12:00:00.000Z",
       maxSteps: 6,
     });
@@ -97,7 +137,7 @@ describe("createExperimentPlan", () => {
       models: ["@cf/moonshotai/kimi-k2.6"],
       repetitions: 1,
       gatewayId: "seedspec-evals",
-      protocolVersion: "0.1.0-alpha.3",
+      protocolVersion: "0.1.0-alpha.4",
       createdAt: "2026-07-21T12:00:00.000Z",
       maxSteps: 6,
     });
@@ -117,7 +157,7 @@ describe("createExperimentPlan", () => {
       models: ["openai/gpt-5.4"],
       repetitions: 1,
       gatewayId: "seedspec-evals",
-      protocolVersion: "0.1.0-alpha.3",
+      protocolVersion: "0.1.0-alpha.4",
       createdAt: "2026-07-21T12:00:00.000Z",
       maxSteps: 6,
     });

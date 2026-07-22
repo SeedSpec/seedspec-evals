@@ -234,6 +234,7 @@ export const EvaluationProfileSubjectSchema = z.strictObject({
   stage: EvaluationStageSchema,
   runId: RunIdSchema.optional(),
   variant: EvaluationVariantSchema.optional(),
+  treatment: IdentifierSchema.optional(),
   case: z.strictObject({
     id: IdentifierSchema,
     version: SemVerSchema,

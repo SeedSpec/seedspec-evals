@@ -9,11 +9,21 @@ function usesSeedSpec(variant: RunManifest["variant"]): boolean {
   return !["raw-source", "markdown-authored"].includes(variant);
 }
 
+function skillTreatment(manifest: RunManifest): string | undefined {
+  const value = manifest.configuration?.["treatmentId"];
+  return typeof value === "string" ? value : undefined;
+}
+
 export function buildDesktopManifest(envelope: ExecutionEnvelope, runner: DesktopRunner): RunManifest {
   const { runId: _runId, runner: _runner, ...immutableBody } = envelope.manifest;
   void _runId;
   void _runner;
   const body = JSON.parse(JSON.stringify(immutableBody)) as RunManifestInput;
+  const treatment = skillTreatment(envelope.manifest);
+  const guidedAudit = treatment === undefined
+    ? ["seedspec-guided", "seedspec-restructured"].includes(envelope.manifest.variant)
+    : treatment === "audit-guidance" || treatment === "skill-and-audit";
+  const usesSkill = treatment === "skill-guidance" || treatment === "skill-and-audit";
   return createRunManifest({
     ...body,
     runner: {
@@ -32,7 +42,15 @@ export function buildDesktopManifest(envelope: ExecutionEnvelope, runner: Deskto
         configuration: {
           protocolVersion: envelope.manifest.protocol.version,
           protocolRevision: envelope.manifest.protocol.revision ?? null,
-          guidedAudit: ["seedspec-guided", "seedspec-restructured"].includes(envelope.manifest.variant),
+          guidedAudit,
+        },
+      }] : []),
+      ...(usesSkill ? [{
+        name: "shape-solution-intent",
+        version: "0.1.0-alpha.1",
+        configuration: {
+          digest: envelope.manifest.configuration?.["skillDigest"] ?? null,
+          entrypoint: "guidance/shape-solution-intent/SKILL.md",
         },
       }] : []),
     ],
@@ -70,6 +88,7 @@ export function buildDesktopBrief(
   const seedSpecCli = runtime.seedSpecCliEntry === undefined
     ? "seedspec"
     : `node ${JSON.stringify(runtime.seedSpecCliEntry)}`;
+  const treatment = skillTreatment(manifest);
   return [
     `# Controlled ${config.stage} evaluation runner brief`,
     "",
@@ -82,6 +101,7 @@ export function buildDesktopBrief(
     `- Case: \`${config.caseId}\``,
     `- Stage: \`${config.stage}\``,
     `- Requested model: \`${config.model}\``,
+    ...(treatment === undefined ? [] : [`- Authoring treatment: \`${treatment}\``]),
     `- Harness version: \`${manifest.harness.version}\``,
     ...(usesSeedSpec(config.variant) ? [`- Protocol version: \`${manifest.protocol.version}\``] : []),
     "",
@@ -103,7 +123,9 @@ export function buildDesktopBrief(
       `${sharedInstructions.length + 7}. Use only the supplied case material, explicit author answers, and ordinary capabilities of this environment. Do not inspect or invoke unavailable authoring tooling.`,
     ] : [
       `${sharedInstructions.length + 7}. Use the frozen local SeedSpec CLI through \`${seedSpecCli}\`. Begin by recording \`${seedSpecCli} version --json\`.`,
-      config.variant === "seedspec-minimal"
+      treatment !== undefined
+        ? `${sharedInstructions.length + 8}. ${skillTreatmentInstruction(treatment, seedSpecCli)}`
+        : config.variant === "seedspec-minimal"
         ? `${sharedInstructions.length + 8}. Use \`seedspec init\` and deterministic validation, but do not use \`seedspec audit\`, guided authoring skills, or authoring audit documentation.`
         : config.variant === "seedspec-restructured"
           ? `${sharedInstructions.length + 8}. Use the complete SeedSpec guided authoring audit, then perform a dedicated semantic restructuring pass that records canonical ownership, duplicate removal, decision provenance, and preserved meaning.`
@@ -180,4 +202,20 @@ export function buildDesktopBrief(
     ] : []),
     `The run is complete only when artifacts, report, finalized trace${config.stage === "implementation" ? ", and finalized decision ledger" : ""} exist.`,
   ].join("\n");
+}
+
+function skillTreatmentInstruction(treatment: string, seedSpecCli: string): string {
+  if (treatment === "no-guidance" || treatment === "embedded-guidance") {
+    return `Use \`${seedSpecCli} init\`, validation, inspection, and digest operations, but do not use \`seedspec audit\` or read a separate authoring skill.`;
+  }
+  if (treatment === "skill-guidance") {
+    return `Read \`guidance/shape-solution-intent/SKILL.md\` completely before authoring and record the consultation, but do not use \`seedspec audit\`.`;
+  }
+  if (treatment === "audit-guidance") {
+    return "Use the complete SeedSpec guided authoring audit and record every audit area consulted, but do not read a supplied authoring skill.";
+  }
+  if (treatment === "skill-and-audit") {
+    return "Read `guidance/shape-solution-intent/SKILL.md` completely before authoring, then use the complete SeedSpec guided authoring audit. Record both forms of guidance consulted.";
+  }
+  throw new Error(`Unknown skill forward-test treatment: ${treatment}`);
 }

@@ -49,7 +49,7 @@
         "kind": {
           "enum": ["skill", "instructions", "verification", "tool", "target-profile"]
         },
-        "usage": { "enum": ["required", "recommended", "available"] },
+        "usage": { "enum": ["expected", "recommended", "available"] },
         "entrypoint": { "$ref": "#/$defs/relativePath" },
         "resolution_status": {
           "enum": ["not-resolved", "online", "bundled", "bundled-fallback", "unavailable"]
