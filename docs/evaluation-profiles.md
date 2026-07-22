@@ -132,6 +132,11 @@ seedspec-eval evaluate profile-run <run-directory> \
   --confirm-model-execution
 ```
 
+Evaluation evidence keeps the provider-qualified AI Gateway model slug. When
+that slug begins with `openai/`, the Codex adapter passes only its model portion
+to the local Codex CLI while retaining the complete slug in the evidence. Other
+provider slugs are not rewritten implicitly.
+
 This preserves Codex's JSONL events and provider-reported input, cached input,
 output, and reasoning-output counts in `evaluator-run.json`. Those are evaluator
 costs; they are not mixed into the evaluated subject's process metrics.

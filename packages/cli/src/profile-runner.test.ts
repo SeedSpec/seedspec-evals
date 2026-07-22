@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { parseCodexEvaluatorEvents } from "./profile-runner.js";
+import { codexModelSelector, parseCodexEvaluatorEvents } from "./profile-runner.js";
+
+describe("Codex evaluator model selection", () => {
+  it("translates an OpenAI gateway slug to the Codex CLI selector", () => {
+    expect(codexModelSelector("openai/gpt-5.6-sol")).toBe("gpt-5.6-sol");
+  });
+
+  it("does not guess how to translate another provider's slug", () => {
+    expect(codexModelSelector("anthropic/claude-opus-4-6")).toBe("anthropic/claude-opus-4-6");
+  });
+});
 
 describe("captured Codex profile evaluator events", () => {
   it("retains thread identity and provider-reported usage", () => {

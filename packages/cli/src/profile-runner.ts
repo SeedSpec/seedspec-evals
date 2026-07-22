@@ -53,7 +53,7 @@ export async function runCodexProfileEvaluator(options: {
     "--color", "never",
     "--sandbox", "workspace-write",
     "--cd", runDirectory,
-    "--model", evidence.evaluatorRequest.model,
+    "--model", codexModelSelector(evidence.evaluatorRequest.model),
     "--config", `model_reasoning_effort=${JSON.stringify(evidence.evaluatorRequest.reasoningEffort)}`,
     "--output-last-message", finalMessagePath,
     prompt,
@@ -111,6 +111,13 @@ export async function runCodexProfileEvaluator(options: {
   });
   await writeFile(runPath, `${JSON.stringify(run, null, 2)}\n`, "utf8");
   return { run, path: runPath };
+}
+
+export function codexModelSelector(model: string): string {
+  // Evaluation manifests use AI Gateway model slugs so the provider remains
+  // explicit. The Codex CLI's OpenAI/ChatGPT adapter accepts the model portion
+  // of that slug instead.
+  return model.startsWith("openai/") ? model.slice("openai/".length) : model;
 }
 
 export function parseCodexEvaluatorEvents(jsonl: string): {
