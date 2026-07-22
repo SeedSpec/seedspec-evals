@@ -50,18 +50,56 @@ authorship:
       kind: requirement
       description: Map each extracted invariant and each deliberately generalized detail back to evidence in the solution snapshot.
   variants:
-    source-only:
+    raw-source:
       objective: >-
-        Extract implementation-ready, reusable instructions from the supplied
-        solution snapshot. Preserve durable invariants, generalize accidental
-        provider choices, and cite source rationale.
+        Turn the solution snapshot into reusable instructions an implementation agent can use.
       deliverables:
         - id: implementation-ready-instructions
           description: Standalone instructions that an independent implementation agent can act on.
           required: true
           path: instructions.md
           mediaType: text/markdown
-    seedspec-scaffold:
+    markdown-authored:
+      objective: >-
+        Use general specification practices to extract reusable, implementation-ready
+        Markdown from the solution snapshot. Ask the simulated author when
+        clarification is necessary.
+      deliverables:
+        - id: implementation-ready-instructions
+          description: Standalone Markdown instructions that an independent implementation agent can act on.
+          required: true
+          path: instructions.md
+          mediaType: text/markdown
+    seedspec-minimal:
+      objective: >-
+        Capture the solution snapshot in a minimally structured, valid SeedSpec package.
+      deliverables:
+        - id: manifest
+          description: A valid reusable SeedSpec manifest with provider-neutral capability requirements.
+          required: true
+          path: seedspec.yaml
+          mediaType: application/yaml
+        - id: outcome-definition
+          description: A definition of release readiness, roles, checklist state, approval, invalidation, notification, and audit outcomes.
+          required: true
+          path: definition/solution.md
+          mediaType: text/markdown
+        - id: configuration-schema
+          description: A provider-neutral configuration schema for check types, required roles, calendar, reminder timing, and destinations.
+          required: true
+          path: configuration/schema.json
+          mediaType: application/schema+json
+        - id: acceptance
+          description: Acceptance scenarios that preserve current outcomes while allowing independent implementations.
+          required: true
+          path: acceptance/criteria.md
+          mediaType: text/markdown
+        - id: source-mapping
+          description: A reviewable mapping of source evidence to invariants, generalizations, open questions, and exclusions.
+          required: true
+          path: reference/source-mapping.md
+          mediaType: text/markdown
+    seedspec-guided:
       objective: >-
         Extract a reusable SeedSpec from the supplied solution snapshot. Preserve the
         human readiness decision and its audit trail, generalize provider-specific
@@ -92,11 +130,12 @@ authorship:
           required: true
           path: reference/source-mapping.md
           mediaType: text/markdown
-    seedspec-guided-authoring:
+    seedspec-restructured:
       objective: >-
-        Extract a reusable SeedSpec from the supplied solution snapshot. Preserve the
-        human readiness decision and its audit trail, generalize provider-specific
-        details into capabilities and configuration, and record source-to-spec rationale.
+        Extract and semantically restructure a reusable SeedSpec from the supplied
+        solution snapshot. Give intent, capability contracts, configuration,
+        acceptance, provenance, and agent routing distinct canonical owners while
+        exposing decision provenance.
       deliverables:
         - id: manifest
           description: A valid reusable SeedSpec manifest with provider-neutral capability requirements.
@@ -153,7 +192,7 @@ implementation:
 successCriteria:
   - id: valid-extracted-package
     stage: authorship
-    variants: [seedspec-scaffold, seedspec-guided-authoring]
+    variants: [seedspec-minimal, seedspec-guided, seedspec-restructured]
     description: The extracted package validates with all required definition, configuration, acceptance, and provenance files.
     measure:
       kind: deterministic
@@ -248,6 +287,34 @@ permittedVariability:
     dimension: integration
     description: Notifications may use provider-native automation or an already-approved automation platform.
     bounds: The scheduled summary and material-change notifications must be idempotent and link back to the authoritative release record.
+
+technicalExpectations:
+  - id: no-source-provider-shims
+    dimension: meaningfulness
+    method: structured-review
+    description: The alternate realization contains native provider concepts rather than unused Airtable or Slack abstractions retained only to resemble the source.
+  - id: invariant-locality
+    dimension: maintainability
+    method: structured-review
+    description: Readiness, blocker, approval, invalidation, and audit invariants have clear ownership independent of notification presentation.
+  - id: alternate-profile-conformance
+    dimension: profile-conformance
+    method: structured-review
+    description: The realization follows the assigned alternate-provider direction without weakening provider-neutral intent.
+
+adaptationChallenges:
+  - id: add-readiness-role
+    description: Add a required privacy readiness check with its own accountable owner and evidence link.
+    purpose: Test whether another readiness role can be introduced without rewriting approval, invalidation, notification, or audit behavior.
+    authorization: declared-by-case
+    constraints:
+      - id: preserve-human-gate
+        kind: requirement
+        description: An authorized human release manager remains the only actor that can approve Go.
+    observations:
+      - The additional role uses the existing checklist contract.
+      - Approval and invalidation behavior require no special-case branch.
+      - Existing audit evidence remains intact.
 
 simulatedToolResponses:
   - id: answer-invariants

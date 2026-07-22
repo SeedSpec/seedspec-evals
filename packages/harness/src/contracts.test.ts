@@ -19,7 +19,7 @@ function validConfig(runId = FALLBACK_RUN_ID) {
     runId,
     caseId: "sparse-app",
     stage: "authorship" as const,
-    variant: "seedspec-guided-authoring" as const,
+    variant: "seedspec-guided" as const,
     model: "@cf/meta/llama-4-scout-17b-16e-instruct",
     gatewayId: "seedspec-evals",
     trustedInstructions: ["Produce the requested SeedSpec artifacts."],

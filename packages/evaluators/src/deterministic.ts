@@ -169,8 +169,8 @@ function declaredDeterministicChecks(
   input: DeterministicCheckContext,
   adapters: ReadonlyMap<string, DeterministicCheckAdapter>,
 ): DeterministicCheckResult[] {
-  const view = createRunnableCaseView(input.evaluationCase, input.stage, input.manifest.variant);
-  return view.successCriteria
+  return input.evaluationCase.successCriteria
+    .filter((criterion) => criterion.stage === input.stage && appliesToVariant(criterion.variants, input.manifest.variant))
     .filter((criterion) => criterion.measure.kind === "deterministic")
     .map((criterion) => {
       if (criterion.measure.kind !== "deterministic") throw new Error("unreachable");

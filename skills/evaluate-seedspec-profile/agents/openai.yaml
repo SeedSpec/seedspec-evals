@@ -1,0 +1,5 @@
+interface:
+  display_name: "Evaluate SeedSpec Profile"
+  short_description: "Describe decisions, evidence, and evaluation gradients"
+  default_prompt: "Use $evaluate-seedspec-profile to create a descriptive, evidence-backed profile of this SeedSpec or implementation."
+

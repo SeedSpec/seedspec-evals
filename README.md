@@ -59,7 +59,21 @@ node packages/cli/dist/index.js experiment inspect \
   runs/first-authorship-plan.json
 ```
 
-The authorship plan creates three explicit evaluation variants: `source-only`, `seedspec-scaffold`, and `seedspec-guided-authoring`. The first receives neither SeedSpec guidance nor SeedSpec tools. The plan command writes control-plane execution envelopes beneath `runs/`, which is ignored by Git. Plans may contain evaluator-only fixtures and must never be copied into a desktop runner project. Submitting one envelope is a separate operation and requires `--confirm-model-execution`.
+The authorship plan creates a five-step treatment gradient: `raw-source`,
+`markdown-authored`, `seedspec-minimal`, `seedspec-guided`, and
+`seedspec-restructured`. Raw and general-Markdown runs receive no SeedSpec
+guidance or tools. The raw control is deliberately zero-shot and has no
+simulated-author answers; the other authoring treatments may ask the same
+predeclared simulated author. Minimal SeedSpec receives scaffolding and deterministic
+checks only. Guided SeedSpec adds semantic audits, while the restructured
+variant adds canonical concern ownership and decision provenance. Normalized
+case constraints, scoring criteria, hidden expectations, and permitted
+variability remain evaluator-only rather than leaking into authoring prompts.
+
+The plan command writes control-plane execution envelopes beneath `runs/`,
+which is ignored by Git. Plans may contain evaluator-only fixtures and must
+never be copied into a desktop runner project. Submitting one envelope is a
+separate operation and requires `--confirm-model-execution`.
 
 ## Run the same experiment in Codex, Claude Code, and Think
 
@@ -75,11 +89,35 @@ By default, the command creates a new isolated directory under `~/Code/agent-eva
 
 Repeat once for each variant. For Claude Code, replace `codex` with `claude-code`. The runner-safe envelope contains the reviewed case and available clarification IDs but no simulated answers. A control record outside the runner project exposes one answer at a time through `runner-control.mjs answer`. The brief also carries variant-specific instructions and tools, the requested model, required outputs, and the portable observable-trace contract. Select the same underlying model and snapshot. If it is unavailable, create a new run identity for the actual model rather than calling the run matched.
 
-After a desktop run finishes, inventory and score its deterministic evidence:
+After a desktop run finishes, inventory its deterministic evidence and prepare
+a descriptive evaluation profile:
 
 ```sh
 node packages/cli/dist/index.js evaluate deterministic \
   <isolated-run-directory>
+
+node packages/cli/dist/index.js evaluate profile-brief \
+  <isolated-run-directory> \
+  --runner codex \
+  --judge-model <independent-evaluator-model>
+```
+
+The profile records decision provenance and materiality,
+obligation-to-evidence coverage, semantic file ownership, process capture,
+technical findings, and uncertainty. It does not emit a normalized score or
+declare a winner. An author can profile a package without running a full lab:
+
+```sh
+node packages/cli/dist/index.js evaluate package-profile-brief \
+  <package-path> \
+  --runner codex \
+  --judge-model <evaluator-model>
+```
+
+Use the older scored rubric only when the experiment predeclares a scored
+comparison:
+
+```sh
 
 node packages/cli/dist/index.js evaluate rubric-brief \
   <isolated-run-directory> \
@@ -87,14 +125,18 @@ node packages/cli/dist/index.js evaluate rubric-brief \
   --judge-model <independent-judge-model>
 ```
 
-Run the emitted evaluator brief in a separate clean task. After all three canonical rubric scorecards validate, compare them:
+Run the emitted evaluator brief in a separate clean task. After like-for-like
+canonical rubric scorecards validate, compare them without treating the delta
+as causal proof:
 
 ```sh
 node packages/cli/dist/index.js compare \
-  <source-only-run>/rubric-scorecard.json \
-  <scaffold-run>/rubric-scorecard.json \
+  <raw-source-run>/rubric-scorecard.json \
+  <markdown-run>/rubric-scorecard.json \
+  <minimal-run>/rubric-scorecard.json \
   <guided-run>/rubric-scorecard.json \
-  --baseline source-only
+  <restructured-run>/rubric-scorecard.json \
+  --baseline raw-source
 ```
 
 Run the matching Think matrix only after reviewing the plan:
@@ -107,8 +149,11 @@ node packages/cli/dist/index.js matrix start runs/<plan>.json \
 
 Think stores observable execution events durably with the run. Codex and Claude Code write the same trace shape from the generated brief. Traces include messages, tool activity, timing, usage when available, artifacts, errors, redactions, and capture limitations; hidden reasoning is never collected. See [the parity-runner and trace instructions](docs/runners.md) for the full copy/paste workflow.
 
-The three bundled evaluator skills cover authorship value, implementation fidelity and congruency, and adversarial probing. They emit evidence-linked, machine-readable judgments while keeping deterministic failures separate from rubric scores.
+The bundled evaluator skills cover descriptive package profiling, read-only
+technical review, authorship value, implementation fidelity and congruency,
+and adversarial probing. They emit evidence-linked, machine-readable judgments
+while keeping deterministic failures separate from semantic evaluation.
 
 Copy `apps/worker/.dev.vars.example` only when you are ready to test authenticated remote operation. Never commit `.dev.vars`.
 
-See [the full lab plan](docs/labs.md), [execution architecture](docs/architecture.md), [parity runners and traces](docs/runners.md), [CLI contract](docs/cli.md), and [open decisions](docs/open-decisions.md).
+See [the full lab plan](docs/labs.md), [descriptive evaluation profiles](docs/evaluation-profiles.md), [execution architecture](docs/architecture.md), [parity runners and traces](docs/runners.md), [CLI contract](docs/cli.md), and [open decisions](docs/open-decisions.md).

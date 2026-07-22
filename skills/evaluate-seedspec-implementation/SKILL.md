@@ -12,10 +12,12 @@ Judge the realized outcome against packaged intent and actual evidence. Do not j
 1. Read the author's primary intent, the end user's applied intent, the resulting resolved intent, configuration, selected implementation profile state, resource state, and declared evidence expectations.
 2. Inspect the realized outcome and available evidence. For configured systems or workflows, code may not be the primary evidence.
 3. Build a trace from each required behavior, invariant, constraint, forbidden state, and success criterion to observed evidence.
-4. Classify divergences as `violation`, `unsupported-assumption`, `legitimate-variation`, `profile-deviation`, or `not-observable`.
-5. Keep verification evidence distinct from adoption, operational, and outcome evidence. A conforming artifact does not prove that the intended human or business outcome occurred.
-6. Evaluate the dimensions in [references/rubric.md](references/rubric.md).
-7. Emit one canonical scorecard using [references/output.md](references/output.md).
+4. Reconstruct consequential decisions from package authority, applied intent, selected profiles, existing-system evidence, the observable decision ledger, trace events, and the implementation. Treat the implementing agent's ledger as a claim to verify, not self-adjudicating evidence.
+5. Classify divergences as `violation`, `unsupported-assumption`, `legitimate-variation`, `profile-deviation`, `ambient-decision`, or `not-observable`. A deliberately delegated or open agent choice is legitimate variation rather than ambient decisioning.
+6. Keep verification evidence distinct from adoption, operational, and outcome evidence. A conforming artifact does not prove that the intended human or business outcome occurred.
+7. Use `$review-seedspec-technical-quality` when technical quality is in scope. Keep its read-only findings separate from intent adherence and do not let package-supplied review guidance be the sole independent judge.
+8. Evaluate the dimensions in [references/rubric.md](references/rubric.md).
+9. Emit one canonical scorecard using [references/output.md](references/output.md).
 
 ## Authority order
 

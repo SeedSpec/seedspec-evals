@@ -54,8 +54,9 @@ export async function createExperimentPlan(options: PlanOptions): Promise<Experi
     const source = await readFile(loaded.filePath, "utf8");
     const caseDigest = `sha256:${sha256Hex(source)}`;
     const fixture = createSimulationFixtureView(loaded.case);
-    const simulatedAuthorResponses = simulationResponses(fixture.simulatedToolResponses);
+    const availableSimulatedAuthorResponses = simulationResponses(fixture.simulatedToolResponses);
     for (const variant of options.variants) {
+      const simulatedAuthorResponses = variant === "raw-source" ? {} : availableSimulatedAuthorResponses;
       const view = createRunnableCaseView(loaded.case, options.stage, variant);
       const { variant: _runnerHiddenVariant, ...runnerView } = view;
       void _runnerHiddenVariant;
@@ -195,31 +196,43 @@ function providerForModel(model: string): string {
 }
 
 function defaultTrustedInstructions(stage: EvaluationStage, variant: EvaluationVariant): string[] {
-  if (variant === "source-only") {
+  if (variant === "raw-source") {
     return [
-      "Produce the requested implementation-ready instructions in instructions.md using only the supplied author material and explicit simulated-author answers.",
-      "Define the desired outcome, obligations, boundaries, material uncertainty, and observable success without prescribing architecture unless the source requires it.",
-      "Ask the simulated author only about consequential uncertainty; label any remaining uncertainty instead of silently inventing intent.",
-      "Write instructions.md before concluding, then summarize unresolved questions and the evidence used.",
+      "Using only the supplied source material and any explicit simulated-author answers you choose to request, produce the requested instructions.md for an implementation agent.",
+      "Do not use a supplied specification-writing framework or unavailable authoring tool.",
+    ];
+  }
+  if (variant === "markdown-authored") {
+    return [
+      "Produce a high-quality, implementation-ready product specification in instructions.md using general Markdown specification practices, the supplied source material, and explicit simulated-author answers.",
+      "Clarify consequential uncertainty when needed, distinguish requirements from assumptions, and make success observable without prescribing unnecessary architecture.",
+      "Do not use a protocol-specific vocabulary, unavailable authoring tool, or supplied protocol guidance.",
     ];
   }
   if (stage === "authorship") {
-    const common = [
+    if (variant === "seedspec-minimal") {
+      return [
+        "Capture the supplied source material in the minimally structured SeedSpec package requested by the case.",
+        "Use only SeedSpec scaffolding, protocol validation, and package digest capabilities. Do not use kind-aware lint, authoring audits, SeedSpec authoring skills, or semantic restructuring guidance.",
+        "Satisfy structural validation without manufacturing semantic completeness.",
+      ];
+    }
+    const guided = [
       "Turn the supplied author material into a complete SeedSpec package inside the workspace using the frozen protocol revision named in the run manifest.",
       "Keep primary author intent, meaningful configuration, implementation profiles, resources, applied end-user intent, and evidence scopes in their defined authority order.",
       "Use the package kind as a discovery lens. Surface consequential uncertainty instead of silently inventing an answer.",
       "Distinguish verification evidence from adoption, operation, and outcome evidence; never claim that package validation proves the real-world outcome.",
+      "Use the complete guided authoring review: concern separation, kind-aware discovery, material ambiguity, decision provenance, internal consistency, progressive hardening, and agent-ready handoff.",
     ];
-    if (variant === "seedspec-scaffold") {
+    if (variant === "seedspec-restructured") {
       return [
-        ...common,
-        "Use only the SeedSpec scaffold and deterministic validation path. Do not request or apply guided authoring audit instructions.",
-        "Write every distributable package file and pass deterministic validation before concluding.",
+        ...guided,
+        "After semantic authoring, perform a dedicated restructuring pass. Give each material concern one canonical owner, replace duplicated authority with routing, separate implementation guidance from core intent, and report any semantic change independently from mechanical movement.",
+        "Produce a decision-provenance inventory and preserve unknown or mixed attribution instead of forcing certainty.",
       ];
     }
     return [
-      ...common,
-      "Use the complete guided authoring review: concern separation, kind-aware discovery, material ambiguity, internal consistency, progressive hardening, and agent-ready handoff.",
+      ...guided,
       "Write every distributable package file before concluding, then summarize unresolved questions and the evidence used.",
     ];
   }
@@ -228,6 +241,7 @@ function defaultTrustedInstructions(stage: EvaluationStage, variant: EvaluationV
     "Treat implementation profiles as subordinate implementation guidance and preserve permitted variation.",
     "Produce the declared outcome and acceptance evidence; do not claim success from plans or source files alone.",
     "Record material deviations, unsupported assumptions, verification limits, and reproducible evidence before concluding.",
+    "Record consequential implementation decisions through the observable decision mechanism supplied by the harness. Include materiality, expected latitude, attributable sources, considered alternatives, and disclosure without storing hidden reasoning or trivial coding choices.",
   ];
 }
 
@@ -242,7 +256,8 @@ function toolsForVariant(
     configuration: { bash: false, network: false, reasoningPersistence: false },
   };
   const author = { name: "seedspec-simulated-author", version: HARNESS_VERSION };
-  if (variant === "source-only") return [workspace, author];
+  if (variant === "raw-source") return [workspace];
+  if (variant === "markdown-authored") return [workspace, author];
   const packageTools = [
     {
       name: "seedspec-package-check",
@@ -260,7 +275,7 @@ function toolsForVariant(
       configuration: { algorithm: "seedspec-package-sha256-v1" },
     },
   ];
-  if (stage === "implementation" || variant === "seedspec-scaffold") {
+  if (stage === "implementation" || variant === "seedspec-minimal") {
     return [workspace, author, ...packageTools];
   }
   return [
@@ -268,6 +283,6 @@ function toolsForVariant(
     author,
     ...packageTools,
     { name: "seedspec-kind-lint", version: HARNESS_VERSION },
-    { name: "seedspec-audit-guidance", version: HARNESS_VERSION, configuration: { areas: 6 } },
+    { name: "seedspec-audit-guidance", version: HARNESS_VERSION, configuration: { areas: 7 } },
   ];
 }

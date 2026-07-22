@@ -13,7 +13,7 @@ describe("createExperimentPlan", () => {
     const plan = await createExperimentPlan({
       cases: cases.slice(0, 1),
       stage: "authorship",
-      variants: ["source-only", "seedspec-scaffold", "seedspec-guided-authoring"],
+      variants: ["raw-source", "markdown-authored", "seedspec-minimal", "seedspec-guided", "seedspec-restructured"],
       models: ["openai/gpt-5.6-sol"],
       repetitions: 1,
       gatewayId: "seedspec-evals",
@@ -23,17 +23,19 @@ describe("createExperimentPlan", () => {
     });
 
     expect(plan.envelopes.map(({ manifest }) => manifest.variant)).toEqual([
-      "source-only",
-      "seedspec-scaffold",
-      "seedspec-guided-authoring",
+      "raw-source",
+      "markdown-authored",
+      "seedspec-minimal",
+      "seedspec-guided",
+      "seedspec-restructured",
     ]);
     const control = plan.envelopes[0]!;
     expect(control.submission.config.untrustedMaterial).not.toContain("SeedSpec");
     expect(control.submission.config.trustedInstructions.join(" ")).not.toContain("SeedSpec");
     expect(control.manifest.tools.map(({ name }) => name)).toEqual([
       "think-workspace",
-      "seedspec-simulated-author",
     ]);
+    expect(control.submission.config.simulatedAuthorResponses).toEqual({});
     const desktopManifest = buildDesktopManifest(control, "codex");
     const desktopBrief = buildDesktopBrief(control, desktopManifest, "codex");
     expect(desktopBrief).not.toMatch(/seedspec/i);
@@ -46,7 +48,7 @@ describe("createExperimentPlan", () => {
     const plan = await createExperimentPlan({
       cases: selected,
       stage: "authorship",
-      variants: ["seedspec-guided-authoring"],
+      variants: ["seedspec-guided"],
       models: ["@cf/moonshotai/kimi-k2.6"],
       repetitions: 1,
       gatewayId: "seedspec-evals",
@@ -60,6 +62,8 @@ describe("createExperimentPlan", () => {
     const material = envelope?.submission.config.untrustedMaterial ?? "";
     expect(material).not.toContain("hostile-instruction-rejected");
     expect(material).not.toContain("An operator invites residents");
+    expect(material).not.toContain("Core borrower and lender tasks must be usable");
+    expect(material).not.toContain("explicit-lifecycle");
     expect(envelope?.submission.config.simulatedAuthorResponses["membership-boundary"])
       .toContain("operator invites residents");
   });
@@ -70,7 +74,7 @@ describe("createExperimentPlan", () => {
     const plan = await createExperimentPlan({
       cases: selected,
       stage: "authorship",
-      variants: ["seedspec-guided-authoring"],
+      variants: ["seedspec-guided"],
       models: ["@cf/moonshotai/kimi-k2.6", "openai/gpt-4.1-mini"],
       repetitions: 2,
       gatewayId: "seedspec-evals",
@@ -89,7 +93,7 @@ describe("createExperimentPlan", () => {
     const plan = await createExperimentPlan({
       cases: cases.slice(0, 1),
       stage: "authorship",
-      variants: ["seedspec-guided-authoring"],
+      variants: ["seedspec-guided"],
       models: ["@cf/moonshotai/kimi-k2.6"],
       repetitions: 1,
       gatewayId: "seedspec-evals",
@@ -109,7 +113,7 @@ describe("createExperimentPlan", () => {
     const plan = await createExperimentPlan({
       cases: cases.slice(0, 1),
       stage: "authorship",
-      variants: ["seedspec-guided-authoring"],
+      variants: ["seedspec-guided"],
       models: ["openai/gpt-5.4"],
       repetitions: 1,
       gatewayId: "seedspec-evals",

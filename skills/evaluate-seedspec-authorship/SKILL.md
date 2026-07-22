@@ -1,6 +1,6 @@
 ---
 name: evaluate-seedspec-authorship
-description: Evaluate a controlled specification-authoring run from source material through its final SeedSpec package or source-only control output. Use for SeedSpec authoring experiments, evaluation-variant comparisons, authoring-tool regressions, and judging whether protocol-aware guidance materially improves an agent's implementation starting state.
+description: Evaluate a controlled specification-authoring run from raw source through its final Markdown instructions or SeedSpec package. Use for SeedSpec authoring experiments, five-level treatment-gradient comparisons, authoring-tool regressions, and judging whether protocol-aware guidance or semantic restructuring materially improves an agent's implementation starting state.
 ---
 
 # Evaluate SeedSpec authorship
@@ -33,9 +33,11 @@ Mark missing evidence as uncertainty. Never infer that a question was asked, a d
 
 ## Variant fairness
 
-- For `source-only`, do not expect SeedSpec structure or protocol validity.
-- For `seedspec-scaffold`, treat deterministic validity as a separate gate; do not assume structure created semantic quality.
-- For `seedspec-guided-authoring`, judge the actual improvement produced, not whether the runner invoked every available tool.
+- For `raw-source`, expect neither SeedSpec structure nor a formal authoring framework.
+- For `markdown-authored`, judge the quality produced by capable general specification practices without SeedSpec.
+- For `seedspec-minimal`, treat deterministic validity as a separate gate; do not assume structure created semantic quality.
+- For `seedspec-guided`, judge the actual improvement produced by semantic audit guidance, not whether the runner invoked every available tool.
+- For `seedspec-restructured`, judge canonical ownership, preserved meaning, routing, and reduced duplication in addition to the common semantic rubric.
 - Apply the same semantic rubric and maximum points to every variant.
 
 Do not edit the authored output. Recommendations belong in the scorecard assessment, not in evaluated artifacts.

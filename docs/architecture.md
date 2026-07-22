@@ -35,7 +35,7 @@ case + variant + runner + model + protocol/tool versions
         |                       |
         +-----------+-----------+
                     v
-            evaluator scorecards
+      descriptive profiles / evaluator scorecards
                     |
                     v
           comparison / congruency report
@@ -47,6 +47,13 @@ Think owns streaming, durable turn recovery, message persistence, file tools, an
 
 The runner-facing case projection excludes hidden expectations and simulated author answers. In Think, Durable Object configuration supplies the exact-match answer map only to `ask_author`. For desktop parity, `runner brief` creates a separate runner project containing a sanitized source envelope while storing the answer map outside that project. A narrow broker returns one requested answer, and deterministic preflight rejects a kit inside the evaluation repository, a dirty output directory, an invalid identity binding, or protected answers in runner-visible files.
 
+Authorship projections also exclude normalized case constraints, evaluation
+success criteria, and permitted variability. Those records belong to the
+evaluator and previously made the authoring baseline too strong. The five
+authorship variants now differ by actual treatment: raw source, general
+Markdown guidance, minimal SeedSpec structure, guided SeedSpec semantics, and
+guided semantics plus explicit restructuring.
+
 Control-plane experiment plans and committed case fixtures are never desktop runner inputs. The evaluated desktop task must be opened on the isolated runner directory, not this repository. This prevents accidental discovery through normal project searches. It does not claim to contain an intentionally malicious local process with unrestricted filesystem access; Think's narrow model tool surface is the stronger isolation boundary.
 
 The manifest is an execution commitment, not descriptive metadata added after a run. Its ID covers the complete manifest body. Digests in that body cover every model-facing payload that is stored in the execution configuration. The CLI validates the binding when reading a plan, and the Worker validates it again at the service and Durable Object boundaries. A changed prompt, source document, simulated answer, model, gateway, or step limit is a different run and must receive a different manifest and run ID.
@@ -54,6 +61,13 @@ The manifest is an execution commitment, not descriptive metadata added after a 
 The Worker supports one-run submission plus a Workflow coordinator that fans out up to 100 reviewed envelopes, submits each idempotently, and waits for terminal states. Evaluation and aggregate experiment records remain separate stages; the coordinator does not turn model output into a score.
 
 Think lifecycle hooks record observable assistant output, tool calls and results, usage, statuses, timing, and errors in the run Durable Object. A terminal export produces the same content-addressed trace shape used by desktop parity runners. Initial user material remains bound in the immutable envelope instead of being duplicated into every trace. Capture capabilities and limitations are explicit, and model reasoning is never stored.
+
+Evaluation profiles convert package, trace, process, and implementation evidence
+into content-addressed descriptive records. They preserve decision attribution
+confidence, expected agent latitude, obligation coverage, structure findings,
+capture limitations, and technical evidence without assigning a normalized
+winner. Scored rubrics remain available for experiments that predeclare a
+scored comparison.
 
 The Think workspace validator compiles the manifest schema from the frozen `@seedspec/protocol` snapshot, then applies package-level reference, semantic, configuration-example, bundled-resource, and digest checks against Think's SQLite-backed workspace. The snapshot records the unpublished source commit and a SHA-256 package digest, so early evaluations do not require publishing an untested protocol revision. Every validation result reports that version, revision, and the workspace-adapter version.
 

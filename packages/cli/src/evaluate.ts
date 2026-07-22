@@ -46,7 +46,7 @@ export async function evaluateRunDirectoryDeterministically(options: {
   const workspace = resolve(runDirectory, "workspace");
   const artifacts = await inventoryRunEvidence(runDirectory, workspace, manifest);
   const artifactManifest = ArtifactManifestSchema.parse({ schemaVersion: 1, runId: manifest.runId, artifacts });
-  const adapters = manifest.variant === "source-only"
+  const adapters = ["raw-source", "markdown-authored"].includes(manifest.variant)
     ? []
     : packageValidationAdapters(workspace, resolve(options.seedSpecCli), artifacts);
   const scorecard = evaluateDeterministically({
@@ -128,7 +128,7 @@ async function inventoryRunEvidence(runDirectory: string, workspace: string, man
   await collectFiles(workspace, workspace, files);
   const kind = manifest.target.stage === "implementation"
     ? "implementation"
-    : manifest.variant === "source-only"
+    : ["raw-source", "markdown-authored"].includes(manifest.variant)
       ? "authored-instructions"
       : "authored-package";
   const workspaceArtifacts = await Promise.all(files.toSorted().map(async (file) => {
@@ -140,6 +140,7 @@ async function inventoryRunEvidence(runDirectory: string, workspace: string, man
     "source-envelope.json": "source",
     "report.md": "log",
     "trace.json": "tool-trace",
+    "decision-ledger.json": "tool-trace",
   } as const;
   const evidenceArtifacts: Artifact[] = [];
   for (const [name, evidenceKind] of Object.entries(evidenceKinds)) {

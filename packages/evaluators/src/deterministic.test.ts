@@ -30,15 +30,23 @@ describe("evaluateDeterministically", () => {
         }],
         constraints: [],
         variants: {
-          "source-only": {
+          "raw-source": {
             objective: "Write instructions.",
             deliverables: [{ id: "instructions", description: "Instructions", required: true, path: "instructions.md" }],
           },
-          "seedspec-scaffold": {
+          "markdown-authored": {
+            objective: "Write Markdown instructions.",
+            deliverables: [{ id: "instructions", description: "Instructions", required: true, path: "instructions.md" }],
+          },
+          "seedspec-minimal": {
             objective: "Author the package.",
             deliverables: [{ id: "manifest", description: "Manifest", required: true, path: "seedspec.yaml" }],
           },
-          "seedspec-guided-authoring": {
+          "seedspec-guided": {
+            objective: "Author the package.",
+            deliverables: [{ id: "manifest", description: "Manifest", required: true, path: "seedspec.yaml" }],
+          },
+          "seedspec-restructured": {
             objective: "Author the package.",
             deliverables: [{ id: "manifest", description: "Manifest", required: true, path: "seedspec.yaml" }],
           },
@@ -65,7 +73,7 @@ describe("evaluateDeterministically", () => {
       schemaVersion: 1,
       case: { id: evaluationCase.id, version: evaluationCase.version, digest },
       target: { stage: "authorship" },
-      variant: "seedspec-guided-authoring",
+      variant: "seedspec-guided",
       repetition: 0,
       createdAt: "2026-07-21T12:00:00.000Z",
       protocol: { name: "seedspec", version: "0.1.0-alpha.3" },

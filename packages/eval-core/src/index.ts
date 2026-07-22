@@ -7,3 +7,4 @@ export * from "./runs.js";
 export * from "./scores.js";
 export * from "./traces.js";
 export * from "./versions.js";
+export * from "./profiles.js";

@@ -30,7 +30,7 @@ export function buildTrustedSystemPrompt(config: RunAgentConfig): string {
 export function buildTrustedInstructionList(config: RunAgentConfig): string[] {
   return [
     ...BASE_TRUSTED_INSTRUCTIONS,
-    ...(config.variant === "source-only" ? [] : [
+    ...(["raw-source", "markdown-authored"].includes(config.variant) ? [] : [
       "Use only the SeedSpec validation, digest, kind lint, and audit tools allowed by this evaluation variant; record the protocol and adapter versions they report.",
     ]),
     ...config.trustedInstructions,

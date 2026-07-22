@@ -5,6 +5,7 @@ import {
   JsonValueSchema,
   SafeRelativePathSchema,
   SemVerSchema,
+  TechnicalDimensionSchema,
   addUniqueIdIssues,
   deepFreeze,
   type DeepReadonly,
@@ -13,9 +14,11 @@ import {
 export const EvaluationStageSchema = z.enum(["authorship", "implementation"]);
 
 export const AuthorshipVariantSchema = z.enum([
-  "source-only",
-  "seedspec-scaffold",
-  "seedspec-guided-authoring",
+  "raw-source",
+  "markdown-authored",
+  "seedspec-minimal",
+  "seedspec-guided",
+  "seedspec-restructured",
 ]);
 export const ImplementationVariantSchema = z.literal("seedspec-implementation");
 export const EvaluationVariantSchema = z.union([
@@ -107,6 +110,23 @@ export const SimulatedToolResponseSchema = z.strictObject({
   response: JsonValueSchema,
 });
 
+export const TechnicalExpectationSchema = z.strictObject({
+  id: IdentifierSchema,
+  dimension: TechnicalDimensionSchema,
+  description: z.string().trim().min(1).max(4_000),
+  method: z.enum(["deterministic", "structured-review"]),
+  applicability: z.string().trim().min(1).max(4_000).optional(),
+});
+
+export const AdaptationChallengeDefinitionSchema = z.strictObject({
+  id: IdentifierSchema,
+  description: z.string().trim().min(1).max(8_000),
+  purpose: z.string().trim().min(1).max(4_000),
+  authorization: z.literal("declared-by-case"),
+  constraints: z.array(CaseConstraintSchema).max(64),
+  observations: z.array(z.string().trim().min(1).max(4_000)).min(1).max(64),
+});
+
 export const AuthorshipVariantContractSchema = z.strictObject({
   objective: z.string().trim().min(1).max(8_000),
   deliverables: z.array(DeliverableSchema).min(1).max(128),
@@ -117,9 +137,11 @@ export const AuthorshipStageSchema = z.strictObject({
   sourceMaterials: z.array(SourceMaterialSchema).min(1).max(128),
   constraints: z.array(CaseConstraintSchema).max(128),
   variants: z.strictObject({
-    "source-only": AuthorshipVariantContractSchema,
-    "seedspec-scaffold": AuthorshipVariantContractSchema,
-    "seedspec-guided-authoring": AuthorshipVariantContractSchema,
+    "raw-source": AuthorshipVariantContractSchema,
+    "markdown-authored": AuthorshipVariantContractSchema,
+    "seedspec-minimal": AuthorshipVariantContractSchema,
+    "seedspec-guided": AuthorshipVariantContractSchema,
+    "seedspec-restructured": AuthorshipVariantContractSchema,
   }),
 });
 
@@ -143,6 +165,8 @@ const EvaluationCaseDataSchema = z
     hiddenExpectations: z.array(HiddenExpectationSchema).max(256),
     permittedVariability: z.array(PermittedVariabilitySchema).max(256),
     simulatedToolResponses: z.array(SimulatedToolResponseSchema).max(256),
+    technicalExpectations: z.array(TechnicalExpectationSchema).max(256).default([]),
+    adaptationChallenges: z.array(AdaptationChallengeDefinitionSchema).max(128).default([]),
   })
   .superRefine((evaluationCase, context) => {
     addUniqueIdIssues(evaluationCase.authorship.sourceMaterials, context, ["authorship", "sourceMaterials"]);
@@ -155,6 +179,8 @@ const EvaluationCaseDataSchema = z
     addUniqueIdIssues(evaluationCase.hiddenExpectations, context, ["hiddenExpectations"]);
     addUniqueIdIssues(evaluationCase.permittedVariability, context, ["permittedVariability"]);
     addUniqueIdIssues(evaluationCase.simulatedToolResponses, context, ["simulatedToolResponses"]);
+    addUniqueIdIssues(evaluationCase.technicalExpectations, context, ["technicalExpectations"]);
+    addUniqueIdIssues(evaluationCase.adaptationChallenges, context, ["adaptationChallenges"]);
 
     if (evaluationCase.implementation !== undefined) {
       addUniqueIdIssues(evaluationCase.implementation.constraints, context, ["implementation", "constraints"]);
@@ -215,6 +241,8 @@ export type SuccessCriterion = z.infer<typeof SuccessCriterionSchema>;
 export type HiddenExpectation = z.infer<typeof HiddenExpectationSchema>;
 export type PermittedVariability = z.infer<typeof PermittedVariabilitySchema>;
 export type SimulatedToolResponse = z.infer<typeof SimulatedToolResponseSchema>;
+export type TechnicalExpectation = z.infer<typeof TechnicalExpectationSchema>;
+export type AdaptationChallengeDefinition = z.infer<typeof AdaptationChallengeDefinitionSchema>;
 export type AuthorshipStage = z.infer<typeof AuthorshipStageSchema>;
 export type ImplementationStage = z.infer<typeof ImplementationStageSchema>;
 export type EvaluationCase = DeepReadonly<z.infer<typeof EvaluationCaseDataSchema>>;
@@ -232,8 +260,6 @@ export interface RunnableCaseView {
   readonly sourceMaterials: readonly DeepReadonly<SourceMaterial>[];
   readonly constraints: readonly DeepReadonly<CaseConstraint>[];
   readonly deliverables: readonly DeepReadonly<Deliverable>[];
-  readonly successCriteria: readonly DeepReadonly<SuccessCriterion>[];
-  readonly permittedVariability: readonly DeepReadonly<PermittedVariability>[];
 }
 
 export interface SimulationFixtureView {
@@ -267,12 +293,11 @@ export function createRunnableCaseView(
     variant,
     objective: stageDefinition.objective,
     sourceMaterials: stage === "authorship" ? input.authorship.sourceMaterials : [],
-    constraints: stage === "authorship" ? input.authorship.constraints : input.implementation?.constraints ?? [],
+    // Authorship constraints, success criteria, and permitted variability are normalized
+    // evaluator expectations. The authoring subject receives only original source material,
+    // its variant objective, and the requested deliverable shape.
+    constraints: stage === "authorship" ? [] : input.implementation?.constraints ?? [],
     deliverables: stageDefinition.deliverables,
-    successCriteria: input.successCriteria.filter((criterion) =>
-      criterion.stage === stage && appliesToVariant(criterion.variants, variant)),
-    permittedVariability: input.permittedVariability.filter((variability) =>
-      variability.stage === stage && appliesToVariant(variability.variants, variant)),
   });
 }
 

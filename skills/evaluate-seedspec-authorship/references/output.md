@@ -13,7 +13,7 @@ Return JSON only, conforming to `ScorecardSchema`. Use this shape:
     "digest": "sha256:<64 lowercase hex characters>"
   },
   "stage": "authorship",
-  "variant": "source-only | seedspec-scaffold | seedspec-guided-authoring",
+  "variant": "raw-source | markdown-authored | seedspec-minimal | seedspec-guided | seedspec-restructured",
   "createdAt": "ISO-8601 timestamp with offset",
   "evaluator": {
     "id": "seedspec-authorship-rubric",

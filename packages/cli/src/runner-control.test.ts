@@ -29,7 +29,7 @@ describe("desktop runner control boundary", () => {
     const plan = await createExperimentPlan({
       cases: selected,
       stage: "authorship",
-      variants: ["source-only"],
+      variants: ["markdown-authored"],
       models: ["openai/gpt-5.6-sol"],
       repetitions: 1,
       gatewayId: "seedspec-evals",
@@ -90,7 +90,7 @@ describe("desktop runner control boundary", () => {
         schemaVersion: 1,
         runId: desktopManifest.runId,
         sourceRunId: executionEnvelope.manifest.runId,
-        variant: "source-only",
+        variant: "markdown-authored",
         runner: desktopManifest.runner,
         model: desktopManifest.model,
         startedAt: "2026-07-22T12:00:00.000Z",

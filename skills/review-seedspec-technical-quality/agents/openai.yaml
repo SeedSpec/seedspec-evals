@@ -1,0 +1,5 @@
+interface:
+  display_name: "Review SeedSpec Technical Quality"
+  short_description: "Evaluate implementation quality without editing code"
+  default_prompt: "Use $review-seedspec-technical-quality to inspect this implementation read-only and return an evidence-backed technical evaluation."
+

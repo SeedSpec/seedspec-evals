@@ -43,18 +43,56 @@ authorship:
       kind: requirement
       description: Slack and Jira receive identifiers, owner, age, priority, and a link, not the ticket transcript or customer message body.
   variants:
-    source-only:
+    raw-source:
       objective: >-
-        Produce implementation-ready instructions for the escalation outcome. Keep
-        credentials out, preserve the approved system boundary, and surface
-        consequential uncertainty.
+        Turn the operations request into instructions an implementation agent can use.
       deliverables:
         - id: implementation-ready-instructions
           description: Standalone instructions that an independent implementation agent can act on.
           required: true
           path: instructions.md
           mediaType: text/markdown
-    seedspec-scaffold:
+    markdown-authored:
+      objective: >-
+        Use general specification practices to produce implementation-ready Markdown
+        for the escalation outcome. Ask the simulated author when clarification is
+        necessary.
+      deliverables:
+        - id: implementation-ready-instructions
+          description: Standalone Markdown instructions that an independent implementation agent can act on.
+          required: true
+          path: instructions.md
+          mediaType: text/markdown
+    seedspec-minimal:
+      objective: >-
+        Capture the operations request in a minimally structured, valid workflow SeedSpec.
+      deliverables:
+        - id: manifest
+          description: A valid workflow SeedSpec manifest with required system capabilities and implementation profiles.
+          required: true
+          path: seedspec.yaml
+          mediaType: application/yaml
+        - id: outcome-definition
+          description: A system-neutral definition of trigger semantics, business-time calculation, actions, deduplication, recovery, and audit evidence.
+          required: true
+          path: definition/workflow.md
+          mediaType: text/markdown
+        - id: configuration-schema
+          description: A schema for approved system references, thresholds, schedules, destinations, and field mappings.
+          required: true
+          path: configuration/schema.json
+          mediaType: application/schema+json
+        - id: configuration-guide
+          description: A credential-safe configuration and verification guide.
+          required: true
+          path: configuration/guide.md
+          mediaType: text/markdown
+        - id: acceptance
+          description: Simulatable acceptance scenarios for trigger, suppression, reset, retries, and privacy.
+          required: true
+          path: acceptance/criteria.md
+          mediaType: text/markdown
+    seedspec-guided:
       objective: >-
         Produce a SeedSpec for a configurable, auditable escalation outcome spanning
         the organization's customer, support, chat, and work-tracking systems. Prefer
@@ -85,11 +123,11 @@ authorship:
           required: true
           path: acceptance/criteria.md
           mediaType: text/markdown
-    seedspec-guided-authoring:
+    seedspec-restructured:
       objective: >-
-        Produce a SeedSpec for a configurable, auditable escalation outcome spanning
-        the organization's customer, support, chat, and work-tracking systems. Prefer
-        configuration of existing capabilities and keep credentials out of the package.
+        Author and semantically restructure a configurable, auditable workflow
+        SeedSpec. Give outcome intent, configuration, profile guidance, acceptance,
+        and agent routing distinct canonical owners and expose decision provenance.
       deliverables:
         - id: manifest
           description: A valid workflow SeedSpec manifest with required system capabilities and implementation profiles.
@@ -146,7 +184,7 @@ implementation:
 successCriteria:
   - id: valid-workflow-package
     stage: authorship
-    variants: [seedspec-scaffold, seedspec-guided-authoring]
+    variants: [seedspec-minimal, seedspec-guided, seedspec-restructured]
     description: The package validates as a workflow and includes configuration, implementation guidance, and acceptance components.
     measure:
       kind: deterministic
@@ -240,6 +278,34 @@ permittedVariability:
     dimension: message-format
     description: Slack block layout and wording may vary.
     bounds: It must expose the ticket ID/link, owner, priority, VIP basis, and business-time age without customer message content.
+
+technicalExpectations:
+  - id: configuration-not-hardcoding
+    dimension: flexibility
+    method: structured-review
+    description: Thresholds, calendars, field mappings, and destinations remain configuration rather than duplicated constants in workflow logic.
+  - id: idempotent-recovery
+    dimension: reliability
+    method: deterministic
+    description: Duplicate events, retries, and partial action failures preserve one escalation episode and a recoverable audit trail.
+  - id: minimum-data-disclosure
+    dimension: security
+    method: structured-review
+    description: Exported configuration and actions contain only approved fields and secret references.
+
+adaptationChallenges:
+  - id: second-support-schedule
+    description: Add a second configured support calendar for another team without duplicating the escalation workflow.
+    purpose: Test whether business-time and destination behavior are genuinely configurable rather than embedded in one workflow branch.
+    authorization: declared-by-case
+    constraints:
+      - id: preserve-episode-semantics
+        kind: requirement
+        description: Episode idempotency, reply reset, and minimum disclosure remain identical.
+    observations:
+      - A second schedule is represented through configuration and mapping.
+      - Core escalation logic is not copied.
+      - Existing replay fixtures remain passing.
 
 simulatedToolResponses:
   - id: answer-vip-rule

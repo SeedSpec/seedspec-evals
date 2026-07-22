@@ -35,15 +35,23 @@ function validCase(id: string): object {
       ],
       constraints: [],
       variants: {
-        "source-only": {
+        "raw-source": {
           objective: "Write implementation-ready instructions.",
           deliverables: [{ id: "instructions", description: "Instructions", required: true, path: "instructions.md" }],
         },
-        "seedspec-scaffold": {
+        "markdown-authored": {
+          objective: "Write a Markdown specification.",
+          deliverables: [{ id: "instructions", description: "Instructions", required: true, path: "instructions.md" }],
+        },
+        "seedspec-minimal": {
           objective: "Author a small evaluation package.",
           deliverables: [{ id: "package", description: "A package", required: true, path: "seedspec.yaml", mediaType: "application/yaml" }],
         },
-        "seedspec-guided-authoring": {
+        "seedspec-guided": {
+          objective: "Author a guided evaluation package.",
+          deliverables: [{ id: "package", description: "A package", required: true, path: "seedspec.yaml", mediaType: "application/yaml" }],
+        },
+        "seedspec-restructured": {
           objective: "Author a small evaluation package.",
           deliverables: [{ id: "package", description: "A package", required: true, path: "seedspec.yaml", mediaType: "application/yaml" }],
         },
@@ -129,6 +137,8 @@ describe("case discovery and loading", () => {
       expect(evaluationCase.hiddenExpectations.length).toBeGreaterThan(0);
       expect(evaluationCase.permittedVariability.length).toBeGreaterThan(0);
       expect(evaluationCase.simulatedToolResponses.length).toBeGreaterThan(0);
+      expect(evaluationCase.technicalExpectations.length).toBeGreaterThan(0);
+      expect(evaluationCase.adaptationChallenges.length).toBeGreaterThan(0);
     }
     expect(first.every(({ case: evaluationCase }) => Object.isFrozen(evaluationCase))).toBe(
       true,

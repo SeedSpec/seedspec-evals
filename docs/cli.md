@@ -31,22 +31,34 @@ seedspec-eval runner preflight <isolated-run-directory>
 seedspec-eval author answer <runner-source-envelope> --question <id>
 seedspec-eval trace finalize <draft> [--out <file>]
 seedspec-eval trace validate <trace>
+seedspec-eval decision-ledger finalize <draft> [--out <file>]
+seedspec-eval decision-ledger validate <ledger>
 seedspec-eval evaluate deterministic <run-directory> [--seedspec-cli <file>]
+seedspec-eval evaluate package-profile-brief <package-path> --runner codex|claude-code --judge-model <model>
+seedspec-eval evaluate profile-brief <run-directory> --runner codex|claude-code --judge-model <model>
+seedspec-eval evaluate profile-finalize <draft> [--out <file>]
+seedspec-eval evaluate profile <profile>
 seedspec-eval evaluate rubric-brief <run-directory> --runner codex|claude-code --judge-model <model>
 seedspec-eval evaluate scorecard <scorecard>
-seedspec-eval compare <scorecard...> [--baseline source-only]
+seedspec-eval compare <scorecard...> [--baseline raw-source]
 seedspec-eval docs [topic]
 ```
 
-`experiment plan` is deterministic. It expands selectors, models, stages, evaluation variants, and repetitions into immutable Think execution envelopes and reports estimated run count. Authorship defaults to `source-only`, `seedspec-scaffold`, and `seedspec-guided-authoring`. The source-only prompt and tool surface omit SeedSpec guidance; every variant remains recorded in the control-plane manifest, trace, artifacts, and scorecards.
+`experiment plan` is deterministic. It expands selectors, models, stages, evaluation variants, and repetitions into immutable Think execution envelopes and reports estimated run count. Authorship defaults to `raw-source`, `markdown-authored`, `seedspec-minimal`, `seedspec-guided`, and `seedspec-restructured`. Raw and Markdown controls receive no SeedSpec tools; the minimal package receives only scaffolding and deterministic checks; guided and restructured variants receive semantic authoring support. Every variant remains recorded in the control-plane manifest, trace, artifacts, and scorecards.
 
-`runner brief` derives a runner-specific immutable manifest and copy/paste handoff while retaining the Think run as its comparison source. It writes only to an isolated directory outside the evaluation repository and places simulated answers in control-only storage. `runner preflight` fails unless the task is operating from that clean directory, identities and broker state match, and no protected response is present in runner-visible files. `author answer` accepts only the sanitized runner source envelope and returns one exact answer. `evaluate deterministic` inventories the completed workspace and runs variant-appropriate checks. `evaluate rubric-brief` prepares an independent judging task but does not call a model. `compare` accepts like-for-like canonical scorecards and reports deltas from the selected baseline without claiming causality. `run submit` and `matrix start` are the actions allowed to invoke a model and therefore require an explicit confirmation flag in addition to remote authentication.
+`runner brief` derives a runner-specific immutable manifest and copy/paste handoff while retaining the Think run as its comparison source. It writes only to an isolated directory outside the evaluation repository and places simulated answers in control-only storage. `runner preflight` fails unless the task is operating from that clean directory, identities and broker state match, and no protected response is present in runner-visible files. `author answer` accepts only the sanitized runner source envelope and returns one exact answer. `evaluate deterministic` inventories the completed workspace and runs variant-appropriate checks. Package and run profile briefs prepare read-only agent tasks; `profile-finalize` validates and content-addresses their descriptive output. `evaluate rubric-brief` prepares an independent scored judging task but does not call a model. `compare` accepts like-for-like canonical scorecards and reports deltas from the selected baseline without claiming causality. `run submit` and `matrix start` are the actions allowed to invoke a model and therefore require an explicit confirmation flag in addition to remote authentication.
 
 Remote run commands read the bearer token from `SEEDSPEC_EVAL_API_TOKEN`; the CLI does not accept it as an ordinary command argument where it would be likely to remain in shell history. The Worker rejects all run routes when its corresponding secret is absent.
 
 `run status` exposes Think submission state without presenting a pending turn as failed. Cancellation is idempotent. Matrix cancellation requires the matching immutable plan so the Worker can terminate the Workflow and cancel active children rather than orphaning model turns.
 
 `run trace` exports the trace stored with a terminal Think run. Desktop runners write a trace body from their generated brief, then `trace finalize` adds a content-derived trace ID and `trace validate` verifies it. Trace capture is capability-declared: unavailable events remain unavailable, redactions are counted, and hidden chain-of-thought is always `not-collected`.
+
+Implementation runners also produce a content-addressed decision ledger.
+`decision-ledger finalize|validate` records observable decision summaries,
+materiality, expected latitude, source citations, alternatives, and limitations
+without collecting hidden reasoning. Independent evaluation verifies the ledger
+rather than accepting its attribution claims as self-proving.
 
 ## Error shape
 

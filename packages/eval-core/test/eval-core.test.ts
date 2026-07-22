@@ -58,7 +58,7 @@ function manifestBody() {
     schemaVersion: 1 as const,
     case: caseReference,
     target: { stage: "authorship" as const },
-    variant: "seedspec-guided-authoring" as const,
+    variant: "seedspec-guided" as const,
     repetition: 0,
     createdAt: NOW,
     protocol,
@@ -104,7 +104,7 @@ function caseInput() {
         { id: "no-network", kind: "prohibition" as const, description: "Do not use the network." },
       ],
       variants: {
-        "source-only": {
+        "raw-source": {
           objective: "Turn sparse intent into implementation-ready instructions.",
           deliverables: [{
             id: "instructions",
@@ -114,7 +114,17 @@ function caseInput() {
             mediaType: "text/markdown",
           }],
         },
-        "seedspec-scaffold": {
+        "markdown-authored": {
+          objective: "Turn sparse intent into a Markdown specification.",
+          deliverables: [{
+            id: "instructions",
+            description: "Implementation-ready instructions",
+            required: true,
+            path: "instructions.md",
+            mediaType: "text/markdown",
+          }],
+        },
+        "seedspec-minimal": {
           objective: "Turn sparse intent into a reviewable package.",
           deliverables: [{
             id: "package",
@@ -124,8 +134,18 @@ function caseInput() {
             mediaType: "text/markdown",
           }],
         },
-        "seedspec-guided-authoring": {
+        "seedspec-guided": {
           objective: "Turn sparse intent into a reviewable package.",
+          deliverables: [{
+            id: "package",
+            description: "A SeedSpec package",
+            required: true,
+            path: "package/spec.md",
+            mediaType: "text/markdown",
+          }],
+        },
+        "seedspec-restructured": {
+          objective: "Turn sparse intent into a semantically restructured package.",
           deliverables: [{
             id: "package",
             description: "A SeedSpec package",
@@ -191,22 +211,24 @@ describe("canonical primitives", () => {
 describe("evaluation cases", () => {
   it("validates both stages, freezes the case, and keeps hidden expectations out of runner views", () => {
     const parsed = EvaluationCaseSchema.parse(caseInput());
-    const view = createRunnableCaseView(parsed, "authorship", "seedspec-guided-authoring");
+    const view = createRunnableCaseView(parsed, "authorship", "seedspec-guided");
 
     expect(Object.isFrozen(parsed)).toBe(true);
     expect(Object.isFrozen(parsed.authorship.sourceMaterials)).toBe(true);
     expect(view).not.toHaveProperty("hiddenExpectations");
     expect(view).not.toHaveProperty("simulatedToolResponses");
+    expect(view).not.toHaveProperty("successCriteria");
+    expect(view).not.toHaveProperty("permittedVariability");
+    expect(view.constraints).toEqual([]);
     expect(JSON.stringify(view)).not.toContain("read-clock");
     expect(JSON.stringify(view)).not.toContain('"hour":12');
     expect(createSimulationFixtureView(parsed).simulatedToolResponses[0]?.response).toEqual({ hour: 12 });
     expect(view.sourceMaterials[0]?.trust).toBe("untrusted");
-    expect(view.successCriteria.map(({ id }) => id)).toEqual(["valid-package"]);
   });
 
   it("rejects traversal paths, duplicate IDs, and dangling implementation expectations", () => {
     const unsafe = caseInput();
-    unsafe.authorship.variants["seedspec-guided-authoring"].deliverables[0]!.path = "../secrets.txt";
+    unsafe.authorship.variants["seedspec-guided"].deliverables[0]!.path = "../secrets.txt";
     expect(EvaluationCaseSchema.safeParse(unsafe).success).toBe(false);
 
     const noImplementation: Record<string, unknown> = { ...caseInput() };
@@ -220,15 +242,15 @@ describe("evaluation cases", () => {
 
   it("rejects exact and case-folded deliverable path collisions", () => {
     const exact = caseInput();
-    exact.authorship.variants["seedspec-guided-authoring"].deliverables.push({
-      ...exact.authorship.variants["seedspec-guided-authoring"].deliverables[0]!,
+    exact.authorship.variants["seedspec-guided"].deliverables.push({
+      ...exact.authorship.variants["seedspec-guided"].deliverables[0]!,
       id: "duplicate-path",
     });
     expect(EvaluationCaseSchema.safeParse(exact).success).toBe(false);
 
     const caseFolded = caseInput();
-    caseFolded.authorship.variants["seedspec-guided-authoring"].deliverables.push({
-      ...caseFolded.authorship.variants["seedspec-guided-authoring"].deliverables[0]!,
+    caseFolded.authorship.variants["seedspec-guided"].deliverables.push({
+      ...caseFolded.authorship.variants["seedspec-guided"].deliverables[0]!,
       id: "case-folded-path",
       path: "PACKAGE/SPEC.MD",
     });
@@ -278,7 +300,7 @@ describe("artifacts and run states", () => {
       schemaVersion: 1 as const,
       runId: run.runId,
       stage: "authorship" as const,
-      variant: "seedspec-guided-authoring" as const,
+      variant: "seedspec-guided" as const,
       kind: "authored-package" as const,
       path: "outputs/package.zip",
       mediaType: "application/zip",
@@ -287,7 +309,7 @@ describe("artifacts and run states", () => {
       createdAt: LATER,
       provenance: {
         case: caseReference,
-        variant: "seedspec-guided-authoring" as const,
+        variant: "seedspec-guided" as const,
         protocol,
         runner,
         model,
@@ -347,7 +369,7 @@ describe("scores", () => {
       runId: createRunManifest(manifestBody()).runId,
       case: caseReference,
       stage: "authorship" as const,
-      variant: "seedspec-guided-authoring" as const,
+      variant: "seedspec-guided" as const,
       createdAt: LATER,
       evaluator: { id: "protocol-checks", kind: "deterministic" as const, version: "1.0.0" },
       kind: "deterministic" as const,
@@ -466,7 +488,7 @@ describe("observable traces", () => {
     const trace = createTrace({
       schemaVersion: 1,
       runId,
-      variant: "seedspec-guided-authoring",
+      variant: "seedspec-guided",
       runner,
       model,
       startedAt: NOW,

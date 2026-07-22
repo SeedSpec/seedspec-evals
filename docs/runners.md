@@ -26,7 +26,7 @@ node packages/cli/dist/index.js runner brief runs/first-parity-plan.json \
   --runner codex
 ```
 
-Repeat for the source-only, scaffold, and guided-authoring run IDs. Each command creates an isolated runner directory outside this repository; an explicit `--out` inside `seedspec-evals` is rejected. Open each generated directory as its own Codex project, paste `handoff.md` into a clean task, and run `node runner-control.mjs preflight` before doing any evaluation work. The preflight requires the task working directory to equal the runner directory, rejects pre-existing output, verifies run identity and the author broker, and detects protected answers in runner-visible files without printing them.
+Repeat for the raw-source, Markdown-authored, minimal-SeedSpec, guided-SeedSpec, and restructured-SeedSpec run IDs. Each command creates an isolated runner directory outside this repository; an explicit `--out` inside `seedspec-evals` is rejected. Open each generated directory as its own Codex project, paste `handoff.md` into a clean task, and run `node runner-control.mjs preflight` before doing any evaluation work. The preflight requires the task working directory to equal the runner directory, rejects pre-existing output, verifies run identity and the author broker, and detects protected answers in runner-visible files without printing them.
 
 The runner-safe `source-envelope.json` contains source material, trusted instructions, and available clarification IDs, but not the answer map. The answer map lives in control-only storage outside the runner project. `node runner-control.mjs answer --question <id>` returns only the requested pre-declared answer. Select the requested underlying model and snapshot. If it is unavailable, create a new run identity for the actual model instead of calling the run matched. If Codex cannot expose a requested trace field, it must declare the limitation instead of filling it speculatively.
 
@@ -82,6 +82,6 @@ Desktop isolation prevents ordinary repository searches from exposing fixtures; 
 
 ## 6. Score and compare authorship variants
 
-Run `evaluate deterministic` for each completed run directory. Then use `evaluate rubric-brief` to create an independent judging task using the same rubric for every variant. Validate each returned scorecard with `evaluate scorecard` and compare like-for-like rubric scorecards with `compare --baseline source-only`.
+Run `evaluate deterministic` for each completed run directory. Then use `evaluate profile-brief` to create a descriptive decision, evidence, structure, process, and technical profile. Use `evaluate rubric-brief` only when a predeclared scored comparison is required. Validate returned scorecards with `evaluate scorecard` and compare like-for-like rubric scorecards with `compare --baseline raw-source`.
 
 The trace contract deliberately excludes hidden chain-of-thought. Comparable evidence consists of observable inputs and outputs, tool activity, artifacts, timing, usage where exposed, errors, and declared capture limitations.

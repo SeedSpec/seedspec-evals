@@ -90,6 +90,28 @@ export class SeedSpecEvalAgent extends Think<Env> {
     const config = this.requireRunConfig();
     return {
       ...createSeedSpecTools(this.workspace, config.stage, config.variant),
+      ...(config.stage === "implementation" ? {
+        record_decision: tool({
+          description: "Record one consequential implementation decision as observable evidence. Do not record hidden reasoning or trivial local coding choices.",
+          inputSchema: z.strictObject({
+            id: z.string().regex(/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/),
+            domain: z.string().regex(/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/),
+            title: z.string().min(1).max(512),
+            choice: z.string().min(1).max(4_000),
+            materiality: z.enum(["critical", "material", "minor"]),
+            expectedLatitude: z.enum(["fixed", "preferred", "delegated", "open", "unresolved", "unknown"]),
+            sources: z.array(z.strictObject({
+              actor: z.enum(["package-author", "end-user", "implementation-profile", "reference-artifact", "existing-system", "environment", "implementing-agent", "mixed", "unknown"]),
+              basis: z.string().min(1).max(4_000),
+              path: z.string().min(1).max(1_024).optional(),
+            })).max(32),
+            alternativesConsidered: z.array(z.string().min(1).max(2_000)).max(32),
+            disclosure: z.enum(["explicit", "implicit", "unknown"]),
+            rationale: z.string().min(1).max(8_000),
+          }),
+          execute: ({ id }) => ({ recorded: true as const, id }),
+        }),
+      } : {}),
       ask_author: tool({
         description:
           "Ask one pre-declared clarification question. Use the exact questionId; unavailable questions return no answer.",
@@ -128,7 +150,8 @@ export class SeedSpecEvalAgent extends Think<Env> {
     return {
       activeTools: [
         ...WORKSPACE_TOOLS,
-        "ask_author",
+        ...(config.variant === "raw-source" ? [] : ["ask_author"]),
+        ...(config.stage === "implementation" ? ["record_decision"] : []),
         ...seedSpecToolNamesForVariant(config.stage, config.variant),
       ],
       maxSteps: config.maxSteps,

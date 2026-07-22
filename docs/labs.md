@@ -8,15 +8,44 @@ The protocol is doing useful work only when its advantages survive different cas
 
 ## Lab 1: authorship value
 
-Run each scenario through at least three evaluation variants:
+Run each scenario through five evaluation variants:
 
-1. **Source-only control** — give the agent the raw author material and ask for implementation-ready instructions.
-2. **SeedSpec scaffold** — use `seedspec init` and ordinary validation, without the guided audit.
-3. **Guided SeedSpec authoring** — run the full six-area audit with an author simulator or a person supplying recorded decisions.
+1. **Raw-source control** — give the agent only original author material, no simulated-author answers, and ask once for implementation-ready instructions.
+2. **General Markdown authorship** — add strong general specification guidance but no SeedSpec concepts or tools.
+3. **Minimal SeedSpec** — use `seedspec init` and deterministic validation without semantic authoring guidance.
+4. **Guided SeedSpec authorship** — run the full seven-area audit with an author simulator or a person supplying recorded decisions.
+5. **Restructured SeedSpec** — add a dedicated semantic restructuring pass that assigns canonical concern ownership, removes duplicated authority, preserves meaning, and records decision provenance.
 
-Measure protocol validity, source fidelity, unresolved material ambiguity, unsupported invention, concern separation, kind-specific coverage, acceptance quality, handoff quality, author interactions, elapsed time, token use, and evaluator confidence.
+Normalized constraints, success criteria, permitted variability, simulated
+answers, and hidden expectations remain outside runner material. Measure
+protocol validity, source fidelity, unresolved material ambiguity, unsupported
+invention, concern separation, decision provenance, obligation-to-evidence
+coverage, kind-specific coverage, handoff quality, author interactions, elapsed
+time, token and cache use, and evaluator confidence.
 
-The main comparison is not document length. It is whether the final package gives an independent agent a better starting state while preserving legitimate implementation freedom.
+The main comparison is not document length or a single winning score. It is the
+gradient of evidence describing whether each treatment gives an independent
+agent a better starting state while preserving legitimate implementation
+freedom.
+
+## Descriptive evaluation profiles
+
+Each completed run can produce a content-addressed profile containing:
+
+- consequential decisions, materiality, expected latitude, proposed and
+  selecting parties, constraints, disclosure, alignment, confidence, and
+  evidence;
+- obligations mapped to planned and observed distinguishing evidence;
+- duplicated, misplaced, conflicting, overloaded, fragmented, or clearly
+  owned package concerns;
+- turns, clarification and correction cycles, tokens, cache use, tool calls,
+  and duration at their actual capture level; and
+- read-only technical checks and explicitly authorized adaptation challenges.
+
+Profiles are descriptive. A package that delegates architecture may be as
+intentional as one that ships normative reference code. The relevant signal is
+whether observed decisioning matches expected latitude, not whether the author
+made the most decisions.
 
 ## Lab 2: harness parity
 

@@ -43,18 +43,51 @@ authorship:
       kind: requirement
       description: The feature must describe host navigation, permissions, and accessibility integration points.
   variants:
-    source-only:
+    raw-source:
       objective: >-
-        Produce implementation-ready instructions for recurring expense templates.
-        Preserve the Ledgerly host boundary and surface consequential uncertainty
-        rather than inventing it.
+        Turn the feature request into instructions an implementation agent can use.
       deliverables:
         - id: implementation-ready-instructions
           description: Standalone instructions that an independent implementation agent can act on.
           required: true
           path: instructions.md
           mediaType: text/markdown
-    seedspec-scaffold:
+    markdown-authored:
+      objective: >-
+        Use general product-specification practices to produce implementation-ready
+        Markdown for the recurring-expense feature. Ask the simulated author when
+        clarification is necessary.
+      deliverables:
+        - id: implementation-ready-instructions
+          description: Standalone Markdown instructions that an independent implementation agent can act on.
+          required: true
+          path: instructions.md
+          mediaType: text/markdown
+    seedspec-minimal:
+      objective: >-
+        Capture the feature request in a minimally structured, valid SeedSpec feature package.
+      deliverables:
+        - id: manifest
+          description: A valid SeedSpec package manifest identifying this as a feature and declaring required host capabilities.
+          required: true
+          path: seedspec.yaml
+          mediaType: application/yaml
+        - id: feature-definition
+          description: Behavior, state, host boundaries, failure cases, and lifecycle for recurring templates and due suggestions.
+          required: true
+          path: definition/feature.md
+          mediaType: text/markdown
+        - id: host-contract
+          description: Explicit required/provided capability contracts and integration assumptions.
+          required: true
+          path: capabilities/recurring-expenses.md
+          mediaType: text/markdown
+        - id: acceptance
+          description: Acceptance scenarios that exercise recurrence, authorization, confirmation, edits, and deletion.
+          required: true
+          path: acceptance/criteria.md
+          mediaType: text/markdown
+    seedspec-guided:
       objective: >-
         Author a reusable feature package for recurring expense templates. State the
         host capabilities it requires, the behavior it provides, and the boundary
@@ -80,11 +113,11 @@ authorship:
           required: true
           path: acceptance/criteria.md
           mediaType: text/markdown
-    seedspec-guided-authoring:
+    seedspec-restructured:
       objective: >-
-        Author a reusable feature package for recurring expense templates. State the
-        host capabilities it requires, the behavior it provides, and the boundary
-        between a due template and an existing Ledgerly transaction.
+        Author and semantically restructure a reusable feature package. Give host
+        contracts, feature intent, acceptance, and agent routing distinct canonical
+        owners while exposing consequential decision provenance.
       deliverables:
         - id: manifest
           description: A valid SeedSpec package manifest identifying this as a feature and declaring required host capabilities.
@@ -136,7 +169,7 @@ implementation:
 successCriteria:
   - id: valid-feature-package
     stage: authorship
-    variants: [seedspec-scaffold, seedspec-guided-authoring]
+    variants: [seedspec-minimal, seedspec-guided, seedspec-restructured]
     description: The package validates and declares feature kind, host requirements, and its provided recurrence capability.
     measure:
       kind: deterministic
@@ -228,6 +261,34 @@ permittedVariability:
     dimension: technology
     description: Due suggestions may be calculated on read or materialized by a scheduled process.
     bounds: Results must be time-zone correct, deterministic, and idempotent.
+
+technicalExpectations:
+  - id: additive-host-integration
+    dimension: maintainability
+    method: structured-review
+    description: Feature code remains additive and uses host capabilities without duplicating or renaming host-owned transaction behavior.
+  - id: recurrence-test-quality
+    dimension: test-quality
+    method: structured-review
+    description: Tests cover calendar edges, authorization, idempotent confirmation, edits, and deletion effects with meaningful negative cases.
+  - id: profile-conformance
+    dimension: profile-conformance
+    method: structured-review
+    description: The implementation follows selected host integration guidance without treating illustrative code structure as binding intent.
+
+adaptationChallenges:
+  - id: weekly-recurrence
+    description: Add weekly recurring templates while preserving monthly end-of-month semantics and explicit transaction confirmation.
+    purpose: Test whether the recurrence model can accept another cadence without branching through unrelated host transaction code.
+    authorization: declared-by-case
+    constraints:
+      - id: preserve-monthly-behavior
+        kind: compatibility
+        description: Existing monthly behavior and tests remain unchanged.
+    observations:
+      - The new cadence is localized to recurrence-owned behavior.
+      - Host transaction models and fixtures remain unchanged.
+      - Confirmation remains explicit and idempotent.
 
 simulatedToolResponses:
   - id: answer-posting

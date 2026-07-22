@@ -25,6 +25,15 @@ import {
   evaluateRunDirectoryDeterministically,
   validateScorecardFile,
 } from "./evaluate.js";
+import {
+  buildPackageProfileBrief,
+  buildRunProfileBrief,
+  finalizeDecisionLedgerFile,
+  finalizeEvaluationProfileFile,
+  formatEvaluationProfile,
+  validateEvaluationProfileFile,
+  validateDecisionLedgerFile,
+} from "./profile.js";
 import { createExperimentPlan } from "./plan.js";
 import {
   cancelRemoteMatrix,
@@ -341,7 +350,30 @@ trace.command("validate")
     output({ ok: true, traceId: parsed.traceId, runId: parsed.runId }, `Validated trace ${parsed.traceId}. Reasoning capture is explicitly ${parsed.capture.reasoning}.`);
   });
 
-const evaluate = program.command("evaluate").description("Score completed run evidence without changing evaluated output.");
+const decisionLedger = program.command("decision-ledger")
+  .description("Finalize and validate observable implementation decision ledgers.");
+
+decisionLedger.command("finalize")
+  .argument("<draft>", "decision ledger body JSON without ledgerId")
+  .option("--out <file>", "final content-addressed ledger output")
+  .action(async (draft: string, options: { out?: string }) => {
+    const result = await finalizeDecisionLedgerFile({
+      draft,
+      ...(options.out === undefined ? {} : { out: options.out }),
+    });
+    output({ ok: true, ledgerId: result.ledger.ledgerId, runId: result.ledger.runId, path: result.path },
+      `Finalized observable decision ledger ${result.ledger.ledgerId} with ${String(result.ledger.entries.length)} entries at ${result.path}.`);
+  });
+
+decisionLedger.command("validate")
+  .argument("<ledger>", "final content-addressed decision ledger JSON")
+  .action(async (file: string) => {
+    const ledger = await validateDecisionLedgerFile(file);
+    output({ ok: true, ledgerId: ledger.ledgerId, runId: ledger.runId, entries: ledger.entries.length },
+      `Validated decision ledger ${ledger.ledgerId}: ${String(ledger.entries.length)} observable material decision record${ledger.entries.length === 1 ? "" : "s"}.`);
+  });
+
+const evaluate = program.command("evaluate").description("Profile or score completed evidence without changing evaluated output.");
 
 evaluate.command("deterministic")
   .argument("<run-directory>", "completed desktop run directory")
@@ -394,10 +426,85 @@ evaluate.command("scorecard")
       `Validated ${scorecard.kind} scorecard for ${scorecard.runId} (${scorecard.variant}): ${String(scorecard.summary.earned)}/${String(scorecard.summary.possible)}.`);
   });
 
+evaluate.command("package-profile-brief")
+  .argument("<package-path>", "SeedSpec package to profile without changing it")
+  .requiredOption("--runner <runner>", "codex or claude-code", parseDesktopRunner)
+  .requiredOption("--judge-model <model>", "exact evaluator model identifier")
+  .option("--seedspec-cli <file>", "frozen SeedSpec CLI entrypoint", "../seedspec/packages/cli/bin/seedspec.js")
+  .option("--out <file>", "handoff output path outside the package")
+  .option("--stdout", "print the complete evaluator brief")
+  .action(async (packagePath: string, options: {
+    runner: DesktopRunner;
+    judgeModel: string;
+    seedspecCli: string;
+    out?: string;
+    stdout?: boolean;
+  }) => {
+    const result = await buildPackageProfileBrief({
+      packagePath,
+      runner: options.runner,
+      judgeModel: options.judgeModel,
+      seedSpecCli: options.seedspecCli,
+      evaluationRepositoryRoot: EVALUATION_REPOSITORY_ROOT,
+      evaluationCliEntry: CLI_ENTRY_PATH,
+      ...(options.out === undefined ? {} : { out: options.out }),
+    });
+    output({ ok: true, ...result }, options.stdout === true
+      ? result.brief
+      : `Prepared a read-only package profiling handoff at ${result.path}. The subject identity is ${result.subjectPath}. No model was called.`);
+  });
+
+evaluate.command("profile-brief")
+  .argument("<run-directory>", "completed run directory")
+  .requiredOption("--runner <runner>", "codex or claude-code", parseDesktopRunner)
+  .requiredOption("--judge-model <model>", "exact evaluator model identifier")
+  .option("--root <directory>", "case library root", "cases")
+  .option("--out <file>", "handoff output path")
+  .option("--stdout", "print the complete evaluator brief")
+  .action(async (runDirectory: string, options: {
+    runner: DesktopRunner;
+    judgeModel: string;
+    root: string;
+    out?: string;
+    stdout?: boolean;
+  }) => {
+    const result = await buildRunProfileBrief({
+      runDirectory,
+      runner: options.runner,
+      judgeModel: options.judgeModel,
+      evaluationRepositoryRoot: EVALUATION_REPOSITORY_ROOT,
+      evaluationCliEntry: CLI_ENTRY_PATH,
+      caseRoot: options.root,
+      ...(options.out === undefined ? {} : { out: options.out }),
+    });
+    output({ ok: true, ...result }, options.stdout === true
+      ? result.brief
+      : `Prepared a descriptive run-profiling handoff at ${result.path}. No model was called.`);
+  });
+
+evaluate.command("profile-finalize")
+  .argument("<draft>", "evaluation profile body JSON without profileId")
+  .option("--out <file>", "final content-addressed profile output")
+  .action(async (draft: string, options: { out?: string }) => {
+    const result = await finalizeEvaluationProfileFile({
+      draft,
+      ...(options.out === undefined ? {} : { out: options.out }),
+    });
+    output({ ok: true, profileId: result.profile.profileId, path: result.path },
+      `Finalized descriptive evaluation profile ${result.profile.profileId} at ${result.path}.`);
+  });
+
+evaluate.command("profile")
+  .argument("<profile>", "final content-addressed evaluation profile JSON")
+  .action(async (file: string) => {
+    const profile = await validateEvaluationProfileFile(file);
+    output({ ok: true, profileId: profile.profileId, summary: profile.summary }, formatEvaluationProfile(profile));
+  });
+
 program.command("compare")
   .description("Compare like-for-like scorecards across evaluation variants.")
   .argument("<scorecards...>", "two or more canonical scorecard JSON files")
-  .option("--baseline <variant>", "baseline evaluation variant", "source-only")
+  .option("--baseline <variant>", "baseline evaluation variant", "raw-source")
   .option("--out <file>", "comparison report output path")
   .action(async (files: string[], options: { baseline: string; out?: string }) => {
     const baseline = EvaluationVariantSchema.parse(options.baseline);
@@ -411,7 +518,7 @@ program.command("compare")
   });
 
 program.command("docs")
-  .argument("[topic]", "architecture, lifecycle, labs, cli, or safety", "cli")
+  .argument("[topic]", "architecture, lifecycle, labs, profiles, cli, or safety", "cli")
   .action((topic: string) => {
     const content = CLI_DOCS[topic];
     if (content === undefined) throw new Error(`Unknown docs topic: ${topic}`);

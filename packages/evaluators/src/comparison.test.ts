@@ -6,7 +6,7 @@ import { createVariantComparison } from "./comparison.js";
 
 const digest = `sha256:${"a".repeat(64)}` as const;
 
-function scorecard(runCharacter: string, variant: "source-only" | "seedspec-scaffold" | "seedspec-guided-authoring", points: number) {
+function scorecard(runCharacter: string, variant: "raw-source" | "seedspec-minimal" | "seedspec-restructured", points: number) {
   return ScorecardSchema.parse({
     schemaVersion: 1,
     id: "authorship-rubric",
@@ -33,19 +33,19 @@ function scorecard(runCharacter: string, variant: "source-only" | "seedspec-scaf
 }
 
 describe("createVariantComparison", () => {
-  it("reports per-run deltas from the source-only mean", () => {
+  it("reports per-run deltas from the raw-source mean", () => {
     const report = createVariantComparison({
       scorecards: [
-        scorecard("a", "source-only", 2),
-        scorecard("b", "seedspec-scaffold", 3),
-        scorecard("c", "seedspec-guided-authoring", 4),
+        scorecard("a", "raw-source", 2),
+        scorecard("b", "seedspec-minimal", 3),
+        scorecard("c", "seedspec-restructured", 4),
       ],
-      baselineVariant: "source-only",
+      baselineVariant: "raw-source",
       createdAt: "2026-07-21T12:01:00.000Z",
     });
 
     expect(report.baseline.meanNormalizedScore).toBe(0.5);
-    expect(report.runs.find(({ variant }) => variant === "seedspec-guided-authoring")?.deltaFromBaseline).toBe(0.5);
+    expect(report.runs.find(({ variant }) => variant === "seedspec-restructured")?.deltaFromBaseline).toBe(0.5);
     expect(report.metrics.map(({ id }) => id)).toEqual(["overall-score", "rubric-target-definition"]);
   });
 });

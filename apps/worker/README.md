@@ -27,7 +27,7 @@ A submit body has this shape. The CLI generates the full content-addressed manif
     "runId": "run_<64 lowercase hex characters>",
     "case": { "id": "sparse-app", "version": "1.0.0", "digest": "sha256:<case digest>" },
     "target": { "stage": "authorship" },
-    "variant": "seedspec-guided-authoring",
+    "variant": "seedspec-guided",
     "model": { "modelId": "@cf/meta/llama-4-scout-17b-16e-instruct" },
     "instructionsDigest": "sha256:<trusted instruction digest>",
     "configuration": {
@@ -41,7 +41,7 @@ A submit body has this shape. The CLI generates the full content-addressed manif
     "runId": "run_<64 lowercase hex characters>",
     "caseId": "sparse-app",
     "stage": "authorship",
-    "variant": "seedspec-guided-authoring",
+    "variant": "seedspec-guided",
     "model": "@cf/meta/llama-4-scout-17b-16e-instruct",
     "gatewayId": "seedspec-evals",
     "maxSteps": 6,
@@ -60,7 +60,7 @@ The actual `manifest` must satisfy the full `RunManifestSchema`; abbreviated man
 
 ## Safety and current scope
 
-Every variant exposes only `read`, `write`, `edit`, `list`, `find`, `grep`, and `ask_author` as its base. The source-only variant receives no SeedSpec tools. The scaffold variant adds package validation and digest tools. Guided authoring also adds kind-aware lint and versioned audit guidance. Workspace Bash, generic fetch/network access, browser tools, code execution, extensions, MCP tools, and reasoning delivery remain disabled. Model steps and durable recovery are bounded.
+Every variant exposes only `read`, `write`, `edit`, `list`, `find`, `grep`, and `ask_author` as its base. Raw-source and general-Markdown variants receive no SeedSpec tools. The minimal SeedSpec variant adds package validation and digest tools. Guided and restructured authoring also add kind-aware lint and versioned audit guidance. Workspace Bash, generic fetch/network access, browser tools, code execution, extensions, MCP tools, and reasoning delivery remain disabled. Model steps and durable recovery are bounded.
 
 This proves the isolated configuration, clarification, submission, inspection, cancellation, and artifact-workspace lifecycle. The current narrow tools support schema-aware package review without enabling a general shell. Scaffold creation is still performed through file tools in Think; exact `seedspec init` parity requires a future narrow initialization tool rather than broad command execution.
 
