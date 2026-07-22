@@ -11,7 +11,7 @@ import {
 } from "./common.js";
 import { AdversarialFindingSchema } from "./adversarial.js";
 import { ArtifactEvidenceSchema } from "./artifacts.js";
-import { EvaluationStageSchema } from "./cases.js";
+import { EvaluationStageSchema, EvaluationVariantSchema } from "./cases.js";
 import { CaseReferenceSchema } from "./versions.js";
 
 export const CongruencyDimensionOutcomeSchema = z.enum([
@@ -138,6 +138,44 @@ const RunComparisonReportDataSchema = z
 export const RunComparisonReportSchema = RunComparisonReportDataSchema.transform((value) => deepFreeze(value));
 export const ComparisonReportSchema = RunComparisonReportSchema;
 
+const VariantComparisonReportDataSchema = z
+  .strictObject({
+    schemaVersion: z.literal(1),
+    id: IdentifierSchema,
+    case: CaseReferenceSchema,
+    stage: EvaluationStageSchema,
+    scorecardKind: z.enum(["deterministic", "rubric"]),
+    createdAt: IsoTimestampSchema,
+    baseline: z.strictObject({
+      variant: EvaluationVariantSchema,
+      meanNormalizedScore: z.number().min(0).max(1),
+    }),
+    runs: z.array(z.strictObject({
+      runId: RunIdSchema,
+      variant: EvaluationVariantSchema,
+      normalizedScore: z.number().min(0).max(1),
+      deltaFromBaseline: z.number().min(-1).max(1),
+    })).min(2).max(1_000),
+    metrics: z.array(ComparisonMetricSchema).min(1).max(10_000),
+    summary: z.string().trim().min(1).max(16_000),
+  })
+  .superRefine((report, context) => {
+    const runIds = report.runs.map(({ runId }) => runId);
+    if (new Set(runIds).size !== runIds.length) {
+      context.addIssue({ code: "custom", message: "run IDs must be unique", path: ["runs"] });
+    }
+    if (!report.runs.some(({ variant }) => variant === report.baseline.variant)) {
+      context.addIssue({ code: "custom", message: "baseline variant must occur in runs", path: ["baseline"] });
+    }
+    for (const [metricIndex, metric] of report.metrics.entries()) {
+      if (!sameStringSet(metric.values.map(({ runId }) => runId), runIds)) {
+        context.addIssue({ code: "custom", message: "metric must contain every compared run", path: ["metrics", metricIndex] });
+      }
+    }
+  });
+
+export const VariantComparisonReportSchema = VariantComparisonReportDataSchema.transform((value) => deepFreeze(value));
+
 export type CongruencyDimensionOutcome = z.infer<typeof CongruencyDimensionOutcomeSchema>;
 export type CongruencyStatus = z.infer<typeof CongruencyStatusSchema>;
 export type CongruencyObservation = z.infer<typeof CongruencyObservationSchema>;
@@ -146,6 +184,7 @@ export type CongruencyReport = DeepReadonly<z.infer<typeof CongruencyReportDataS
 export type ComparisonMetric = z.infer<typeof ComparisonMetricSchema>;
 export type RunComparisonReport = DeepReadonly<z.infer<typeof RunComparisonReportDataSchema>>;
 export type ComparisonReport = RunComparisonReport;
+export type VariantComparisonReport = DeepReadonly<z.infer<typeof VariantComparisonReportDataSchema>>;
 
 export function deriveCongruencyStatus(
   dimensions: readonly Pick<CongruencyDimension, "outcome">[],

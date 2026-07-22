@@ -13,10 +13,6 @@ tags:
 
 authorship:
   mode: extract-existing-solution
-  objective: >-
-    Extract a reusable SeedSpec from the supplied solution snapshot. Preserve the
-    human readiness decision and its audit trail, generalize provider-specific
-    details into capabilities and configuration, and record source-to-spec rationale.
   sourceMaterials:
     - id: solution-snapshot
       label: Current release-coordination runbook
@@ -53,32 +49,80 @@ authorship:
     - id: provenance
       kind: requirement
       description: Map each extracted invariant and each deliberately generalized detail back to evidence in the solution snapshot.
-  deliverables:
-    - id: manifest
-      description: A valid reusable SeedSpec manifest with provider-neutral capability requirements.
-      required: true
-      path: seedspec.yaml
-      mediaType: application/yaml
-    - id: outcome-definition
-      description: A definition of release readiness, roles, checklist state, approval, invalidation, notification, and audit outcomes.
-      required: true
-      path: definition/solution.md
-      mediaType: text/markdown
-    - id: configuration-schema
-      description: A provider-neutral configuration schema for check types, required roles, calendar, reminder timing, and destinations.
-      required: true
-      path: configuration/schema.json
-      mediaType: application/schema+json
-    - id: acceptance
-      description: Acceptance scenarios that preserve current outcomes while allowing independent implementations.
-      required: true
-      path: acceptance/criteria.md
-      mediaType: text/markdown
-    - id: source-mapping
-      description: A reviewable mapping of source evidence to invariants, generalizations, open questions, and exclusions.
-      required: true
-      path: reference/source-mapping.md
-      mediaType: text/markdown
+  variants:
+    source-only:
+      objective: >-
+        Extract implementation-ready, reusable instructions from the supplied
+        solution snapshot. Preserve durable invariants, generalize accidental
+        provider choices, and cite source rationale.
+      deliverables:
+        - id: implementation-ready-instructions
+          description: Standalone instructions that an independent implementation agent can act on.
+          required: true
+          path: instructions.md
+          mediaType: text/markdown
+    seedspec-scaffold:
+      objective: >-
+        Extract a reusable SeedSpec from the supplied solution snapshot. Preserve the
+        human readiness decision and its audit trail, generalize provider-specific
+        details into capabilities and configuration, and record source-to-spec rationale.
+      deliverables:
+        - id: manifest
+          description: A valid reusable SeedSpec manifest with provider-neutral capability requirements.
+          required: true
+          path: seedspec.yaml
+          mediaType: application/yaml
+        - id: outcome-definition
+          description: A definition of release readiness, roles, checklist state, approval, invalidation, notification, and audit outcomes.
+          required: true
+          path: definition/solution.md
+          mediaType: text/markdown
+        - id: configuration-schema
+          description: A provider-neutral configuration schema for check types, required roles, calendar, reminder timing, and destinations.
+          required: true
+          path: configuration/schema.json
+          mediaType: application/schema+json
+        - id: acceptance
+          description: Acceptance scenarios that preserve current outcomes while allowing independent implementations.
+          required: true
+          path: acceptance/criteria.md
+          mediaType: text/markdown
+        - id: source-mapping
+          description: A reviewable mapping of source evidence to invariants, generalizations, open questions, and exclusions.
+          required: true
+          path: reference/source-mapping.md
+          mediaType: text/markdown
+    seedspec-guided-authoring:
+      objective: >-
+        Extract a reusable SeedSpec from the supplied solution snapshot. Preserve the
+        human readiness decision and its audit trail, generalize provider-specific
+        details into capabilities and configuration, and record source-to-spec rationale.
+      deliverables:
+        - id: manifest
+          description: A valid reusable SeedSpec manifest with provider-neutral capability requirements.
+          required: true
+          path: seedspec.yaml
+          mediaType: application/yaml
+        - id: outcome-definition
+          description: A definition of release readiness, roles, checklist state, approval, invalidation, notification, and audit outcomes.
+          required: true
+          path: definition/solution.md
+          mediaType: text/markdown
+        - id: configuration-schema
+          description: A provider-neutral configuration schema for check types, required roles, calendar, reminder timing, and destinations.
+          required: true
+          path: configuration/schema.json
+          mediaType: application/schema+json
+        - id: acceptance
+          description: Acceptance scenarios that preserve current outcomes while allowing independent implementations.
+          required: true
+          path: acceptance/criteria.md
+          mediaType: text/markdown
+        - id: source-mapping
+          description: A reviewable mapping of source evidence to invariants, generalizations, open questions, and exclusions.
+          required: true
+          path: reference/source-mapping.md
+          mediaType: text/markdown
 
 implementation:
   objective: >-
@@ -109,6 +153,7 @@ implementation:
 successCriteria:
   - id: valid-extracted-package
     stage: authorship
+    variants: [seedspec-scaffold, seedspec-guided-authoring]
     description: The extracted package validates with all required definition, configuration, acceptance, and provenance files.
     measure:
       kind: deterministic
@@ -133,7 +178,7 @@ successCriteria:
       rubric: >-
         Award one point each for provider-neutral work tracking, notification,
         identity/roles, business calendar, and audit capability contracts; deduct a
-        point for each Airtable/Slack detail leaked into core intent.
+        point for each Airtable/Slack detail leaked into primary intent.
       maxPoints: 5
   - id: alternate-realization-pass
     stage: implementation

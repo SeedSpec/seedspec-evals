@@ -9,6 +9,9 @@ import {
   type CongruencyReport,
   type RunComparisonReport,
   type Scorecard,
+  VariantComparisonReportSchema,
+  type EvaluationVariant,
+  type VariantComparisonReport,
 } from "@seedspec/eval-core";
 
 export interface CongruencyReportInput {
@@ -91,6 +94,46 @@ export function createRunComparison(input: RunComparisonInput): RunComparisonRep
     metrics: scorecardMetrics(input.scorecards),
     congruency: input.congruency,
     adversarialFindings: input.adversarialFindings ?? [],
+  });
+}
+
+export interface VariantComparisonInput {
+  readonly scorecards: readonly Scorecard[];
+  readonly createdAt: string;
+  readonly baselineVariant: EvaluationVariant;
+}
+
+export function createVariantComparison(input: VariantComparisonInput): VariantComparisonReport {
+  requireComparableScorecards(input.scorecards);
+  const baselineScores = input.scorecards
+    .filter(({ variant }) => variant === input.baselineVariant)
+    .map(({ summary }) => summary.normalized);
+  if (baselineScores.length === 0) throw new Error(`No scorecard uses baseline variant ${input.baselineVariant}`);
+  if (baselineScores.some((score) => score === null)) throw new Error("Cannot compare scorecards with no normalized score");
+  const numericBaselineScores = baselineScores.filter((score): score is number => score !== null);
+  const baselineMean = numericBaselineScores.reduce((sum, score) => sum + score, 0) / numericBaselineScores.length;
+  const runs = input.scorecards.map((scorecard) => {
+    if (scorecard.summary.normalized === null) throw new Error(`Run ${scorecard.runId} has no normalized score`);
+    return {
+      runId: scorecard.runId,
+      variant: scorecard.variant,
+      normalizedScore: scorecard.summary.normalized,
+      deltaFromBaseline: scorecard.summary.normalized - baselineMean,
+    };
+  });
+  const first = input.scorecards[0];
+  if (first === undefined) throw new Error("At least two scorecards are required");
+  return VariantComparisonReportSchema.parse({
+    schemaVersion: 1,
+    id: "variant-comparison",
+    case: first.case,
+    stage: first.stage,
+    scorecardKind: first.kind,
+    createdAt: input.createdAt,
+    baseline: { variant: input.baselineVariant, meanNormalizedScore: baselineMean },
+    runs,
+    metrics: scorecardMetrics(input.scorecards),
+    summary: `Compared ${String(input.scorecards.length)} ${first.kind} scorecards across ${String(new Set(input.scorecards.map(({ variant }) => variant)).size)} evaluation variants. Deltas are relative to the ${input.baselineVariant} mean and do not establish causality.`,
   });
 }
 

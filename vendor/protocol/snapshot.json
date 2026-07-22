@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "package": "@seedspec/protocol",
+  "version": "0.1.0-alpha.3",
+  "sourceRepository": "git+https://github.com/SeedSpec/seedspec.git",
+  "sourceCommit": "1804926c42a47bc4624e59743fde9ccb19b37620",
+  "sourceDigest": "sha256:9eb0feb988f806161d27f7f4c10502a6afbaca398b3184678c70d18bb52aa159",
+  "sourceDirectory": "packages/protocol"
+}

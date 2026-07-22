@@ -9,7 +9,7 @@ import {
   type DeepReadonly,
 } from "./common.js";
 import { ArtifactEvidenceSchema } from "./artifacts.js";
-import { EvaluationStageSchema } from "./cases.js";
+import { EvaluationStageSchema, EvaluationVariantSchema, variantBelongsToStage } from "./cases.js";
 import {
   CaseReferenceSchema,
   EvaluatorMetadataSchema,
@@ -53,6 +53,7 @@ const ScorecardCommon = {
   runId: RunIdSchema,
   case: CaseReferenceSchema,
   stage: EvaluationStageSchema,
+  variant: EvaluationVariantSchema,
   createdAt: IsoTimestampSchema,
   evaluator: EvaluatorMetadataSchema,
   summary: ScoreSummarySchema,
@@ -75,6 +76,9 @@ const RubricScorecardSchema = z.strictObject({
 const ScorecardDataSchema = z
   .discriminatedUnion("kind", [DeterministicScorecardSchema, RubricScorecardSchema])
   .superRefine((scorecard, context) => {
+    if (!variantBelongsToStage(scorecard.variant, scorecard.stage)) {
+      context.addIssue({ code: "custom", message: "variant does not belong to stage", path: ["variant"] });
+    }
     if (scorecard.evaluator.kind !== scorecard.kind) {
       context.addIssue({
         code: "custom",

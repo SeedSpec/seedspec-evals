@@ -23,7 +23,6 @@ function validCase(id: string): object {
     title: `Test case ${id}`,
     authorship: {
       mode: "sparse-application",
-      objective: "Author a small evaluation package.",
       sourceMaterials: [
         {
           id: "prompt",
@@ -35,15 +34,20 @@ function validCase(id: string): object {
         },
       ],
       constraints: [],
-      deliverables: [
-        {
-          id: "package",
-          description: "A package",
-          required: true,
-          path: "seedspec.yaml",
-          mediaType: "application/yaml",
+      variants: {
+        "source-only": {
+          objective: "Write implementation-ready instructions.",
+          deliverables: [{ id: "instructions", description: "Instructions", required: true, path: "instructions.md" }],
         },
-      ],
+        "seedspec-scaffold": {
+          objective: "Author a small evaluation package.",
+          deliverables: [{ id: "package", description: "A package", required: true, path: "seedspec.yaml", mediaType: "application/yaml" }],
+        },
+        "seedspec-guided-authoring": {
+          objective: "Author a small evaluation package.",
+          deliverables: [{ id: "package", description: "A package", required: true, path: "seedspec.yaml", mediaType: "application/yaml" }],
+        },
+      },
     },
     successCriteria: [
       {

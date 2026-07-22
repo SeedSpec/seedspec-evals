@@ -1,0 +1,39 @@
+{
+  "name": "@seedspec/protocol",
+  "version": "0.1.0-alpha.3",
+  "description": "Canonical schemas and metadata for the SeedSpec Protocol",
+  "keywords": [
+    "seedspec",
+    "protocol",
+    "json-schema",
+    "agents",
+    "specifications"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./schemas/*": "./schemas/*"
+  },
+  "files": [
+    "schemas",
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SeedSpec/seedspec.git",
+    "directory": "packages/protocol"
+  },
+  "homepage": "https://seedspec.dev",
+  "bugs": {
+    "url": "https://github.com/SeedSpec/seedspec/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "SeedSpec contributors",
+  "license": "Apache-2.0"
+}

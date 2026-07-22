@@ -5,6 +5,7 @@ export function equalRunAgentConfigs(left: RunAgentConfig, right: RunAgentConfig
     left.runId === right.runId &&
     left.caseId === right.caseId &&
     left.stage === right.stage &&
+    left.variant === right.variant &&
     left.model === right.model &&
     left.gatewayId === right.gatewayId &&
     left.maxSteps === right.maxSteps &&
@@ -25,6 +26,7 @@ export function conflictingRunConfigFields(
   if (existing.runId !== requested.runId) fields.push("runId");
   if (existing.caseId !== requested.caseId) fields.push("caseId");
   if (existing.stage !== requested.stage) fields.push("stage");
+  if (existing.variant !== requested.variant) fields.push("variant");
   if (existing.model !== requested.model) fields.push("model");
   if (existing.gatewayId !== requested.gatewayId) fields.push("gatewayId");
   if (existing.maxSteps !== requested.maxSteps) fields.push("maxSteps");

@@ -17,6 +17,7 @@
     "packages/*"
   ],
   "scripts": {
+    "protocol:sync": "node scripts/sync-protocol.mjs",
     "build": "tsc -b",
     "clean": "tsc -b --clean",
     "typecheck": "tsc -b --pretty false",

@@ -2,6 +2,7 @@ import {
   ScorecardSchema,
   calculateDeterministicSummary,
   createRunnableCaseView,
+  appliesToVariant,
   type ArtifactEvidence,
   type ArtifactManifest,
   type DeterministicCheckResult,
@@ -43,6 +44,7 @@ export function evaluateDeterministically(input: DeterministicEvaluationInput): 
   checks.push(hiddenExpectationsAreIsolated(input));
   checks.push(...requiredDeliverablesExist(input));
   checks.push(...declaredDeterministicChecks(input, adapterMap));
+  checks.push(...declaredHiddenChecks(input, adapterMap));
 
   const summary = calculateDeterministicSummary(checks);
   return ScorecardSchema.parse({
@@ -51,6 +53,7 @@ export function evaluateDeterministically(input: DeterministicEvaluationInput): 
     runId: input.manifest.runId,
     case: input.manifest.case,
     stage: input.stage,
+    variant: input.manifest.variant,
     createdAt: input.createdAt,
     evaluator: {
       id: "seedspec-eval-deterministic",
@@ -61,6 +64,40 @@ export function evaluateDeterministically(input: DeterministicEvaluationInput): 
     summary,
     checks,
   }) as DeterministicScorecard;
+}
+
+function declaredHiddenChecks(
+  input: DeterministicCheckContext,
+  adapters: ReadonlyMap<string, DeterministicCheckAdapter>,
+): DeterministicCheckResult[] {
+  return input.evaluationCase.hiddenExpectations
+    .filter((expectation) =>
+      expectation.stage === input.stage &&
+      expectation.evaluation.kind === "deterministic" &&
+      appliesToVariant(expectation.variants, input.manifest.variant))
+    .map((expectation) => {
+      if (expectation.evaluation.kind !== "deterministic") throw new Error("unreachable");
+      const adapter = adapters.get(expectation.evaluation.check);
+      if (adapter === undefined) {
+        return {
+          id: `hidden-${expectation.id}`,
+          description: expectation.description,
+          outcome: "not-applicable" as const,
+          weight: expectation.severity === "critical" ? 3 : expectation.severity === "major" ? 2 : 1,
+          message: `No deterministic adapter is registered for ${expectation.evaluation.check}.`,
+          evidence: [],
+        };
+      }
+      const result = adapter.evaluate(input, expectation.evaluation.target);
+      return {
+        id: `hidden-${expectation.id}`,
+        description: expectation.description,
+        outcome: result.outcome,
+        weight: expectation.severity === "critical" ? 3 : expectation.severity === "major" ? 2 : 1,
+        ...(result.message === undefined ? {} : { message: result.message }),
+        evidence: [...(result.evidence ?? [])],
+      };
+    });
 }
 
 function caseMatchesManifest(input: DeterministicCheckContext): DeterministicCheckResult {
@@ -78,7 +115,7 @@ function caseMatchesManifest(input: DeterministicCheckContext): DeterministicChe
 }
 
 function hiddenExpectationsAreIsolated(input: DeterministicCheckContext): DeterministicCheckResult {
-  const view = createRunnableCaseView(input.evaluationCase, input.stage);
+  const view = createRunnableCaseView(input.evaluationCase, input.stage, input.manifest.variant);
   const serialized = JSON.stringify(view);
   const leakedIds = input.evaluationCase.hiddenExpectations
     .filter((expectation) => expectation.stage === input.stage)
@@ -97,8 +134,7 @@ function hiddenExpectationsAreIsolated(input: DeterministicCheckContext): Determ
 }
 
 function requiredDeliverablesExist(input: DeterministicCheckContext): DeterministicCheckResult[] {
-  const stage = input.stage === "authorship" ? input.evaluationCase.authorship : input.evaluationCase.implementation;
-  if (stage === undefined) return [];
+  const stage = createRunnableCaseView(input.evaluationCase, input.stage, input.manifest.variant);
   const artifactPaths = input.artifacts.artifacts.map((artifact) => artifact.path);
 
   return stage.deliverables.filter((deliverable) => deliverable.required).map((deliverable) => {
@@ -133,8 +169,9 @@ function declaredDeterministicChecks(
   input: DeterministicCheckContext,
   adapters: ReadonlyMap<string, DeterministicCheckAdapter>,
 ): DeterministicCheckResult[] {
-  return input.evaluationCase.successCriteria
-    .filter((criterion) => criterion.stage === input.stage && criterion.measure.kind === "deterministic")
+  const view = createRunnableCaseView(input.evaluationCase, input.stage, input.manifest.variant);
+  return view.successCriteria
+    .filter((criterion) => criterion.measure.kind === "deterministic")
     .map((criterion) => {
       if (criterion.measure.kind !== "deterministic") throw new Error("unreachable");
       const adapter = adapters.get(criterion.measure.check);

@@ -3,7 +3,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["**/dist/**", "**/node_modules/**", "**/worker-configuration.d.ts"],
+    ignores: ["**/dist/**", "**/node_modules/**", "**/vendor/**", "**/worker-configuration.d.ts"],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
@@ -21,7 +21,15 @@ export default tseslint.config(
     },
   },
   {
-    files: ["**/*.js", "vitest.config.ts"],
+    files: ["**/*.js", "**/*.mjs", "vitest.config.ts"],
     extends: [tseslint.configs.disableTypeChecked],
+  },
+  {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        process: "readonly",
+      },
+    },
   },
 );

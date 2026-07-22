@@ -1,6 +1,6 @@
 # Running parity experiments in Think, Codex, and Claude Code
 
-The same committed case, trusted instructions, protocol version, and requested model should be used for every parity run. Each environment receives its own immutable run manifest because runner identity is part of reproducibility. The generated desktop manifest records the Think run as `sourceRunId` so results remain comparable without pretending they were the same execution.
+The same committed case, evaluation variant, trusted instructions, frozen protocol revision where applicable, and requested model should be used for every parity run. Each environment receives its own immutable run manifest because runner identity is part of reproducibility. The generated desktop manifest records the Think run as `sourceRunId` so results remain comparable without pretending they were the same execution.
 
 ## 1. Build and plan without calling a model
 
@@ -12,6 +12,8 @@ node packages/cli/dist/index.js experiment plan \
   --case sparse-neighborhood-tool-lending \
   --model <gateway-provider/model> \
   --out runs/first-parity-plan.json
+
+node packages/cli/dist/index.js experiment inspect runs/first-parity-plan.json
 ```
 
 Review the plan before authorizing inference. Planning, brief generation, and trace validation do not call a model.
@@ -20,11 +22,12 @@ Review the plan before authorizing inference. Planning, brief generation, and tr
 
 ```sh
 node packages/cli/dist/index.js runner brief runs/first-parity-plan.json \
+  --run <one-run-id-from-experiment-inspect> \
   --runner codex \
-  --stdout
+  --out runs/first-authorship/<variant>
 ```
 
-Copy the complete output into a new Codex task with a clean workspace. Select the requested underlying model and snapshot. If it is unavailable, create a new run identity for the actual model instead of calling the run matched. The brief tells the agent where to write its evidence report and observable trace draft. It also gives the agent a deterministic `author answer` command so clarifications use the same pre-declared responses as Think without exposing every answer up front. If Codex cannot expose a requested trace field, it must declare the limitation instead of filling it speculatively.
+Repeat for the source-only, scaffold, and guided-authoring run IDs. Copy each generated `handoff.md` into a separate Codex task with a clean workspace. Select the requested underlying model and snapshot. If it is unavailable, create a new run identity for the actual model instead of calling the run matched. The brief tells the agent where to write its authored output, evidence report, and observable trace draft. It also gives the agent a deterministic `author answer` command so clarifications use the same pre-declared responses as Think without exposing every answer up front. If Codex cannot expose a requested trace field, it must declare the limitation instead of filling it speculatively.
 
 An agent given this repository's README can follow the same steps: ask it to build the project, create or inspect the reviewed plan, run `runner brief --runner codex --stdout`, and execute the emitted brief in a clean task.
 
@@ -32,8 +35,9 @@ An agent given this repository's README can follow the same steps: ask it to bui
 
 ```sh
 node packages/cli/dist/index.js runner brief runs/first-parity-plan.json \
+  --run <one-run-id-from-experiment-inspect> \
   --runner claude-code \
-  --stdout
+  --out runs/first-authorship/<variant>
 ```
 
 Paste the output into a clean Claude Code session. Configure the same underlying model and snapshot. If it is unavailable, generate a new run identity for the actual model; do not treat similar product labels as evidence of model parity.
@@ -72,5 +76,9 @@ node packages/cli/dist/index.js trace validate runs/<run-id>/trace.json
 ```
 
 `runs/` is ignored by Git. Preserve a complete experiment directory in controlled storage when the evidence matters; a Git checkout alone is not a trace archive. Traces may contain prompts, outputs, tool inputs, and tool results, so review them for credentials, personal data, and customer material before sharing. Record redaction counts and reasons in the trace rather than silently editing evidence.
+
+## 6. Score and compare authorship variants
+
+Run `evaluate deterministic` for each completed run directory. Then use `evaluate rubric-brief` to create an independent judging task using the same rubric for every variant. Validate each returned scorecard with `evaluate scorecard` and compare like-for-like rubric scorecards with `compare --baseline source-only`.
 
 The trace contract deliberately excludes hidden chain-of-thought. Comparable evidence consists of observable inputs and outputs, tool activity, artifacts, timing, usage where exposed, errors, and declared capture limitations.

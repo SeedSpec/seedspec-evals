@@ -2,7 +2,7 @@
 
 These choices should be answered with evidence from the first experiments rather than settled in the abstract.
 
-1. Which authorship improvements can be scored deterministically, and which require a rubric evaluator?
+1. Which authorship improvements can be scored deterministically, and which require a rubric evaluator shared fairly across evaluation variants?
 2. What is the minimum useful repetition count for detecting model variance without wasting spend?
 3. How should congruency distinguish required behavior from legitimate implementation freedom?
 4. Which evaluator scores are stable enough to become author-facing tooling?

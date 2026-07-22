@@ -6,6 +6,7 @@ import {
   SemVerSchema,
   Sha256DigestSchema,
 } from "./common.js";
+import { EvaluationVariantSchema } from "./cases.js";
 
 const RevisionFields = {
   version: SemVerSchema,
@@ -72,6 +73,7 @@ export const CaseReferenceSchema = z.strictObject({
 
 export const ReproducibilityMetadataSchema = z.strictObject({
   case: CaseReferenceSchema,
+  variant: EvaluationVariantSchema,
   protocol: ProtocolVersionMetadataSchema,
   runner: RunnerMetadataSchema,
   model: ModelMetadataSchema,

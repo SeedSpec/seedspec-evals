@@ -1,41 +1,41 @@
 ---
 name: evaluate-seedspec-authorship
-description: Evaluate a SeedSpec authoring run by comparing the author's source material, authoring-tool instructions, decisions, audit state, and resulting package. Use for SeedSpec authoring experiments, authoring-tool regressions, before/after package comparisons, and judging whether protocol-aware guidance materially improved an initially sparse specification.
+description: Evaluate a controlled specification-authoring run from source material through its final SeedSpec package or source-only control output. Use for SeedSpec authoring experiments, evaluation-variant comparisons, authoring-tool regressions, and judging whether protocol-aware guidance materially improves an agent's implementation starting state.
 ---
 
 # Evaluate SeedSpec authorship
 
-Assess whether the authoring process produced a stronger, more honest, more agent-ready package. Do not reward added volume by itself.
+Assess whether the authored output gives an independent implementing agent a stronger, more honest starting state. Judge semantic value across evaluation variants without rewarding SeedSpec vocabulary, file count, or document length by itself.
 
-## Inputs
+## Required evidence
 
-Require or identify:
+Identify:
 
-- the original author material;
+- the immutable run manifest and evaluation variant;
+- the original author material and explicit simulated-author answers;
 - the authoring instructions and exact tool/protocol versions;
-- questions, author answers, deferred decisions, and applied changes;
-- the final package and validation output;
-- the case expectations, with hidden expectations withheld from the authoring agent.
+- the final authored output;
+- deterministic results, observable trace, and artifact manifest;
+- the full evaluation case, including evaluator-only expectations.
 
-Mark missing evidence as an uncertainty. Never infer that a question was asked or a decision was authorized.
+Mark missing evidence as uncertainty. Never infer that a question was asked, a decision was authorized, or an outcome was proven.
 
 ## Procedure
 
-1. Validate the evidence inventory and keep deterministic validator results separate from semantic judgment.
-2. Compare the final package to original material and explicit author answers. Flag unsupported invented requirements.
-3. Evaluate each of the six authoring areas using [references/rubric.md](references/rubric.md).
-4. Identify consequential ambiguity that remains, ambiguity resolved without author authority, and harmless implementation freedom correctly left open.
-5. Check that transient questions, speculation, and authoring state did not leak into the distributable package as selected intent.
-6. Decide whether the final package gives an independent implementing agent a materially better starting state than the original input.
-7. Emit one machine-readable result using [references/output.md](references/output.md). Put evidence paths or concise excerpts behind every material score or finding.
+1. Verify the evidence inventory and keep deterministic validity separate from semantic judgment.
+2. Compare the output to source material and explicit author answers. Flag lost intent and unsupported invention.
+3. Score every dimension in [references/rubric.md](references/rubric.md).
+4. Check that goals, obligations, boundaries, forbidden states, material uncertainty, and meaningful freedoms are clear.
+5. Distinguish package verification from adoption, operational, and outcome evidence. Never treat the first as proof of the others.
+6. Assess whether an independent implementation agent can recognize success without being forced into an unnecessary architecture.
+7. Apply evaluator-only expectations and permitted variability without leaking them back into the evaluated output.
+8. Emit one canonical scorecard using [references/output.md](references/output.md), with artifact evidence behind every material judgment.
 
-## Judgment rules
+## Variant fairness
 
-- Reward clarity, traceability, testability, honest uncertainty, and proper concern separation.
-- Do not reward technical prescription unless the source or author made it part of intent.
-- Do not penalize legitimate provider-specific intent merely for being nonportable.
-- Treat `kind` as an authoring lens, not a template or validity gate.
-- Treat `completed` audit passes as review records, not certification.
-- Give a high score only when another agent can act with less material guesswork and without losing intended implementation freedom.
+- For `source-only`, do not expect SeedSpec structure or protocol validity.
+- For `seedspec-scaffold`, treat deterministic validity as a separate gate; do not assume structure created semantic quality.
+- For `seedspec-guided-authoring`, judge the actual improvement produced, not whether the runner invoked every available tool.
+- Apply the same semantic rubric and maximum points to every variant.
 
-Do not edit the package during evaluation. Recommendations belong in findings, not in the evaluated artifact.
+Do not edit the authored output. Recommendations belong in the scorecard assessment, not in evaluated artifacts.

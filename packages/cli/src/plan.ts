@@ -10,18 +10,21 @@ import {
   sha256Hex,
   stableJson,
   type EvaluationStage,
+  type EvaluationVariant,
   type JsonValue,
 } from "@seedspec/eval-core";
 import type { LoadedEvaluationCase } from "@seedspec/eval-case-library";
 import { HARNESS_VERSION, RunAgentConfigSchema } from "@seedspec/eval-harness";
 
 import { ExperimentPlanSchema, type ExperimentPlan } from "./contracts.js";
+import { FROZEN_PROTOCOL_SNAPSHOT } from "./protocol-snapshot.generated.js";
 
 const EVALUATION_VERSION = "0.1.0-alpha.1";
 
 export interface PlanOptions {
   readonly cases: readonly LoadedEvaluationCase[];
   readonly stage: EvaluationStage;
+  readonly variants: readonly EvaluationVariant[];
   readonly models: readonly string[];
   readonly repetitions: number;
   readonly gatewayId: string;
@@ -36,30 +39,38 @@ export async function createExperimentPlan(options: PlanOptions): Promise<Experi
     throw new Error("Repetitions must be an integer from 1 to 100.");
   }
   if (options.models.length === 0) throw new Error("At least one model is required.");
+  if (options.variants.length === 0) throw new Error("At least one evaluation variant is required.");
   if (options.stage === "implementation" && options.authoredPackageArtifactId === undefined) {
     throw new Error("Implementation planning requires --authored-package-artifact.");
   }
 
-  const trustedInstructions = defaultTrustedInstructions(options.stage);
+  const protocolSnapshot = FROZEN_PROTOCOL_SNAPSHOT;
+  if (options.protocolVersion !== protocolSnapshot.version) {
+    throw new Error(`Protocol version ${options.protocolVersion} does not match the frozen evaluation snapshot ${protocolSnapshot.version}. Run npm run protocol:sync before planning another revision.`);
+  }
   const envelopes: unknown[] = [];
 
   for (const loaded of options.cases) {
     const source = await readFile(loaded.filePath, "utf8");
     const caseDigest = `sha256:${sha256Hex(source)}`;
-    const view = createRunnableCaseView(loaded.case, options.stage);
     const fixture = createSimulationFixtureView(loaded.case);
-    const untrustedMaterial = stableJson(view as unknown as JsonValue);
     const simulatedAuthorResponses = simulationResponses(fixture.simulatedToolResponses);
-    const caseTrustedInstructions = Object.keys(simulatedAuthorResponses).length === 0
-      ? trustedInstructions
-      : [
-          ...trustedInstructions,
-          `The simulated author can answer these clarification topics through ask_author: ${Object.keys(simulatedAuthorResponses).sort().join(", ")}. Use the exact questionId only when its topic is materially relevant.`,
-        ];
-    const instructionsDigest = `sha256:${sha256Hex(stableJson(caseTrustedInstructions))}`;
+    for (const variant of options.variants) {
+      const view = createRunnableCaseView(loaded.case, options.stage, variant);
+      const { variant: _runnerHiddenVariant, ...runnerView } = view;
+      void _runnerHiddenVariant;
+      const untrustedMaterial = stableJson(runnerView as unknown as JsonValue);
+      const trustedInstructions = defaultTrustedInstructions(options.stage, variant);
+      const caseTrustedInstructions = Object.keys(simulatedAuthorResponses).length === 0
+        ? trustedInstructions
+        : [
+            ...trustedInstructions,
+            `The simulated author can answer these clarification topics through ask_author: ${Object.keys(simulatedAuthorResponses).sort().join(", ")}. Use the exact questionId only when its topic is materially relevant.`,
+          ];
+      const instructionsDigest = `sha256:${sha256Hex(stableJson(caseTrustedInstructions))}`;
 
-    for (const model of options.models) {
-      for (let repetition = 0; repetition < options.repetitions; repetition += 1) {
+      for (const model of options.models) {
+        for (let repetition = 0; repetition < options.repetitions; repetition += 1) {
         const manifest = createRunManifest({
           schemaVersion: 1,
           case: { id: loaded.case.id, version: loaded.case.version, digest: caseDigest },
@@ -69,9 +80,10 @@ export async function createExperimentPlan(options: PlanOptions): Promise<Experi
                 stage: "implementation",
                 authoredPackageArtifactId: ArtifactIdSchema.parse(options.authoredPackageArtifactId),
               },
+          variant,
           repetition,
           createdAt: options.createdAt,
-          protocol: { name: "seedspec", version: options.protocolVersion },
+          protocol: { name: "seedspec", version: options.protocolVersion, revision: protocolSnapshot.sourceDigest },
           runner: {
             id: "cloudflare-think",
             kind: "agent",
@@ -90,22 +102,14 @@ export async function createExperimentPlan(options: PlanOptions): Promise<Experi
             routing: { gateway: options.gatewayId },
           },
           harness: { name: "seedspec-eval-harness", version: HARNESS_VERSION },
-          tools: [
-            {
-              name: "think-workspace",
-              version: HARNESS_VERSION,
-              configuration: { bash: false, network: false, reasoningPersistence: false },
-            },
-            { name: "seedspec-package-check", version: HARNESS_VERSION, configuration: { protocolVersion: "0.1", protocolPackage: "@seedspec/protocol@0.1.0-alpha.2", adapter: "think-workspace" } },
-            { name: "seedspec-package-digest", version: HARNESS_VERSION, configuration: { algorithm: "seedspec-package-sha256-v1" } },
-            ...(options.stage === "authorship" ? [
-              { name: "seedspec-kind-lint", version: HARNESS_VERSION },
-              { name: "seedspec-audit-guidance", version: HARNESS_VERSION, configuration: { areas: 6 } },
-            ] : []),
-          ],
+          tools: toolsForVariant(options.stage, variant, protocolSnapshot),
           evaluators: [
             { id: "seedspec-eval-deterministic", kind: "deterministic", version: EVALUATION_VERSION },
-            { id: `seedspec-${options.stage}-rubric`, kind: "rubric", version: EVALUATION_VERSION },
+            {
+              id: `seedspec-${options.stage}-rubric`,
+              kind: "rubric",
+              version: EVALUATION_VERSION,
+            },
           ],
           limits: {
             maxTurns: 1,
@@ -117,6 +121,8 @@ export async function createExperimentPlan(options: PlanOptions): Promise<Experi
           configuration: {
             gatewayId: options.gatewayId,
             maxSteps: options.maxSteps,
+            evaluationVariant: variant,
+            protocolSourceCommit: protocolSnapshot.sourceCommit,
             untrustedMaterialDigest: `sha256:${sha256Hex(untrustedMaterial)}`,
             simulatedAuthorResponsesDigest:
               `sha256:${sha256Hex(stableJson(simulatedAuthorResponses))}`,
@@ -126,6 +132,7 @@ export async function createExperimentPlan(options: PlanOptions): Promise<Experi
           runId: manifest.runId,
           caseId: loaded.case.id,
           stage: options.stage,
+          variant,
           model,
           gatewayId: options.gatewayId,
           maxSteps: options.maxSteps,
@@ -143,9 +150,11 @@ export async function createExperimentPlan(options: PlanOptions): Promise<Experi
               caseVersion: loaded.case.version,
               repetition,
               evaluationVersion: EVALUATION_VERSION,
+              variant,
             },
           },
         });
+        }
       }
     }
   }
@@ -185,13 +194,32 @@ function providerForModel(model: string): string {
   return provider.replaceAll(".", "-");
 }
 
-function defaultTrustedInstructions(stage: EvaluationStage): string[] {
-  if (stage === "authorship") {
+function defaultTrustedInstructions(stage: EvaluationStage, variant: EvaluationVariant): string[] {
+  if (variant === "source-only") {
     return [
-      "Turn the supplied author material into a complete SeedSpec package inside the workspace.",
-      "Apply the current SeedSpec concern boundaries: core intent, configuration, implementation profiles, resources, and acceptance must retain their distinct authority.",
+      "Produce the requested implementation-ready instructions in instructions.md using only the supplied author material and explicit simulated-author answers.",
+      "Define the desired outcome, obligations, boundaries, material uncertainty, and observable success without prescribing architecture unless the source requires it.",
+      "Ask the simulated author only about consequential uncertainty; label any remaining uncertainty instead of silently inventing intent.",
+      "Write instructions.md before concluding, then summarize unresolved questions and the evidence used.",
+    ];
+  }
+  if (stage === "authorship") {
+    const common = [
+      "Turn the supplied author material into a complete SeedSpec package inside the workspace using the frozen protocol revision named in the run manifest.",
+      "Keep primary author intent, meaningful configuration, implementation profiles, resources, applied end-user intent, and evidence scopes in their defined authority order.",
       "Use the package kind as a discovery lens. Surface consequential uncertainty instead of silently inventing an answer.",
-      "Review concern separation, kind-aware discovery, material ambiguity, internal consistency, progressive hardening, and the final agent-ready handoff.",
+      "Distinguish verification evidence from adoption, operation, and outcome evidence; never claim that package validation proves the real-world outcome.",
+    ];
+    if (variant === "seedspec-scaffold") {
+      return [
+        ...common,
+        "Use only the SeedSpec scaffold and deterministic validation path. Do not request or apply guided authoring audit instructions.",
+        "Write every distributable package file and pass deterministic validation before concluding.",
+      ];
+    }
+    return [
+      ...common,
+      "Use the complete guided authoring review: concern separation, kind-aware discovery, material ambiguity, internal consistency, progressive hardening, and agent-ready handoff.",
       "Write every distributable package file before concluding, then summarize unresolved questions and the evidence used.",
     ];
   }
@@ -200,5 +228,46 @@ function defaultTrustedInstructions(stage: EvaluationStage): string[] {
     "Treat implementation profiles as subordinate implementation guidance and preserve permitted variation.",
     "Produce the declared outcome and acceptance evidence; do not claim success from plans or source files alone.",
     "Record material deviations, unsupported assumptions, verification limits, and reproducible evidence before concluding.",
+  ];
+}
+
+function toolsForVariant(
+  stage: EvaluationStage,
+  variant: EvaluationVariant,
+  protocolSnapshot: typeof FROZEN_PROTOCOL_SNAPSHOT,
+) {
+  const workspace = {
+    name: "think-workspace",
+    version: HARNESS_VERSION,
+    configuration: { bash: false, network: false, reasoningPersistence: false },
+  };
+  const author = { name: "seedspec-simulated-author", version: HARNESS_VERSION };
+  if (variant === "source-only") return [workspace, author];
+  const packageTools = [
+    {
+      name: "seedspec-package-check",
+      version: HARNESS_VERSION,
+      configuration: {
+        protocolVersion: "0.1",
+        protocolPackage: `@seedspec/protocol@${protocolSnapshot.version}`,
+        protocolRevision: protocolSnapshot.sourceDigest,
+        adapter: "think-workspace",
+      },
+    },
+    {
+      name: "seedspec-package-digest",
+      version: HARNESS_VERSION,
+      configuration: { algorithm: "seedspec-package-sha256-v1" },
+    },
+  ];
+  if (stage === "implementation" || variant === "seedspec-scaffold") {
+    return [workspace, author, ...packageTools];
+  }
+  return [
+    workspace,
+    author,
+    ...packageTools,
+    { name: "seedspec-kind-lint", version: HARNESS_VERSION },
+    { name: "seedspec-audit-guidance", version: HARNESS_VERSION, configuration: { areas: 6 } },
   ];
 }

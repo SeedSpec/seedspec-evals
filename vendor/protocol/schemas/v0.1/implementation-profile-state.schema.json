@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seedspec.dev/schemas/v0.1/implementation-profile-state.schema.json",
+  "title": "Resolved SeedSpec Implementation Profile State 0.1 Alpha",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol_version", "scope", "status", "packages"],
+  "properties": {
+    "protocol_version": { "const": "0.1" },
+    "scope": { "const": "project" },
+    "status": { "enum": ["not-declared", "recorded", "review"] },
+    "packages": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/packageState" }
+    }
+  },
+  "$defs": {
+    "namespacedId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:\\.[a-z0-9][a-z0-9-]*){2,}$"
+    },
+    "localId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "relativePath": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9][A-Za-z0-9._-]*)*/?$"
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "statement", "verification"],
+      "properties": {
+        "id": { "$ref": "#/$defs/localId" },
+        "statement": { "type": "string", "minLength": 1 },
+        "verification": { "$ref": "#/$defs/conditionVerification" }
+      }
+    },
+    "conditionVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "evidence"],
+      "properties": {
+        "method": {
+          "oneOf": [
+            {
+              "enum": [
+                "user-confirmation",
+                "environment-inspection",
+                "tool-check",
+                "document-review",
+                "manual-observation"
+              ]
+            },
+            { "$ref": "#/$defs/namespacedId" }
+          ]
+        },
+        "evidence": { "enum": ["none", "optional", "required"] },
+        "guidance": { "type": "string", "minLength": 1 }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "description", "prerequisites", "blockers", "tradeoffs", "implementation_resources"],
+      "properties": {
+        "id": { "$ref": "#/$defs/localId" },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "guidance": { "$ref": "#/$defs/relativePath" },
+        "prerequisites": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/condition" }
+        },
+        "blockers": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/condition" }
+        },
+        "tradeoffs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "implementation_resources": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/namespacedId" }
+        }
+      }
+    },
+    "packageState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package", "kind", "selection", "profiles"],
+      "properties": {
+        "package": { "$ref": "#/$defs/namespacedId" },
+        "kind": {
+          "oneOf": [
+            { "enum": ["solution", "application", "feature", "workflow", "automation", "configuration", "integration"] },
+            { "$ref": "#/$defs/namespacedId" }
+          ]
+        },
+        "selection": { "enum": ["none", "available", "preferred", "review"] },
+        "preferred_profile": { "$ref": "#/$defs/localId" },
+        "profiles": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/profile" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "selection": { "const": "preferred" } },
+            "required": ["selection"]
+          },
+          "then": { "required": ["preferred_profile"] },
+          "else": { "not": { "required": ["preferred_profile"] } }
+        }
+      ]
+    }
+  }
+}

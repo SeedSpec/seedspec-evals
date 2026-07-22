@@ -13,10 +13,6 @@ tags:
 
 authorship:
   mode: existing-product-feature
-  objective: >-
-    Author a reusable feature package for recurring expense templates. State the
-    host capabilities it requires, the behavior it provides, and the boundary
-    between a due template and an existing Ledgerly transaction.
   sourceMaterials:
     - id: feature-request
       label: Product manager's feature request
@@ -46,27 +42,70 @@ authorship:
     - id: native-experience
       kind: requirement
       description: The feature must describe host navigation, permissions, and accessibility integration points.
-  deliverables:
-    - id: manifest
-      description: A valid SeedSpec package manifest identifying this as a feature and declaring required host capabilities.
-      required: true
-      path: seedspec.yaml
-      mediaType: application/yaml
-    - id: feature-definition
-      description: Behavior, state, host boundaries, failure cases, and lifecycle for recurring templates and due suggestions.
-      required: true
-      path: definition/feature.md
-      mediaType: text/markdown
-    - id: host-contract
-      description: Explicit required/provided capability contracts and integration assumptions.
-      required: true
-      path: capabilities/recurring-expenses.md
-      mediaType: text/markdown
-    - id: acceptance
-      description: Acceptance scenarios that exercise recurrence, authorization, confirmation, edits, and deletion.
-      required: true
-      path: acceptance/criteria.md
-      mediaType: text/markdown
+  variants:
+    source-only:
+      objective: >-
+        Produce implementation-ready instructions for recurring expense templates.
+        Preserve the Ledgerly host boundary and surface consequential uncertainty
+        rather than inventing it.
+      deliverables:
+        - id: implementation-ready-instructions
+          description: Standalone instructions that an independent implementation agent can act on.
+          required: true
+          path: instructions.md
+          mediaType: text/markdown
+    seedspec-scaffold:
+      objective: >-
+        Author a reusable feature package for recurring expense templates. State the
+        host capabilities it requires, the behavior it provides, and the boundary
+        between a due template and an existing Ledgerly transaction.
+      deliverables:
+        - id: manifest
+          description: A valid SeedSpec package manifest identifying this as a feature and declaring required host capabilities.
+          required: true
+          path: seedspec.yaml
+          mediaType: application/yaml
+        - id: feature-definition
+          description: Behavior, state, host boundaries, failure cases, and lifecycle for recurring templates and due suggestions.
+          required: true
+          path: definition/feature.md
+          mediaType: text/markdown
+        - id: host-contract
+          description: Explicit required/provided capability contracts and integration assumptions.
+          required: true
+          path: capabilities/recurring-expenses.md
+          mediaType: text/markdown
+        - id: acceptance
+          description: Acceptance scenarios that exercise recurrence, authorization, confirmation, edits, and deletion.
+          required: true
+          path: acceptance/criteria.md
+          mediaType: text/markdown
+    seedspec-guided-authoring:
+      objective: >-
+        Author a reusable feature package for recurring expense templates. State the
+        host capabilities it requires, the behavior it provides, and the boundary
+        between a due template and an existing Ledgerly transaction.
+      deliverables:
+        - id: manifest
+          description: A valid SeedSpec package manifest identifying this as a feature and declaring required host capabilities.
+          required: true
+          path: seedspec.yaml
+          mediaType: application/yaml
+        - id: feature-definition
+          description: Behavior, state, host boundaries, failure cases, and lifecycle for recurring templates and due suggestions.
+          required: true
+          path: definition/feature.md
+          mediaType: text/markdown
+        - id: host-contract
+          description: Explicit required/provided capability contracts and integration assumptions.
+          required: true
+          path: capabilities/recurring-expenses.md
+          mediaType: text/markdown
+        - id: acceptance
+          description: Acceptance scenarios that exercise recurrence, authorization, confirmation, edits, and deletion.
+          required: true
+          path: acceptance/criteria.md
+          mediaType: text/markdown
 
 implementation:
   objective: >-
@@ -97,6 +136,7 @@ implementation:
 successCriteria:
   - id: valid-feature-package
     stage: authorship
+    variants: [seedspec-scaffold, seedspec-guided-authoring]
     description: The package validates and declares feature kind, host requirements, and its provided recurrence capability.
     measure:
       kind: deterministic

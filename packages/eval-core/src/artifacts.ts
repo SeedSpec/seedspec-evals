@@ -12,11 +12,12 @@ import {
   type DeepReadonly,
   type JsonValue,
 } from "./common.js";
-import { EvaluationStageSchema } from "./cases.js";
+import { EvaluationStageSchema, EvaluationVariantSchema, variantBelongsToStage } from "./cases.js";
 import { ReproducibilityMetadataSchema } from "./versions.js";
 
 export const ArtifactKindSchema = z.enum([
   "source",
+  "authored-instructions",
   "authored-package",
   "implementation",
   "transcript",
@@ -32,6 +33,7 @@ export const ArtifactBodySchema = z.strictObject({
   schemaVersion: z.literal(1),
   runId: RunIdSchema,
   stage: EvaluationStageSchema,
+  variant: EvaluationVariantSchema,
   kind: ArtifactKindSchema,
   path: SafeRelativePathSchema,
   mediaType: z.string().trim().min(1).max(256),
@@ -40,6 +42,10 @@ export const ArtifactBodySchema = z.strictObject({
   createdAt: IsoTimestampSchema,
   provenance: ReproducibilityMetadataSchema,
   metadata: JsonObjectSchema.optional(),
+}).superRefine((artifact, context) => {
+  if (!variantBelongsToStage(artifact.variant, artifact.stage)) {
+    context.addIssue({ code: "custom", message: "variant does not belong to stage", path: ["variant"] });
+  }
 });
 
 export type ArtifactBody = z.infer<typeof ArtifactBodySchema>;

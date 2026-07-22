@@ -4,7 +4,7 @@
 
 The first release separates deterministic protocol work from model-driven work.
 
-- The local packages define cases, run manifests, artifacts, scorecards, and reproducibility metadata without depending on Cloudflare.
+- The local packages define cases, evaluation variants, run manifests, artifacts, scorecards, and reproducibility metadata without depending on Cloudflare.
 - The Cloudflare harness extends Think instead of implementing a second agent loop.
 - One Think Durable Object instance represents one run. Instance names are derived from run IDs, never from a shared mutable global.
 - Cloudflare AI Gateway is the model routing boundary. A run records the exact model identifier and gateway name used.
@@ -17,7 +17,7 @@ The first release separates deterministic protocol work from model-driven work.
 ## Data flow
 
 ```text
-case + runner + model + protocol/tool versions
+case + variant + runner + model + protocol/tool versions
                     |
                     v
              immutable run manifest
@@ -53,7 +53,7 @@ The Worker supports one-run submission plus a Workflow coordinator that fans out
 
 Think lifecycle hooks record observable assistant output, tool calls and results, usage, statuses, timing, and errors in the run Durable Object. A terminal export produces the same content-addressed trace shape used by desktop parity runners. Initial user material remains bound in the immutable envelope instead of being duplicated into every trace. Capture capabilities and limitations are explicit, and model reasoning is never stored.
 
-The Think workspace validator compiles the canonical manifest schema shipped by `@seedspec/protocol`, then applies the package-level reference, semantic, configuration-example, bundled-resource, and digest checks against Think's SQLite-backed workspace. It reports both the protocol-package version and the workspace-adapter version so the result is reproducible without pretending a local Node filesystem exists inside Workers.
+The Think workspace validator compiles the manifest schema from the frozen `@seedspec/protocol` snapshot, then applies package-level reference, semantic, configuration-example, bundled-resource, and digest checks against Think's SQLite-backed workspace. The snapshot records the unpublished source commit and a SHA-256 package digest, so early evaluations do not require publishing an untested protocol revision. Every validation result reports that version, revision, and the workspace-adapter version.
 
 ## Model routing
 

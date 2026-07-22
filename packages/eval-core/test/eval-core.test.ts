@@ -58,6 +58,7 @@ function manifestBody() {
     schemaVersion: 1 as const,
     case: caseReference,
     target: { stage: "authorship" as const },
+    variant: "seedspec-guided-authoring" as const,
     repetition: 0,
     createdAt: NOW,
     protocol,
@@ -89,7 +90,6 @@ function caseInput() {
     title: "Sparse application",
     authorship: {
       mode: "sparse-application" as const,
-      objective: "Turn sparse intent into a reviewable package.",
       sourceMaterials: [
         {
           id: "brief",
@@ -103,15 +103,38 @@ function caseInput() {
       constraints: [
         { id: "no-network", kind: "prohibition" as const, description: "Do not use the network." },
       ],
-      deliverables: [
-        {
-          id: "package",
-          description: "A SeedSpec package",
-          required: true,
-          path: "package/spec.md",
-          mediaType: "text/markdown",
+      variants: {
+        "source-only": {
+          objective: "Turn sparse intent into implementation-ready instructions.",
+          deliverables: [{
+            id: "instructions",
+            description: "Implementation-ready instructions",
+            required: true,
+            path: "instructions.md",
+            mediaType: "text/markdown",
+          }],
         },
-      ],
+        "seedspec-scaffold": {
+          objective: "Turn sparse intent into a reviewable package.",
+          deliverables: [{
+            id: "package",
+            description: "A SeedSpec package",
+            required: true,
+            path: "package/spec.md",
+            mediaType: "text/markdown",
+          }],
+        },
+        "seedspec-guided-authoring": {
+          objective: "Turn sparse intent into a reviewable package.",
+          deliverables: [{
+            id: "package",
+            description: "A SeedSpec package",
+            required: true,
+            path: "package/spec.md",
+            mediaType: "text/markdown",
+          }],
+        },
+      },
     },
     implementation: {
       objective: "Implement the authored package.",
@@ -168,7 +191,7 @@ describe("canonical primitives", () => {
 describe("evaluation cases", () => {
   it("validates both stages, freezes the case, and keeps hidden expectations out of runner views", () => {
     const parsed = EvaluationCaseSchema.parse(caseInput());
-    const view = createRunnableCaseView(parsed, "authorship");
+    const view = createRunnableCaseView(parsed, "authorship", "seedspec-guided-authoring");
 
     expect(Object.isFrozen(parsed)).toBe(true);
     expect(Object.isFrozen(parsed.authorship.sourceMaterials)).toBe(true);
@@ -183,7 +206,7 @@ describe("evaluation cases", () => {
 
   it("rejects traversal paths, duplicate IDs, and dangling implementation expectations", () => {
     const unsafe = caseInput();
-    unsafe.authorship.deliverables[0]!.path = "../secrets.txt";
+    unsafe.authorship.variants["seedspec-guided-authoring"].deliverables[0]!.path = "../secrets.txt";
     expect(EvaluationCaseSchema.safeParse(unsafe).success).toBe(false);
 
     const noImplementation: Record<string, unknown> = { ...caseInput() };
@@ -197,15 +220,15 @@ describe("evaluation cases", () => {
 
   it("rejects exact and case-folded deliverable path collisions", () => {
     const exact = caseInput();
-    exact.authorship.deliverables.push({
-      ...exact.authorship.deliverables[0]!,
+    exact.authorship.variants["seedspec-guided-authoring"].deliverables.push({
+      ...exact.authorship.variants["seedspec-guided-authoring"].deliverables[0]!,
       id: "duplicate-path",
     });
     expect(EvaluationCaseSchema.safeParse(exact).success).toBe(false);
 
     const caseFolded = caseInput();
-    caseFolded.authorship.deliverables.push({
-      ...caseFolded.authorship.deliverables[0]!,
+    caseFolded.authorship.variants["seedspec-guided-authoring"].deliverables.push({
+      ...caseFolded.authorship.variants["seedspec-guided-authoring"].deliverables[0]!,
       id: "case-folded-path",
       path: "PACKAGE/SPEC.MD",
     });
@@ -255,6 +278,7 @@ describe("artifacts and run states", () => {
       schemaVersion: 1 as const,
       runId: run.runId,
       stage: "authorship" as const,
+      variant: "seedspec-guided-authoring" as const,
       kind: "authored-package" as const,
       path: "outputs/package.zip",
       mediaType: "application/zip",
@@ -263,6 +287,7 @@ describe("artifacts and run states", () => {
       createdAt: LATER,
       provenance: {
         case: caseReference,
+        variant: "seedspec-guided-authoring" as const,
         protocol,
         runner,
         model,
@@ -322,6 +347,7 @@ describe("scores", () => {
       runId: createRunManifest(manifestBody()).runId,
       case: caseReference,
       stage: "authorship" as const,
+      variant: "seedspec-guided-authoring" as const,
       createdAt: LATER,
       evaluator: { id: "protocol-checks", kind: "deterministic" as const, version: "1.0.0" },
       kind: "deterministic" as const,
@@ -350,6 +376,7 @@ describe("scores", () => {
       runId: createRunManifest(manifestBody()).runId,
       case: caseReference,
       stage: "implementation" as const,
+      variant: "seedspec-implementation" as const,
       createdAt: LATER,
       evaluator: { id: "implementation-review", kind: "rubric" as const, version: "1.0.0" },
       kind: "rubric" as const,
@@ -439,6 +466,7 @@ describe("observable traces", () => {
     const trace = createTrace({
       schemaVersion: 1,
       runId,
+      variant: "seedspec-guided-authoring",
       runner,
       model,
       startedAt: NOW,

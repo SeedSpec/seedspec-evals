@@ -4,12 +4,26 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 import { loadCaseFile, loadCaseLibrary } from "@seedspec/eval-case-library";
-import { RunIdSchema, TraceBodySchema, createTrace, parseTrace, type EvaluationStage } from "@seedspec/eval-core";
+import {
+  EvaluationVariantSchema,
+  RunIdSchema,
+  TraceBodySchema,
+  createTrace,
+  parseTrace,
+  variantsForStage,
+  type EvaluationStage,
+  type EvaluationVariant,
+} from "@seedspec/eval-core";
 import { SubmissionIdSchema } from "@seedspec/eval-harness";
 import { Command, InvalidArgumentError } from "commander";
 
 import { ExecutionEnvelopeSchema, ExperimentPlanSchema, type ExecutionEnvelope } from "./contracts.js";
 import { CLI_DOCS } from "./docs.js";
+import {
+  buildRubricEvaluationBrief,
+  evaluateRunDirectoryDeterministically,
+  validateScorecardFile,
+} from "./evaluate.js";
 import { createExperimentPlan } from "./plan.js";
 import {
   cancelRemoteMatrix,
@@ -21,6 +35,7 @@ import {
   submitEnvelope,
 } from "./remote.js";
 import { buildDesktopBrief, buildDesktopManifest, type DesktopRunner } from "./runner-brief.js";
+import { createVariantComparison } from "@seedspec/evaluators";
 
 const CLI_VERSION = "0.1.0-alpha.1";
 const program = new Command();
@@ -64,9 +79,10 @@ experiment.command("plan")
   .option("--case <id...>", "case IDs to include; defaults to all")
   .requiredOption("--model <model...>", "AI Gateway model slug(s)")
   .option("--stage <stage>", "authorship or implementation", parseStage, "authorship")
+  .option("--variant <variant...>", "evaluation variant(s); defaults to every standard variant for the stage")
   .option("--repetitions <count>", "runs per case/model", parsePositiveInteger, 1)
   .option("--gateway <id>", "Cloudflare AI Gateway ID", "seedspec-evals")
-  .option("--protocol-version <version>", "SeedSpec protocol version", "0.1.0-alpha.4")
+  .option("--protocol-version <version>", "frozen SeedSpec protocol package version", "0.1.0-alpha.3")
   .option("--max-steps <count>", "maximum Think steps per turn", parsePositiveInteger, 6)
   .option("--authored-package-artifact <id>", "authored package artifact for implementation runs")
   .option("--out <file>", "plan output path")
@@ -75,6 +91,7 @@ experiment.command("plan")
     case?: string[];
     model: string[];
     stage: EvaluationStage;
+    variant?: string[];
     repetitions: number;
     gateway: string;
     protocolVersion: string;
@@ -89,9 +106,11 @@ experiment.command("plan")
     const missing = options.case?.filter((id) => !selected.some((entry) => entry.case.id === id)) ?? [];
     if (missing.length > 0) throw new Error(`Unknown case IDs: ${missing.join(", ")}`);
     const createdAt = new Date().toISOString();
+    const variants = parseVariants(options.variant, options.stage);
     const plan = await createExperimentPlan({
       cases: selected,
       stage: options.stage,
+      variants,
       models: options.model,
       repetitions: options.repetitions,
       gatewayId: options.gateway,
@@ -107,7 +126,25 @@ experiment.command("plan")
     await mkdir(dirname(outPath), { recursive: true });
     await writeFile(outPath, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
     output({ ok: true, planId: plan.planId, runs: plan.envelopes.length, path: outPath },
-      `Planned ${String(plan.envelopes.length)} model run${plan.envelopes.length === 1 ? "" : "s"} in ${outPath}.\nNo model was called. Review the plan, then submit an envelope with --confirm-model-execution.`);
+      `Planned ${String(plan.envelopes.length)} model run${plan.envelopes.length === 1 ? "" : "s"} across ${String(variants.length)} evaluation variant${variants.length === 1 ? "" : "s"} in ${outPath}.\nNo model was called. Review the plan, then submit an envelope with --confirm-model-execution.`);
+  });
+
+experiment.command("inspect")
+  .argument("<plan>", "experiment plan JSON")
+  .action(async (file: string) => {
+    const plan = ExperimentPlanSchema.parse(JSON.parse(await readFile(resolve(file), "utf8")) as unknown);
+    const runs = plan.envelopes.map(({ manifest }) => ({
+      runId: manifest.runId,
+      caseId: manifest.case.id,
+      stage: manifest.target.stage,
+      variant: manifest.variant,
+      model: manifest.model.modelId,
+      repetition: manifest.repetition,
+    }));
+    output({ ok: true, planId: plan.planId, runs }, [
+      `Plan ${plan.planId}:`,
+      ...runs.map((run) => `- ${run.runId} — ${run.caseId} / ${run.variant} / ${run.model} / repetition ${String(run.repetition)}`),
+    ].join("\n"));
   });
 
 const run = program.command("run").description("Submit or inspect Cloudflare Think runs.");
@@ -261,6 +298,73 @@ trace.command("validate")
     output({ ok: true, traceId: parsed.traceId, runId: parsed.runId }, `Validated trace ${parsed.traceId}. Reasoning capture is explicitly ${parsed.capture.reasoning}.`);
   });
 
+const evaluate = program.command("evaluate").description("Score completed run evidence without changing evaluated output.");
+
+evaluate.command("deterministic")
+  .argument("<run-directory>", "completed desktop run directory")
+  .option("--root <directory>", "case library root", "cases")
+  .option("--seedspec-cli <file>", "frozen SeedSpec CLI entrypoint", "../seedspec/packages/cli/bin/seedspec.js")
+  .action(async (runDirectory: string, options: { root: string; seedspecCli: string }) => {
+    const result = await evaluateRunDirectoryDeterministically({
+      runDirectory,
+      caseRoot: options.root,
+      seedSpecCli: options.seedspecCli,
+      createdAt: new Date().toISOString(),
+    });
+    output({
+      ok: true,
+      runId: result.scorecard.runId,
+      variant: result.scorecard.variant,
+      score: result.scorecard.summary,
+      artifactManifestPath: result.artifactManifestPath,
+      scorecardPath: result.scorecardPath,
+    }, `Deterministic evaluation completed for ${result.scorecard.runId} (${result.scorecard.variant}): ${String(result.scorecard.summary.earned)}/${String(result.scorecard.summary.possible)}.\nArtifacts: ${result.artifactManifestPath}\nScorecard: ${result.scorecardPath}\nNo model was called.`);
+  });
+
+evaluate.command("rubric-brief")
+  .argument("<run-directory>", "completed run directory")
+  .requiredOption("--runner <runner>", "codex or claude-code", parseDesktopRunner)
+  .requiredOption("--judge-model <model>", "exact model identifier for the independent judge")
+  .option("--root <directory>", "case library root", "cases")
+  .option("--out <file>", "handoff output path")
+  .option("--stdout", "print the complete evaluator brief")
+  .action(async (runDirectory: string, options: { runner: DesktopRunner; judgeModel: string; root: string; out?: string; stdout?: boolean }) => {
+    const result = await buildRubricEvaluationBrief({
+      runDirectory,
+      caseRoot: options.root,
+      runner: options.runner,
+      judgeModel: options.judgeModel,
+      ...(options.out === undefined ? {} : { out: options.out }),
+    });
+    output({ ok: true, path: result.path, brief: result.brief }, options.stdout === true
+      ? result.brief
+      : `Prepared the independent rubric-evaluation handoff at ${result.path}. No model was called.`);
+  });
+
+evaluate.command("scorecard")
+  .argument("<scorecard>", "rubric or deterministic scorecard JSON")
+  .action(async (file: string) => {
+    const scorecard = await validateScorecardFile(file);
+    output({ ok: true, runId: scorecard.runId, variant: scorecard.variant, kind: scorecard.kind, summary: scorecard.summary },
+      `Validated ${scorecard.kind} scorecard for ${scorecard.runId} (${scorecard.variant}): ${String(scorecard.summary.earned)}/${String(scorecard.summary.possible)}.`);
+  });
+
+program.command("compare")
+  .description("Compare like-for-like scorecards across evaluation variants.")
+  .argument("<scorecards...>", "two or more canonical scorecard JSON files")
+  .option("--baseline <variant>", "baseline evaluation variant", "source-only")
+  .option("--out <file>", "comparison report output path")
+  .action(async (files: string[], options: { baseline: string; out?: string }) => {
+    const baseline = EvaluationVariantSchema.parse(options.baseline);
+    const scorecards = await Promise.all(files.map(validateScorecardFile));
+    const report = createVariantComparison({ scorecards, baselineVariant: baseline, createdAt: new Date().toISOString() });
+    const defaultPath = `runs/variant-comparison-${new Date().toISOString().replaceAll(/[:.]/g, "-")}.json`;
+    const outPath = resolve(options.out ?? defaultPath);
+    await mkdir(dirname(outPath), { recursive: true });
+    await writeFile(outPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    output({ ok: true, path: outPath, report }, `Compared ${String(scorecards.length)} ${report.scorecardKind} scorecards against ${report.baseline.variant}.\nReport: ${outPath}\nNo model was called.`);
+  });
+
 program.command("docs")
   .argument("[topic]", "architecture, lifecycle, labs, cli, or safety", "cli")
   .action((topic: string) => {
@@ -295,6 +399,14 @@ function parseStage(value: string): EvaluationStage {
     throw new InvalidArgumentError("must be authorship or implementation");
   }
   return value;
+}
+
+function parseVariants(values: string[] | undefined, stage: EvaluationStage): EvaluationVariant[] {
+  const selected = values === undefined ? [...variantsForStage(stage)] : values.map((value) => EvaluationVariantSchema.parse(value));
+  const invalid = selected.filter((variant) => !variantsForStage(stage).includes(variant));
+  if (invalid.length > 0) throw new InvalidArgumentError(`variant does not belong to ${stage}: ${invalid.join(", ")}`);
+  if (new Set(selected).size !== selected.length) throw new InvalidArgumentError("variants must be unique");
+  return selected;
 }
 
 function assertRunId(value: string): void {

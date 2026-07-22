@@ -8,6 +8,37 @@ import { ExperimentPlanSchema } from "./contracts.js";
 import { buildDesktopBrief, buildDesktopManifest } from "./runner-brief.js";
 
 describe("createExperimentPlan", () => {
+  it("creates one isolated run for every standard authorship variant", async () => {
+    const cases = await loadCaseLibrary(resolve("cases"));
+    const plan = await createExperimentPlan({
+      cases: cases.slice(0, 1),
+      stage: "authorship",
+      variants: ["source-only", "seedspec-scaffold", "seedspec-guided-authoring"],
+      models: ["openai/gpt-5.6-sol"],
+      repetitions: 1,
+      gatewayId: "seedspec-evals",
+      protocolVersion: "0.1.0-alpha.3",
+      createdAt: "2026-07-21T12:00:00.000Z",
+      maxSteps: 6,
+    });
+
+    expect(plan.envelopes.map(({ manifest }) => manifest.variant)).toEqual([
+      "source-only",
+      "seedspec-scaffold",
+      "seedspec-guided-authoring",
+    ]);
+    const control = plan.envelopes[0]!;
+    expect(control.submission.config.untrustedMaterial).not.toContain("SeedSpec");
+    expect(control.submission.config.trustedInstructions.join(" ")).not.toContain("SeedSpec");
+    expect(control.manifest.tools.map(({ name }) => name)).toEqual([
+      "think-workspace",
+      "seedspec-simulated-author",
+    ]);
+    const desktopManifest = buildDesktopManifest(control, "codex");
+    const desktopBrief = buildDesktopBrief(control, desktopManifest, "codex", "runs/source-only");
+    expect(desktopBrief).not.toMatch(/seedspec/i);
+  });
+
   it("keeps hidden expectations and simulated answers out of model material", async () => {
     const cases = await loadCaseLibrary(resolve("cases"));
     const selected = cases.filter(({ case: evaluationCase }) =>
@@ -15,10 +46,11 @@ describe("createExperimentPlan", () => {
     const plan = await createExperimentPlan({
       cases: selected,
       stage: "authorship",
+      variants: ["seedspec-guided-authoring"],
       models: ["@cf/moonshotai/kimi-k2.6"],
       repetitions: 1,
       gatewayId: "seedspec-evals",
-      protocolVersion: "0.1.0-alpha.4",
+      protocolVersion: "0.1.0-alpha.3",
       createdAt: "2026-07-21T12:00:00.000Z",
       maxSteps: 6,
     });
@@ -38,10 +70,11 @@ describe("createExperimentPlan", () => {
     const plan = await createExperimentPlan({
       cases: selected,
       stage: "authorship",
+      variants: ["seedspec-guided-authoring"],
       models: ["@cf/moonshotai/kimi-k2.6", "openai/gpt-4.1-mini"],
       repetitions: 2,
       gatewayId: "seedspec-evals",
-      protocolVersion: "0.1.0-alpha.4",
+      protocolVersion: "0.1.0-alpha.3",
       createdAt: "2026-07-21T12:00:00.000Z",
       maxSteps: 6,
     });
@@ -56,10 +89,11 @@ describe("createExperimentPlan", () => {
     const plan = await createExperimentPlan({
       cases: cases.slice(0, 1),
       stage: "authorship",
+      variants: ["seedspec-guided-authoring"],
       models: ["@cf/moonshotai/kimi-k2.6"],
       repetitions: 1,
       gatewayId: "seedspec-evals",
-      protocolVersion: "0.1.0-alpha.4",
+      protocolVersion: "0.1.0-alpha.3",
       createdAt: "2026-07-21T12:00:00.000Z",
       maxSteps: 6,
     });
@@ -75,10 +109,11 @@ describe("createExperimentPlan", () => {
     const plan = await createExperimentPlan({
       cases: cases.slice(0, 1),
       stage: "authorship",
+      variants: ["seedspec-guided-authoring"],
       models: ["openai/gpt-5.4"],
       repetitions: 1,
       gatewayId: "seedspec-evals",
-      protocolVersion: "0.1.0-alpha.4",
+      protocolVersion: "0.1.0-alpha.3",
       createdAt: "2026-07-21T12:00:00.000Z",
       maxSteps: 6,
     });
@@ -92,6 +127,7 @@ describe("createExperimentPlan", () => {
     expect(manifest.tools.map((entry) => entry.name)).toEqual([
       "desktop-agent-workspace",
       "seedspec-simulated-author",
+      "seedspec-cli",
     ]);
     expect(brief).toContain("author answer runs/parity-codex/source-envelope.json");
     expect(brief).toContain("runs/parity-codex/trace-draft.json");

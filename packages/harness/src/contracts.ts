@@ -1,5 +1,6 @@
 import {
   EvaluationStageSchema,
+  EvaluationVariantSchema,
   IdentifierSchema,
   JsonObjectSchema,
   RunManifestSchema,
@@ -70,6 +71,7 @@ export const RunAgentConfigSchema = z
     runId: RunIdSchema,
     caseId: CaseIdSchema,
     stage: RunStageSchema,
+    variant: EvaluationVariantSchema,
     model: ModelIdSchema,
     gatewayId: GatewayIdSchema,
     maxSteps: z.number().int().min(1).max(MAX_MAX_STEPS).default(DEFAULT_MAX_STEPS),
@@ -237,6 +239,11 @@ function addManifestBindingIssues(
       matches: manifest.target.stage === config.stage,
       message: "manifest stage does not match the execution configuration",
       path: ["config", "stage"],
+    },
+    {
+      matches: manifest.variant === config.variant,
+      message: "manifest variant does not match the execution configuration",
+      path: ["config", "variant"],
     },
     {
       matches: manifest.model.modelId === config.model,

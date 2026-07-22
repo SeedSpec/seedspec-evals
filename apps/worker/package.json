@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@cloudflare/think": "0.13.0",
-    "@seedspec/protocol": "0.1.0-alpha.2",
+    "@seedspec/protocol": "file:../../vendor/protocol",
     "@seedspec/eval-core": "0.1.0-alpha.1",
     "@seedspec/eval-harness": "0.1.0-alpha.1",
     "agents": "0.17.4",

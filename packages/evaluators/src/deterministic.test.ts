@@ -20,7 +20,6 @@ describe("evaluateDeterministically", () => {
       title: "Example",
       authorship: {
         mode: "sparse-application",
-        objective: "Author the package.",
         sourceMaterials: [{
           id: "note",
           label: "Note",
@@ -30,7 +29,20 @@ describe("evaluateDeterministically", () => {
           trust: "untrusted",
         }],
         constraints: [],
-        deliverables: [{ id: "manifest", description: "Manifest", required: true, path: "seedspec.yaml" }],
+        variants: {
+          "source-only": {
+            objective: "Write instructions.",
+            deliverables: [{ id: "instructions", description: "Instructions", required: true, path: "instructions.md" }],
+          },
+          "seedspec-scaffold": {
+            objective: "Author the package.",
+            deliverables: [{ id: "manifest", description: "Manifest", required: true, path: "seedspec.yaml" }],
+          },
+          "seedspec-guided-authoring": {
+            objective: "Author the package.",
+            deliverables: [{ id: "manifest", description: "Manifest", required: true, path: "seedspec.yaml" }],
+          },
+        },
       },
       successCriteria: [{
         id: "valid",
@@ -53,9 +65,10 @@ describe("evaluateDeterministically", () => {
       schemaVersion: 1,
       case: { id: evaluationCase.id, version: evaluationCase.version, digest },
       target: { stage: "authorship" },
+      variant: "seedspec-guided-authoring",
       repetition: 0,
       createdAt: "2026-07-21T12:00:00.000Z",
-      protocol: { name: "seedspec", version: "0.1.0-alpha.4" },
+      protocol: { name: "seedspec", version: "0.1.0-alpha.3" },
       runner: { id: "unit-test", kind: "local", version: "1.0.0" },
       model: { provider: "test", modelId: "none", parameters: {} },
       harness: { name: "unit-test", version: "1.0.0" },

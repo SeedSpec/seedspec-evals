@@ -12,6 +12,17 @@ import {
 
 export const EvaluationStageSchema = z.enum(["authorship", "implementation"]);
 
+export const AuthorshipVariantSchema = z.enum([
+  "source-only",
+  "seedspec-scaffold",
+  "seedspec-guided-authoring",
+]);
+export const ImplementationVariantSchema = z.literal("seedspec-implementation");
+export const EvaluationVariantSchema = z.union([
+  AuthorshipVariantSchema,
+  ImplementationVariantSchema,
+]);
+
 export const AuthoringModeSchema = z.enum([
   "sparse-application",
   "existing-product-feature",
@@ -64,6 +75,7 @@ export const EvaluationMeasureSchema = z.discriminatedUnion("kind", [
 export const SuccessCriterionSchema = z.strictObject({
   id: IdentifierSchema,
   stage: EvaluationStageSchema,
+  variants: z.array(EvaluationVariantSchema).min(1).max(16).optional(),
   description: z.string().trim().min(1).max(4_000),
   measure: EvaluationMeasureSchema,
 });
@@ -71,6 +83,7 @@ export const SuccessCriterionSchema = z.strictObject({
 export const HiddenExpectationSchema = z.strictObject({
   id: IdentifierSchema,
   stage: EvaluationStageSchema,
+  variants: z.array(EvaluationVariantSchema).min(1).max(16).optional(),
   description: z.string().trim().min(1).max(4_000),
   severity: z.enum(["minor", "major", "critical"]),
   evaluation: EvaluationMeasureSchema,
@@ -80,6 +93,7 @@ export const HiddenExpectationSchema = z.strictObject({
 export const PermittedVariabilitySchema = z.strictObject({
   id: IdentifierSchema,
   stage: EvaluationStageSchema,
+  variants: z.array(EvaluationVariantSchema).min(1).max(16).optional(),
   dimension: IdentifierSchema,
   description: z.string().trim().min(1).max(4_000),
   bounds: z.string().trim().min(1).max(4_000).optional(),
@@ -93,12 +107,20 @@ export const SimulatedToolResponseSchema = z.strictObject({
   response: JsonValueSchema,
 });
 
+export const AuthorshipVariantContractSchema = z.strictObject({
+  objective: z.string().trim().min(1).max(8_000),
+  deliverables: z.array(DeliverableSchema).min(1).max(128),
+});
+
 export const AuthorshipStageSchema = z.strictObject({
   mode: AuthoringModeSchema,
-  objective: z.string().trim().min(1).max(8_000),
   sourceMaterials: z.array(SourceMaterialSchema).min(1).max(128),
   constraints: z.array(CaseConstraintSchema).max(128),
-  deliverables: z.array(DeliverableSchema).min(1).max(128),
+  variants: z.strictObject({
+    "source-only": AuthorshipVariantContractSchema,
+    "seedspec-scaffold": AuthorshipVariantContractSchema,
+    "seedspec-guided-authoring": AuthorshipVariantContractSchema,
+  }),
 });
 
 export const ImplementationStageSchema = z.strictObject({
@@ -125,7 +147,10 @@ const EvaluationCaseDataSchema = z
   .superRefine((evaluationCase, context) => {
     addUniqueIdIssues(evaluationCase.authorship.sourceMaterials, context, ["authorship", "sourceMaterials"]);
     addUniqueIdIssues(evaluationCase.authorship.constraints, context, ["authorship", "constraints"]);
-    addUniqueIdIssues(evaluationCase.authorship.deliverables, context, ["authorship", "deliverables"]);
+    for (const [variant, contract] of Object.entries(evaluationCase.authorship.variants)) {
+      addUniqueIdIssues(contract.deliverables, context, ["authorship", "variants", variant, "deliverables"]);
+      addDeliverablePathIssues(contract.deliverables, context, ["authorship", "variants", variant, "deliverables"]);
+    }
     addUniqueIdIssues(evaluationCase.successCriteria, context, ["successCriteria"]);
     addUniqueIdIssues(evaluationCase.hiddenExpectations, context, ["hiddenExpectations"]);
     addUniqueIdIssues(evaluationCase.permittedVariability, context, ["permittedVariability"]);
@@ -136,7 +161,6 @@ const EvaluationCaseDataSchema = z
       addUniqueIdIssues(evaluationCase.implementation.deliverables, context, ["implementation", "deliverables"]);
     }
 
-    addDeliverablePathIssues(evaluationCase.authorship.deliverables, context, ["authorship", "deliverables"]);
     if (evaluationCase.implementation !== undefined) {
       addDeliverablePathIssues(
         evaluationCase.implementation.deliverables,
@@ -157,6 +181,18 @@ const EvaluationCaseDataSchema = z
           message: "implementation-stage evaluation data requires an implementation stage",
         });
       }
+      if (referenced.variants !== undefined) {
+        if (new Set(referenced.variants).size !== referenced.variants.length) {
+          context.addIssue({ code: "custom", message: "variants must be unique" });
+        }
+        const invalid = referenced.variants.filter((variant) => !variantBelongsToStage(variant, referenced.stage));
+        if (invalid.length > 0) {
+          context.addIssue({
+            code: "custom",
+            message: `variants do not belong to ${referenced.stage}: ${invalid.join(", ")}`,
+          });
+        }
+      }
     }
 
     if (evaluationCase.tags !== undefined && new Set(evaluationCase.tags).size !== evaluationCase.tags.length) {
@@ -167,6 +203,9 @@ const EvaluationCaseDataSchema = z
 export const EvaluationCaseSchema = EvaluationCaseDataSchema.transform((value) => deepFreeze(value));
 
 export type EvaluationStage = z.infer<typeof EvaluationStageSchema>;
+export type AuthorshipVariant = z.infer<typeof AuthorshipVariantSchema>;
+export type ImplementationVariant = z.infer<typeof ImplementationVariantSchema>;
+export type EvaluationVariant = z.infer<typeof EvaluationVariantSchema>;
 export type AuthoringMode = z.infer<typeof AuthoringModeSchema>;
 export type SourceMaterial = z.infer<typeof SourceMaterialSchema>;
 export type CaseConstraint = z.infer<typeof CaseConstraintSchema>;
@@ -188,6 +227,7 @@ export interface RunnableCaseView {
   readonly caseId: string;
   readonly caseVersion: string;
   readonly stage: EvaluationStage;
+  readonly variant: EvaluationVariant;
   readonly objective: string;
   readonly sourceMaterials: readonly DeepReadonly<SourceMaterial>[];
   readonly constraints: readonly DeepReadonly<CaseConstraint>[];
@@ -206,25 +246,51 @@ export interface SimulationFixtureView {
 export function createRunnableCaseView(
   input: EvaluationCase,
   stage: EvaluationStage,
+  variant: EvaluationVariant,
 ): DeepReadonly<RunnableCaseView> {
+  if (!variantBelongsToStage(variant, stage)) {
+    throw new Error(`Variant ${variant} does not belong to the ${stage} stage`);
+  }
   if (stage === "implementation" && input.implementation === undefined) {
     throw new Error(`Case ${input.id} has no implementation stage`);
   }
 
-  const stageDefinition = stage === "authorship" ? input.authorship : input.implementation;
+  const stageDefinition = stage === "authorship"
+    ? input.authorship.variants[variant as AuthorshipVariant]
+    : input.implementation;
   if (stageDefinition === undefined) throw new Error(`Case ${input.id} has no ${stage} stage`);
 
   return deepFreeze({
     caseId: input.id,
     caseVersion: input.version,
     stage,
+    variant,
     objective: stageDefinition.objective,
     sourceMaterials: stage === "authorship" ? input.authorship.sourceMaterials : [],
-    constraints: stageDefinition.constraints,
+    constraints: stage === "authorship" ? input.authorship.constraints : input.implementation?.constraints ?? [],
     deliverables: stageDefinition.deliverables,
-    successCriteria: input.successCriteria.filter((criterion) => criterion.stage === stage),
-    permittedVariability: input.permittedVariability.filter((variability) => variability.stage === stage),
+    successCriteria: input.successCriteria.filter((criterion) =>
+      criterion.stage === stage && appliesToVariant(criterion.variants, variant)),
+    permittedVariability: input.permittedVariability.filter((variability) =>
+      variability.stage === stage && appliesToVariant(variability.variants, variant)),
   });
+}
+
+export function variantsForStage(stage: EvaluationStage): readonly EvaluationVariant[] {
+  return stage === "authorship"
+    ? AuthorshipVariantSchema.options
+    : [ImplementationVariantSchema.value];
+}
+
+export function variantBelongsToStage(variant: EvaluationVariant, stage: EvaluationStage): boolean {
+  return variantsForStage(stage).includes(variant);
+}
+
+export function appliesToVariant(
+  variants: readonly EvaluationVariant[] | undefined,
+  variant: EvaluationVariant,
+): boolean {
+  return variants === undefined || variants.includes(variant);
 }
 
 /** Control-plane-only fixture data. Never include this view in a runner or model prompt. */

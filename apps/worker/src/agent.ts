@@ -33,7 +33,7 @@ import { createWorkersAI } from "workers-ai-provider";
 import { z } from "zod";
 
 import { errorClass, structuredLog } from "./logging.js";
-import { createSeedSpecTools, digestPackage } from "./seedspec-tools.js";
+import { createSeedSpecTools, digestPackage, seedSpecToolNamesForVariant } from "./seedspec-tools.js";
 
 const WORKSPACE_TOOLS = ["read", "write", "edit", "list", "find", "grep"];
 
@@ -89,7 +89,7 @@ export class SeedSpecEvalAgent extends Think<Env> {
   override getTools(): ToolSet {
     const config = this.requireRunConfig();
     return {
-      ...createSeedSpecTools(this.workspace, config.stage),
+      ...createSeedSpecTools(this.workspace, config.stage, config.variant),
       ask_author: tool({
         description:
           "Ask one pre-declared clarification question. Use the exact questionId; unavailable questions return no answer.",
@@ -112,6 +112,7 @@ export class SeedSpecEvalAgent extends Think<Env> {
     const config = this.requireRunConfig();
     this.appendTraceEvent("status", "runner", "turn-started", {
       stage: config.stage,
+      variant: config.variant,
       model: config.model,
       maxSteps: config.maxSteps,
     });
@@ -119,6 +120,7 @@ export class SeedSpecEvalAgent extends Think<Env> {
       runId: config.runId,
       caseId: config.caseId,
       stage: config.stage,
+      variant: config.variant,
       model: config.model,
       gatewayId: config.gatewayId,
       maxSteps: config.maxSteps,
@@ -127,9 +129,7 @@ export class SeedSpecEvalAgent extends Think<Env> {
       activeTools: [
         ...WORKSPACE_TOOLS,
         "ask_author",
-        "seedspec_package_check",
-        "seedspec_package_digest",
-        ...(config.stage === "authorship" ? ["seedspec_kind_lint", "seedspec_audit_guidance"] : []),
+        ...seedSpecToolNamesForVariant(config.stage, config.variant),
       ],
       maxSteps: config.maxSteps,
       sendReasoning: false,
@@ -365,6 +365,7 @@ export class SeedSpecEvalAgent extends Think<Env> {
       traceJson: JSON.stringify(createTrace({
         schemaVersion: 1,
         runId: config.runId,
+        variant: config.variant,
         runner: { id: "cloudflare-think", kind: "agent", version: HARNESS_VERSION, environment: { runtime: "cloudflare-workers", runtimeVersion: "2026-07-21" } },
         model: { provider: providerForModel(config.model), modelId: config.model, parameters: {}, routing: { gateway: config.gatewayId } },
         startedAt,
@@ -397,6 +398,7 @@ export class SeedSpecEvalAgent extends Think<Env> {
         runId: config.runId,
         caseId: config.caseId,
         stage: config.stage,
+        variant: config.variant,
         model: config.model,
         gatewayId: config.gatewayId,
         maxSteps: config.maxSteps,

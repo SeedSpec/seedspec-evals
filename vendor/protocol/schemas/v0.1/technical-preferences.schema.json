@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seedspec.dev/schemas/v0.1/technical-preferences.schema.json",
+  "title": "SeedSpec Technical Preferences 0.1 Alpha",
+  "type": "object",
+  "properties": {
+    "implementation_targets": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/implementationTarget" }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "namespacedId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:\\.[a-z0-9][a-z0-9-]*){2,}$"
+    },
+    "localId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "componentName": {
+      "enum": [
+        "acceptance",
+        "integration",
+        "evals",
+        "examples",
+        "reference",
+        "deployment",
+        "maintenance",
+        "migration",
+        "compatibility",
+        "assets",
+        "security",
+        "generation_report"
+      ]
+    },
+    "materialReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package"],
+      "properties": {
+        "package": { "$ref": "#/$defs/namespacedId" },
+        "artifact": { "$ref": "#/$defs/localId" },
+        "component": { "$ref": "#/$defs/componentName" },
+        "resource": { "$ref": "#/$defs/namespacedId" }
+      },
+      "oneOf": [
+        {
+          "required": ["artifact"],
+          "not": { "anyOf": [{ "required": ["component"] }, { "required": ["resource"] }] }
+        },
+        {
+          "required": ["component"],
+          "not": { "anyOf": [{ "required": ["artifact"] }, { "required": ["resource"] }] }
+        },
+        {
+          "required": ["resource"],
+          "not": { "anyOf": [{ "required": ["artifact"] }, { "required": ["component"] }] }
+        }
+      ]
+    },
+    "implementationTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "target", "guidance"],
+      "properties": {
+        "id": { "$ref": "#/$defs/localId" },
+        "kind": { "$ref": "#/$defs/namespacedId" },
+        "target": { "$ref": "#/$defs/namespacedId" },
+        "guidance": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/materialReference" }
+        },
+        "note": { "type": "string", "minLength": 1, "maxLength": 500 }
+      }
+    }
+  }
+}

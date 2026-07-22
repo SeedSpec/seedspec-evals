@@ -8,11 +8,11 @@ The protocol is doing useful work only when its advantages survive different cas
 
 ## Lab 1: authorship value
 
-Run each scenario through at least three arms:
+Run each scenario through at least three evaluation variants:
 
 1. **Source-only control** — give the agent the raw author material and ask for implementation-ready instructions.
 2. **SeedSpec scaffold** — use `seedspec init` and ordinary validation, without the guided audit.
-3. **SeedSpec authoring** — run the full six-area audit with an author simulator or a person supplying recorded decisions.
+3. **Guided SeedSpec authoring** — run the full six-area audit with an author simulator or a person supplying recorded decisions.
 
 Measure protocol validity, source fidelity, unresolved material ambiguity, unsupported invention, concern separation, kind-specific coverage, acceptance quality, handoff quality, author interactions, elapsed time, token use, and evaluator confidence.
 
@@ -60,7 +60,7 @@ Evaluate each outcome independently against the package before comparing outcome
 6. implementation profile adherence;
 7. reversible architecture and technology choices.
 
-High congruency in layers 1–5 is normally desirable. Variation in layer 7 is expected and may be evidence that SeedSpec preserved implementation freedom. Profile variation is acceptable only when it remains subordinate to core intent and explicit user direction.
+High congruency in layers 1–5 is normally desirable. Variation in layer 7 is expected and may be evidence that SeedSpec preserved implementation freedom. Profile variation is acceptable only when it remains subordinate to resolved intent and explicit user direction.
 
 Authors can use these reports to tighten ambiguity, clarify success, or deliberately preserve freedom. The lab must not optimize every package toward deterministic code shape.
 
@@ -81,7 +81,7 @@ Every run records:
 
 - case ID and version;
 - immutable run ID and parent experiment ID;
-- stage and arm;
+- stage and evaluation variant;
 - SeedSpec protocol, CLI, and authoring instruction versions;
 - runner, harness, model, gateway, and evaluator versions;
 - prompts or instruction artifacts by digest;
