@@ -79,7 +79,7 @@ export function buildDesktopBrief(
     `- Harness version: \`${manifest.harness.version}\``,
     ...(config.variant === "source-only" ? [] : [`- Protocol version: \`${manifest.protocol.version}\``]),
     "",
-    "Before starting, select the same underlying model and snapshot as the requested model. If the environment cannot provide it, stop and ask the operator to create a new run identity for the actual model. Never infer parity from a marketing alias.",
+    "Before starting, verify that the operator launched the runner with the requested model selector. An explicit CLI or API model selection is authoritative even when the model cannot self-report its own version. Record that selector and any dated snapshot identifier the environment exposes; record the snapshot as unavailable when none is exposed. Stop only when the requested selector was unavailable or a different selector was actually used. Never infer parity from a marketing alias or model self-description.",
     "Before doing any evaluation work, run `node runner-control.mjs preflight`. Continue only when every check passes and the result says READY. Do not search parent directories, evaluation-harness source, plans, manifests, or control files to reconstruct information that the broker has not returned.",
     "",
     "## Trusted runner contract",

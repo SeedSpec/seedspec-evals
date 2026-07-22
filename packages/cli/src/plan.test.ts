@@ -131,6 +131,8 @@ describe("createExperimentPlan", () => {
     ]);
     expect(brief).toContain("runner-control.mjs answer --question");
     expect(brief).toContain("trace-draft.json");
+    expect(brief).toContain("explicit CLI or API model selection is authoritative");
+    expect(brief).toContain("snapshot as unavailable when none is exposed");
     expect(brief).not.toContain(envelope.submission.config.simulatedAuthorResponses["due-date-policy"] ?? "not-present");
   });
 });
