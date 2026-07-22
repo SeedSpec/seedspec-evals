@@ -27,7 +27,8 @@ seedspec-eval matrix start <plan> --endpoint <url> --confirm-model-execution
 seedspec-eval matrix status <plan-id> --endpoint <url>
 seedspec-eval matrix cancel <plan> --endpoint <url>
 seedspec-eval runner brief <plan-or-envelope> --runner codex|claude-code [--stdout]
-seedspec-eval author answer <plan-or-envelope> --question <id>
+seedspec-eval runner preflight <isolated-run-directory>
+seedspec-eval author answer <runner-source-envelope> --question <id>
 seedspec-eval trace finalize <draft> [--out <file>]
 seedspec-eval trace validate <trace>
 seedspec-eval evaluate deterministic <run-directory> [--seedspec-cli <file>]
@@ -39,7 +40,7 @@ seedspec-eval docs [topic]
 
 `experiment plan` is deterministic. It expands selectors, models, stages, evaluation variants, and repetitions into immutable Think execution envelopes and reports estimated run count. Authorship defaults to `source-only`, `seedspec-scaffold`, and `seedspec-guided-authoring`. The source-only prompt and tool surface omit SeedSpec guidance; every variant remains recorded in the control-plane manifest, trace, artifacts, and scorecards.
 
-`runner brief` derives a runner-specific immutable manifest and copy/paste handoff while retaining the Think run as its comparison source. `evaluate deterministic` inventories the completed workspace and runs variant-appropriate checks. `evaluate rubric-brief` prepares an independent judging task but does not call a model. `compare` accepts like-for-like canonical scorecards and reports deltas from the selected baseline without claiming causality. `run submit` and `matrix start` are the actions allowed to invoke a model and therefore require an explicit confirmation flag in addition to remote authentication.
+`runner brief` derives a runner-specific immutable manifest and copy/paste handoff while retaining the Think run as its comparison source. It writes only to an isolated directory outside the evaluation repository and places simulated answers in control-only storage. `runner preflight` fails unless the task is operating from that clean directory, identities and broker state match, and no protected response is present in runner-visible files. `author answer` accepts only the sanitized runner source envelope and returns one exact answer. `evaluate deterministic` inventories the completed workspace and runs variant-appropriate checks. `evaluate rubric-brief` prepares an independent judging task but does not call a model. `compare` accepts like-for-like canonical scorecards and reports deltas from the selected baseline without claiming causality. `run submit` and `matrix start` are the actions allowed to invoke a model and therefore require an explicit confirmation flag in addition to remote authentication.
 
 Remote run commands read the bearer token from `SEEDSPEC_EVAL_API_TOKEN`; the CLI does not accept it as an ordinary command argument where it would be likely to remain in shell history. The Worker rejects all run routes when its corresponding secret is absent.
 

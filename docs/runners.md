@@ -23,21 +23,21 @@ Review the plan before authorizing inference. Planning, brief generation, and tr
 ```sh
 node packages/cli/dist/index.js runner brief runs/first-parity-plan.json \
   --run <one-run-id-from-experiment-inspect> \
-  --runner codex \
-  --out runs/first-authorship/<variant>
+  --runner codex
 ```
 
-Repeat for the source-only, scaffold, and guided-authoring run IDs. Copy each generated `handoff.md` into a separate Codex task with a clean workspace. Select the requested underlying model and snapshot. If it is unavailable, create a new run identity for the actual model instead of calling the run matched. The brief tells the agent where to write its authored output, evidence report, and observable trace draft. It also gives the agent a deterministic `author answer` command so clarifications use the same pre-declared responses as Think without exposing every answer up front. If Codex cannot expose a requested trace field, it must declare the limitation instead of filling it speculatively.
+Repeat for the source-only, scaffold, and guided-authoring run IDs. Each command creates an isolated runner directory outside this repository; an explicit `--out` inside `seedspec-evals` is rejected. Open each generated directory as its own Codex project, paste `handoff.md` into a clean task, and run `node runner-control.mjs preflight` before doing any evaluation work. The preflight requires the task working directory to equal the runner directory, rejects pre-existing output, verifies run identity and the author broker, and detects protected answers in runner-visible files without printing them.
 
-An agent given this repository's README can follow the same steps: ask it to build the project, create or inspect the reviewed plan, run `runner brief --runner codex --stdout`, and execute the emitted brief in a clean task.
+The runner-safe `source-envelope.json` contains source material, trusted instructions, and available clarification IDs, but not the answer map. The answer map lives in control-only storage outside the runner project. `node runner-control.mjs answer --question <id>` returns only the requested pre-declared answer. Select the requested underlying model and snapshot. If it is unavailable, create a new run identity for the actual model instead of calling the run matched. If Codex cannot expose a requested trace field, it must declare the limitation instead of filling it speculatively.
+
+The agent that plans an experiment may build this repository and generate the kit. The evaluated agent must receive only the isolated runner project; do not open it on `seedspec-evals`, because committed cases and control-plane plans contain evaluator-only material.
 
 ## 3. Claude Code
 
 ```sh
 node packages/cli/dist/index.js runner brief runs/first-parity-plan.json \
   --run <one-run-id-from-experiment-inspect> \
-  --runner claude-code \
-  --out runs/first-authorship/<variant>
+  --runner claude-code
 ```
 
 Paste the output into a clean Claude Code session. Configure the same underlying model and snapshot. If it is unavailable, generate a new run identity for the actual model; do not treat similar product labels as evidence of model parity.
@@ -71,11 +71,14 @@ node packages/cli/dist/index.js run trace <run-id> \
 Codex and Claude Code write a trace body from the template embedded in their generated brief. Finalize and content-address it with:
 
 ```sh
-node packages/cli/dist/index.js trace finalize runs/<run-id>/trace-draft.json
-node packages/cli/dist/index.js trace validate runs/<run-id>/trace.json
+node runner-control.mjs finalize-trace
+# From the evaluation repository after the run:
+node packages/cli/dist/index.js trace validate <isolated-run-directory>/trace.json
 ```
 
-`runs/` is ignored by Git. Preserve a complete experiment directory in controlled storage when the evidence matters; a Git checkout alone is not a trace archive. Traces may contain prompts, outputs, tool inputs, and tool results, so review them for credentials, personal data, and customer material before sharing. Record redaction counts and reasons in the trace rather than silently editing evidence.
+Control-plane plans under `runs/` are ignored by Git. Desktop evidence lives in separately isolated runner directories. Preserve a complete experiment directory in controlled storage when the evidence matters; a Git checkout alone is not a trace archive. Traces may contain prompts, outputs, tool inputs, and tool results, so review them for credentials, personal data, and customer material before sharing. Record redaction counts and reasons in the trace rather than silently editing evidence.
+
+Desktop isolation prevents ordinary repository searches from exposing fixtures; it is not a hard security boundary against an intentionally malicious local agent with unrestricted filesystem access. Think provides the stronger boundary because the model receives narrow tools and cannot inspect its Durable Object configuration.
 
 ## 6. Score and compare authorship variants
 

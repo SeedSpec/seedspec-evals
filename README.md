@@ -59,7 +59,7 @@ node packages/cli/dist/index.js experiment inspect \
   runs/first-authorship-plan.json
 ```
 
-The authorship plan creates three explicit evaluation variants: `source-only`, `seedspec-scaffold`, and `seedspec-guided-authoring`. The first receives neither SeedSpec guidance nor SeedSpec tools. The plan command writes immutable execution envelopes beneath `runs/`, which is ignored by Git. Submitting one envelope is a separate operation and requires `--confirm-model-execution`.
+The authorship plan creates three explicit evaluation variants: `source-only`, `seedspec-scaffold`, and `seedspec-guided-authoring`. The first receives neither SeedSpec guidance nor SeedSpec tools. The plan command writes control-plane execution envelopes beneath `runs/`, which is ignored by Git. Plans may contain evaluator-only fixtures and must never be copied into a desktop runner project. Submitting one envelope is a separate operation and requires `--confirm-model-execution`.
 
 ## Run the same experiment in Codex, Claude Code, and Think
 
@@ -68,20 +68,21 @@ Generate a copy/paste brief for a clean Codex desktop task:
 ```sh
 node packages/cli/dist/index.js runner brief runs/first-authorship-plan.json \
   --run <run-id-from-experiment-inspect> \
-  --runner codex \
-  --out runs/first-authorship/<variant>
+  --runner codex
 ```
 
-Repeat the command once for each variant, then paste each generated `handoff.md` into its own clean Codex task. For Claude Code, replace `codex` with `claude-code`. The brief carries the reviewed case, variant-specific trusted instructions and tools, requested model, required outputs, simulated-author boundary, and portable observable-trace contract. Select the same underlying model and snapshot. If it is unavailable, create a new run identity for the actual model rather than calling the run matched.
+By default, the command creates a new isolated directory under `~/Code/agent-eval-runs` when the repository is under `~/Code`. It refuses to create a runner kit anywhere inside `seedspec-evals`. Open the generated directory—not this repository—as a new Codex project, paste its `handoff.md` into a clean task, and begin with `node runner-control.mjs preflight`. Continue only when it reports `READY`.
+
+Repeat once for each variant. For Claude Code, replace `codex` with `claude-code`. The runner-safe envelope contains the reviewed case and available clarification IDs but no simulated answers. A control record outside the runner project exposes one answer at a time through `runner-control.mjs answer`. The brief also carries variant-specific instructions and tools, the requested model, required outputs, and the portable observable-trace contract. Select the same underlying model and snapshot. If it is unavailable, create a new run identity for the actual model rather than calling the run matched.
 
 After a desktop run finishes, inventory and score its deterministic evidence:
 
 ```sh
 node packages/cli/dist/index.js evaluate deterministic \
-  runs/first-authorship/<variant>
+  <isolated-run-directory>
 
 node packages/cli/dist/index.js evaluate rubric-brief \
-  runs/first-authorship/<variant> \
+  <isolated-run-directory> \
   --runner codex \
   --judge-model <independent-judge-model>
 ```
@@ -90,9 +91,9 @@ Run the emitted evaluator brief in a separate clean task. After all three canoni
 
 ```sh
 node packages/cli/dist/index.js compare \
-  runs/first-authorship/source-only/rubric-scorecard.json \
-  runs/first-authorship/seedspec-scaffold/rubric-scorecard.json \
-  runs/first-authorship/seedspec-guided-authoring/rubric-scorecard.json \
+  <source-only-run>/rubric-scorecard.json \
+  <scaffold-run>/rubric-scorecard.json \
+  <guided-run>/rubric-scorecard.json \
   --baseline source-only
 ```
 

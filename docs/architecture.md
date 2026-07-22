@@ -45,7 +45,9 @@ case + variant + runner + model + protocol/tool versions
 
 Think owns streaming, durable turn recovery, message persistence, file tools, and agent lifecycle hooks. SeedSpec owns the run contract, prompts, permitted tool surface, artifact contract, scoring rubrics, and comparisons.
 
-The runner-facing case projection excludes hidden expectations and simulated author answers. The control plane supplies only an exact-match answer map to the `ask_author` tool, so clarification is reproducible without preloading answers into model context.
+The runner-facing case projection excludes hidden expectations and simulated author answers. In Think, Durable Object configuration supplies the exact-match answer map only to `ask_author`. For desktop parity, `runner brief` creates a separate runner project containing a sanitized source envelope while storing the answer map outside that project. A narrow broker returns one requested answer, and deterministic preflight rejects a kit inside the evaluation repository, a dirty output directory, an invalid identity binding, or protected answers in runner-visible files.
+
+Control-plane experiment plans and committed case fixtures are never desktop runner inputs. The evaluated desktop task must be opened on the isolated runner directory, not this repository. This prevents accidental discovery through normal project searches. It does not claim to contain an intentionally malicious local process with unrestricted filesystem access; Think's narrow model tool surface is the stronger isolation boundary.
 
 The manifest is an execution commitment, not descriptive metadata added after a run. Its ID covers the complete manifest body. Digests in that body cover every model-facing payload that is stored in the execution configuration. The CLI validates the binding when reading a plan, and the Worker validates it again at the service and Durable Object boundaries. A changed prompt, source document, simulated answer, model, gateway, or step limit is a different run and must receive a different manifest and run ID.
 

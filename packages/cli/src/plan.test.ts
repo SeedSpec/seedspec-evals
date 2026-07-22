@@ -35,7 +35,7 @@ describe("createExperimentPlan", () => {
       "seedspec-simulated-author",
     ]);
     const desktopManifest = buildDesktopManifest(control, "codex");
-    const desktopBrief = buildDesktopBrief(control, desktopManifest, "codex", "runs/source-only");
+    const desktopBrief = buildDesktopBrief(control, desktopManifest, "codex");
     expect(desktopBrief).not.toMatch(/seedspec/i);
   });
 
@@ -119,7 +119,7 @@ describe("createExperimentPlan", () => {
     });
     const envelope = plan.envelopes[0]!;
     const manifest = buildDesktopManifest(envelope, "codex");
-    const brief = buildDesktopBrief(envelope, manifest, "codex", "runs/parity-codex");
+    const brief = buildDesktopBrief(envelope, manifest, "codex");
 
     expect(manifest.runId).not.toBe(envelope.manifest.runId);
     expect(manifest.configuration?.["sourceRunId"]).toBe(envelope.manifest.runId);
@@ -129,8 +129,8 @@ describe("createExperimentPlan", () => {
       "seedspec-simulated-author",
       "seedspec-cli",
     ]);
-    expect(brief).toContain("author answer runs/parity-codex/source-envelope.json");
-    expect(brief).toContain("runs/parity-codex/trace-draft.json");
+    expect(brief).toContain("runner-control.mjs answer --question");
+    expect(brief).toContain("trace-draft.json");
     expect(brief).not.toContain(envelope.submission.config.simulatedAuthorResponses["due-date-policy"] ?? "not-present");
   });
 });

@@ -3,7 +3,7 @@
 1. **Define a case.** Commit sparse source material, the authoring mode, constraints, hidden expectations, and permitted variability.
 2. **Validate the case.** Reject invalid structure, unsafe paths, missing versions, or evaluator expectations that cannot be measured.
 3. **Plan an experiment.** Expand cases × evaluation variants × runners × models × repetitions into immutable run manifests with stable IDs.
-4. **Execute authorship.** Run the source-only, SeedSpec scaffold, and guided SeedSpec authoring variants from isolated workspaces. Capture final output and observable traces.
+4. **Execute authorship.** Generate one runner-safe project per source-only, SeedSpec scaffold, and guided SeedSpec authoring variant. Pass deterministic preflight, then capture final output and observable traces without exposing control-plane fixtures.
 5. **Evaluate the output.** Inventory artifacts, run variant-appropriate deterministic checks, and conduct an independent rubric review using the same semantic rubric for every variant.
 6. **Execute implementations.** Give independent implementation agents clean workspaces and the authored package. Do not leak prior implementation choices.
 7. **Evaluate outcomes.** Measure satisfaction of declared success criteria, package fidelity, unsupported assumptions, and implementation quality.

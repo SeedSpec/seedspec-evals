@@ -38,7 +38,12 @@ export function buildDesktopManifest(envelope: ExecutionEnvelope, runner: Deskto
   });
 }
 
-export function buildDesktopBrief(envelope: ExecutionEnvelope, manifest: RunManifest, runner: DesktopRunner, outputDirectory: string): string {
+export function buildDesktopBrief(
+  envelope: ExecutionEnvelope,
+  manifest: RunManifest,
+  runner: DesktopRunner,
+  runtime: { readonly seedSpecCliEntry?: string } = {},
+): string {
   const config = envelope.submission.config;
   const sharedInstructions = buildTrustedInstructionList(config);
   const traceModel = config.variant === "source-only"
@@ -49,11 +54,13 @@ export function buildDesktopBrief(envelope: ExecutionEnvelope, manifest: RunMani
           : { region: manifest.model.routing.region },
       }
     : manifest.model;
-  const tracePath = `${outputDirectory}/trace-draft.json`;
-  const reportPath = `${outputDirectory}/report.md`;
-  const envelopePath = `${outputDirectory}/source-envelope.json`;
-  const workspacePath = `${outputDirectory}/workspace`;
-  const seedSpecCli = "node ../seedspec/packages/cli/bin/seedspec.js";
+  const tracePath = "trace-draft.json";
+  const reportPath = "report.md";
+  const workspacePath = "workspace";
+  const runnerControl = "node runner-control.mjs";
+  const seedSpecCli = runtime.seedSpecCliEntry === undefined
+    ? "seedspec"
+    : `node ${JSON.stringify(runtime.seedSpecCliEntry)}`;
   return [
     "# Controlled authorship evaluation runner brief",
     "",
@@ -70,6 +77,7 @@ export function buildDesktopBrief(envelope: ExecutionEnvelope, manifest: RunMani
     ...(config.variant === "source-only" ? [] : [`- Protocol version: \`${manifest.protocol.version}\``]),
     "",
     "Before starting, select the same underlying model and snapshot as the requested model. If the environment cannot provide it, stop and ask the operator to create a new run identity for the actual model. Never infer parity from a marketing alias.",
+    "Before doing any evaluation work, run `node runner-control.mjs preflight`. Continue only when every check passes and the result says READY. Do not search parent directories, evaluation-harness source, plans, manifests, or control files to reconstruct information that the broker has not returned.",
     "",
     "## Trusted runner contract",
     "",
@@ -77,8 +85,8 @@ export function buildDesktopBrief(envelope: ExecutionEnvelope, manifest: RunMani
     `${sharedInstructions.length + 1}. Work in a clean, isolated workspace. Do not inspect another runner's outputs.`,
     `${sharedInstructions.length + 2}. ${config.variant === "source-only" ? "Record the runner and model versions exposed by the environment." : "Use only the SeedSpec CLI capabilities allowed by this variant. Record exact commands and versions."}`,
     `${sharedInstructions.length + 3}. Record observable messages, tool calls/results, timing, usage when exposed, artifact paths/digests, errors, redactions, and capture limitations.`,
-    `${sharedInstructions.length + 4}. When a material clarification is needed, call the simulated author through: \`node packages/cli/dist/index.js author answer ${envelopePath} --question <question-id>\`. Do not inspect the stored response map directly or invent an unavailable answer.`,
-    `${sharedInstructions.length + 5}. Put every evaluated deliverable under \`${workspacePath}\`; do not write evaluated output elsewhere in this repository.`,
+    `${sharedInstructions.length + 4}. When a material clarification is needed, call the simulated author through: \`${runnerControl} answer --question <question-id>\`. The broker exposes only that answer. Do not inspect control storage or invent an unavailable answer.`,
+    `${sharedInstructions.length + 5}. Put every evaluated deliverable under \`${workspacePath}\`; do not write evaluated output elsewhere in this isolated project.`,
     ...(config.variant === "source-only" ? [
       `${sharedInstructions.length + 6}. Use only the supplied case material, explicit author answers, and ordinary capabilities of this environment.`,
     ] : [
@@ -99,7 +107,7 @@ export function buildDesktopBrief(envelope: ExecutionEnvelope, manifest: RunMani
     `1. Produce the requested output in \`${workspacePath}\`.`,
     `2. Write a concise evidence report to \`${reportPath}\`.`,
     `3. Write a trace body (without \`traceId\`) to \`${tracePath}\` using the evaluation trace contract. Use run ID \`${manifest.runId}\`, sourceRunId \`${envelope.manifest.runId}\`, runner ID \`${manifest.runner.id}\`, and \`reasoning: not-collected\`.`,
-    `4. Finalize it from this repository with: \`node packages/cli/dist/index.js trace finalize ${tracePath}\`.` ,
+    `4. Finalize it with: \`${runnerControl} finalize-trace\`.` ,
     "5. State exactly what your environment could not capture. Do not fabricate events or token usage.",
     "",
     "Use this shape for the trace draft, replacing the illustrative values and adding zero-based, contiguous observable events:",
