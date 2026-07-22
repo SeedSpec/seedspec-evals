@@ -9,6 +9,12 @@ Write JSON only. Do not include `profileId`; the CLI calculates it during finali
     "stage": "authorship",
     "runId": "run_<64 lowercase hex characters>",
     "variant": "evaluation variant when this is a run",
+    "case": {
+      "id": "evaluation-case-id",
+      "version": "1.0.0",
+      "digest": "sha256:<64 lowercase hex characters>"
+    },
+    "kind": "application",
     "package": {
       "id": "package-id",
       "version": "1.0.0",
@@ -19,17 +25,22 @@ Write JSON only. Do not include `profileId`; the CLI calculates it during finali
   "createdAt": "ISO-8601 timestamp with offset",
   "evaluator": {
     "id": "seedspec-profile-evaluator",
-    "version": "0.1.0-alpha.1",
+    "version": "0.1.0-alpha.2",
     "kind": "agent",
     "model": {
       "provider": "provider-id",
       "modelId": "exact model identifier",
-      "parameters": {}
+      "parameters": {
+        "additional": {
+          "reasoningEffort": "exact effort requested by the evidence envelope"
+        }
+      }
     }
   },
   "decisions": [
     {
       "id": "membership-authority",
+      "caseAxisId": "membership-authority-axis",
       "domain": "authorization",
       "title": "Who may add members",
       "description": "Select the authority allowed to add another member.",
@@ -62,6 +73,7 @@ Write JSON only. Do not include `profileId`; the CLI calculates it during finali
   "obligations": [
     {
       "id": "custody-confirmation",
+      "caseAxisId": "custody-confirmation-axis",
       "kind": "behavior",
       "description": "A borrower confirms custody before an item becomes borrowed.",
       "importance": "critical",
@@ -112,5 +124,6 @@ Write JSON only. Do not include `profileId`; the CLI calculates it during finali
 }
 ```
 
-Omit `runId`, `variant`, `package`, `process`, or `technical` only when they are genuinely outside the subject or unavailable. At least one of `subject.runId` and `subject.package` is required. Evidence must identify a relative path, artifact ID, or trace sequence and must include a relevance note.
+Omit `runId`, `variant`, `case`, `package`, `process`, or `technical` only when they are genuinely outside the subject or unavailable. A run subject requires `runId`, `variant`, and its exact `case`; a standalone package subject may omit them. At least one of `subject.runId` and `subject.package` is required. Evidence must identify a relative path, artifact ID, or trace sequence and must include a relevance note.
 
+For an evidence-bound run, include every comparison axis exactly once. `caseAxisId` is the stable denominator across profiles. Records without it are useful subject-specific findings, but they remain outside direct cross-variant comparison. The finalizer rejects missing, duplicated, unknown, or semantically changed case axes.

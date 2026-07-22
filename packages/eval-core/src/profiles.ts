@@ -42,11 +42,13 @@ export const EvaluationEvidenceLocatorSchema = z.strictObject({
 export const DecisionActorSchema = z.enum([
   "package-author",
   "end-user",
+  "authoring-agent",
   "implementation-profile",
   "reference-artifact",
   "existing-system",
   "environment",
   "implementing-agent",
+  "evaluation-case",
   "evaluator",
   "mixed",
   "unknown",
@@ -67,6 +69,7 @@ export const DecisionMaterialitySchema = z.strictObject({
 
 export const DecisionRecordSchema = z.strictObject({
   id: IdentifierSchema,
+  caseAxisId: IdentifierSchema.optional(),
   domain: IdentifierSchema,
   title: z.string().trim().min(1).max(512),
   description: z.string().trim().min(1).max(8_000),
@@ -98,10 +101,11 @@ export const DecisionRecordSchema = z.strictObject({
     context.addIssue({ code: "custom", message: "observed alignment requires observedChoice", path: ["observedChoice"] });
   }
   if (decision.alignment === "ambient") {
-    if (!decision.provenance.selectedBy.some(({ actor }) => actor === "implementing-agent")) {
+    if (!decision.provenance.selectedBy.some(({ actor }) =>
+      actor === "authoring-agent" || actor === "implementing-agent")) {
       context.addIssue({
         code: "custom",
-        message: "ambient decisions must identify the implementing agent as a selecting party",
+        message: "ambient decisions must identify the authoring or implementing agent as a selecting party",
         path: ["provenance", "selectedBy"],
       });
     }
@@ -117,6 +121,7 @@ export const DecisionRecordSchema = z.strictObject({
 
 export const ObligationEvidenceRecordSchema = z.strictObject({
   id: IdentifierSchema,
+  caseAxisId: IdentifierSchema.optional(),
   kind: z.enum([
     "outcome",
     "behavior",
@@ -229,6 +234,12 @@ export const EvaluationProfileSubjectSchema = z.strictObject({
   stage: EvaluationStageSchema,
   runId: RunIdSchema.optional(),
   variant: EvaluationVariantSchema.optional(),
+  case: z.strictObject({
+    id: IdentifierSchema,
+    version: SemVerSchema,
+    digest: Sha256DigestSchema,
+  }).optional(),
+  kind: IdentifierSchema.optional(),
   package: z.strictObject({
     id: IdentifierSchema.optional(),
     version: SemVerSchema.optional(),
@@ -241,6 +252,9 @@ export const EvaluationProfileSubjectSchema = z.strictObject({
   }
   if (subject.variant !== undefined && !variantBelongsToStage(subject.variant, subject.stage)) {
     context.addIssue({ code: "custom", message: "variant does not belong to subject stage", path: ["variant"] });
+  }
+  if (subject.runId !== undefined && subject.case === undefined) {
+    context.addIssue({ code: "custom", message: "run subjects must identify their evaluation case", path: ["case"] });
   }
 });
 
@@ -266,12 +280,29 @@ export const EvaluationProfileBodySchema = z.strictObject({
 }).superRefine((profile, context) => {
   addUniqueIdIssues(profile.decisions, context, ["decisions"]);
   addUniqueIdIssues(profile.obligations, context, ["obligations"]);
+  addUniqueOptionalIdIssues(profile.decisions, "caseAxisId", context, ["decisions"]);
+  addUniqueOptionalIdIssues(profile.obligations, "caseAxisId", context, ["obligations"]);
   addUniqueIdIssues(profile.structure, context, ["structure"]);
   if (profile.technical !== undefined) {
     addUniqueIdIssues(profile.technical.checks, context, ["technical", "checks"]);
     addUniqueIdIssues(profile.technical.adaptationChallenges, context, ["technical", "adaptationChallenges"]);
   }
 });
+
+function addUniqueOptionalIdIssues(
+  values: readonly Record<string, unknown>[],
+  key: string,
+  context: z.core.$RefinementCtx,
+  path: PropertyKey[],
+): void {
+  const seen = new Set<string>();
+  for (const [index, value] of values.entries()) {
+    const id = value[key];
+    if (typeof id !== "string") continue;
+    if (seen.has(id)) context.addIssue({ code: "custom", message: `${key} must be unique when present`, path: [...path, index, key] });
+    seen.add(id);
+  }
+}
 
 const EvaluationProfileDataSchema = EvaluationProfileBodySchema.safeExtend({
   profileId: z.string().regex(/^profile_[a-f0-9]{64}$/),

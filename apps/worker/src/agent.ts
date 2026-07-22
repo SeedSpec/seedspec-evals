@@ -1,4 +1,5 @@
 import {
+  DecisionActorSchema,
   createTrace,
   type JsonObject,
   type TraceEvent,
@@ -101,7 +102,7 @@ export class SeedSpecEvalAgent extends Think<Env> {
             materiality: z.enum(["critical", "material", "minor"]),
             expectedLatitude: z.enum(["fixed", "preferred", "delegated", "open", "unresolved", "unknown"]),
             sources: z.array(z.strictObject({
-              actor: z.enum(["package-author", "end-user", "implementation-profile", "reference-artifact", "existing-system", "environment", "implementing-agent", "mixed", "unknown"]),
+              actor: DecisionActorSchema.exclude(["evaluation-case", "evaluator"]),
               basis: z.string().min(1).max(4_000),
               path: z.string().min(1).max(1_024).optional(),
             })).max(32),
@@ -298,6 +299,16 @@ export class SeedSpecEvalAgent extends Think<Env> {
     const initialized = this.initializeConfig(parsed.data.config);
     if (!initialized.ok) return { ok: false, value: null, error: initialized.error };
 
+    try {
+      await this.ensureAuthoredInputMounted(parsed.data.config);
+    } catch (error) {
+      structuredLog("error", "eval.authored_input.mount_failed", {
+        runId: parsed.data.config.runId,
+        errorClass: errorClass(error),
+      });
+      return { ok: false, value: null, error: { code: "authored_input_invalid", message: "The authored input could not be verified and mounted." } };
+    }
+
     const message: UIMessage = {
       id: crypto.randomUUID(),
       role: "user",
@@ -449,6 +460,30 @@ export class SeedSpecEvalAgent extends Think<Env> {
     return config;
   }
 
+  private async ensureAuthoredInputMounted(config: RunAgentConfig): Promise<void> {
+    if (config.authoredInput === undefined) return;
+    for (const file of config.authoredInput.files) {
+      const bytes = decodeBase64(file.contentBase64);
+      if (bytes.byteLength !== file.byteLength || `sha256:${await sha256Bytes(bytes)}` !== file.digest) {
+        throw new Error(`Authored input failed digest verification: ${file.path}`);
+      }
+      const path = `input/authored/${file.path}`;
+      const existing = await this.workspace.readFileBytes(path);
+      if (existing !== null) {
+        if (`sha256:${await sha256Bytes(existing)}` !== file.digest) throw new Error(`Mounted authored input changed: ${file.path}`);
+        continue;
+      }
+      const content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      await this.workspace.writeFile(path, content);
+    }
+    this.appendTraceEvent("artifact", "runner", "authored-input-mounted", {
+      artifactId: config.authoredInput.artifactId,
+      digest: config.authoredInput.digest,
+      fileCount: config.authoredInput.files.length,
+      path: "input/authored",
+    });
+  }
+
   private appendTraceEvent(kind: TraceEvent["kind"], actor: TraceEvent["actor"], name: string, data: JsonObject): void {
     this.ensureTraceTable();
     void this.sql`INSERT INTO seedspec_eval_trace_events (event_at, kind, actor, name, data_json)
@@ -470,6 +505,18 @@ export class SeedSpecEvalAgent extends Think<Env> {
       data_json TEXT NOT NULL
     )`;
   }
+}
+
+function decodeBase64(value: string): Uint8Array {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+async function sha256Bytes(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", Uint8Array.from(bytes).buffer);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function providerForModel(model: string): string {

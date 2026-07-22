@@ -42,6 +42,7 @@ export function evaluateDeterministically(input: DeterministicEvaluationInput): 
 
   checks.push(caseMatchesManifest(input));
   checks.push(hiddenExpectationsAreIsolated(input));
+  checks.push(...authoringStateIsExcluded(input));
   checks.push(...requiredDeliverablesExist(input));
   checks.push(...declaredDeterministicChecks(input, adapterMap));
   checks.push(...declaredHiddenChecks(input, adapterMap));
@@ -58,12 +59,40 @@ export function evaluateDeterministically(input: DeterministicEvaluationInput): 
     evaluator: {
       id: "seedspec-eval-deterministic",
       kind: "deterministic",
-      version: "0.1.0-alpha.1",
+      version: "0.1.0-alpha.2",
     },
     kind: "deterministic",
     summary,
     checks,
   }) as DeterministicScorecard;
+}
+
+function authoringStateIsExcluded(input: DeterministicCheckContext): DeterministicCheckResult[] {
+  if (input.stage !== "authorship" || ["raw-source", "markdown-authored"].includes(input.manifest.variant)) return [];
+  const stateNames = new Set([
+    "open-questions.yaml",
+    "open-questions.yml",
+    "authoring-state.json",
+    "authoring-state.yaml",
+    "sources.yaml",
+    "workspace.yaml",
+  ]);
+  const leaked = input.artifacts.artifacts
+    .filter(({ kind }) => kind === "authored-package")
+    .map(({ path }) => path)
+    .filter((path) => path.startsWith(".seedspec-authoring/") || stateNames.has(path));
+  return [{
+    id: "authoring-state-excluded",
+    description: "Temporary authoring state and unresolved-work queues stay outside the distributable package.",
+    outcome: leaked.length === 0 ? "pass" : "fail",
+    weight: 1,
+    message: leaked.length === 0
+      ? "No temporary authoring-state path occurs in the authored package."
+      : `Temporary authoring-state paths occur in the package: ${leaked.join(", ")}`,
+    evidence: input.artifacts.artifacts
+      .filter(({ path }) => leaked.includes(path))
+      .map(({ artifactId, path }) => ({ artifactId, path })),
+  }];
 }
 
 function declaredHiddenChecks(

@@ -6,11 +6,11 @@ import {
   createRunnableCaseView,
   createSimulationFixtureView,
   contentId,
-  ArtifactIdSchema,
   sha256Hex,
   stableJson,
   type EvaluationStage,
   type EvaluationVariant,
+  type AuthoredInputBundle,
   type JsonValue,
 } from "@seedspec/eval-core";
 import type { LoadedEvaluationCase } from "@seedspec/eval-case-library";
@@ -19,7 +19,7 @@ import { HARNESS_VERSION, RunAgentConfigSchema } from "@seedspec/eval-harness";
 import { ExperimentPlanSchema, type ExperimentPlan } from "./contracts.js";
 import { FROZEN_PROTOCOL_SNAPSHOT } from "./protocol-snapshot.generated.js";
 
-const EVALUATION_VERSION = "0.1.0-alpha.1";
+const EVALUATION_VERSION = "0.1.0-alpha.2";
 
 export interface PlanOptions {
   readonly cases: readonly LoadedEvaluationCase[];
@@ -31,7 +31,7 @@ export interface PlanOptions {
   readonly protocolVersion: string;
   readonly createdAt: string;
   readonly maxSteps: number;
-  readonly authoredPackageArtifactId?: string;
+  readonly authoredInput?: AuthoredInputBundle;
 }
 
 export async function createExperimentPlan(options: PlanOptions): Promise<ExperimentPlan> {
@@ -40,8 +40,11 @@ export async function createExperimentPlan(options: PlanOptions): Promise<Experi
   }
   if (options.models.length === 0) throw new Error("At least one model is required.");
   if (options.variants.length === 0) throw new Error("At least one evaluation variant is required.");
-  if (options.stage === "implementation" && options.authoredPackageArtifactId === undefined) {
-    throw new Error("Implementation planning requires --authored-package-artifact.");
+  if (options.stage === "implementation" && options.authoredInput === undefined) {
+    throw new Error("Implementation planning requires --authored-input.");
+  }
+  if (options.stage === "authorship" && options.authoredInput !== undefined) {
+    throw new Error("Authored input is only valid for implementation planning.");
   }
 
   const protocolSnapshot = FROZEN_PROTOCOL_SNAPSHOT;
@@ -79,7 +82,7 @@ export async function createExperimentPlan(options: PlanOptions): Promise<Experi
             ? { stage: "authorship" }
             : {
                 stage: "implementation",
-                authoredPackageArtifactId: ArtifactIdSchema.parse(options.authoredPackageArtifactId),
+                authoredInputArtifactId: options.authoredInput!.artifactId,
               },
           variant,
           repetition,
@@ -125,6 +128,11 @@ export async function createExperimentPlan(options: PlanOptions): Promise<Experi
             evaluationVariant: variant,
             protocolSourceCommit: protocolSnapshot.sourceCommit,
             untrustedMaterialDigest: `sha256:${sha256Hex(untrustedMaterial)}`,
+            deliverablesDigest: `sha256:${sha256Hex(stableJson(view.deliverables as unknown as JsonValue))}`,
+            ...(options.authoredInput === undefined ? {} : {
+              authoredInputArtifactId: options.authoredInput.artifactId,
+              authoredInputDigest: options.authoredInput.digest,
+            }),
             simulatedAuthorResponsesDigest:
               `sha256:${sha256Hex(stableJson(simulatedAuthorResponses))}`,
           },
@@ -139,6 +147,8 @@ export async function createExperimentPlan(options: PlanOptions): Promise<Experi
           maxSteps: options.maxSteps,
           trustedInstructions: caseTrustedInstructions,
           untrustedMaterial,
+          deliverables: view.deliverables,
+          ...(options.authoredInput === undefined ? {} : { authoredInput: options.authoredInput }),
           simulatedAuthorResponses,
         });
         envelopes.push({

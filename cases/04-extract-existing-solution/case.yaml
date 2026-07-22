@@ -1,6 +1,6 @@
 schemaVersion: 1
 id: extract-release-readiness-coordination
-version: 1.0.0
+version: 1.1.0
 title: Extract a reusable SeedSpec — release readiness coordination
 description: >-
   Tests whether an agent can recover essential outcomes and contracts from a
@@ -315,6 +315,75 @@ adaptationChallenges:
       - The additional role uses the existing checklist contract.
       - Approval and invalidation behavior require no special-case branch.
       - Existing audit evidence remains intact.
+
+comparisonAxes:
+  decisions:
+    - id: essential-outcomes
+      stages: [authorship, implementation]
+      title: Essential release outcomes
+      description: Which source behaviors remain invariant and which provider details are accidental.
+      materiality: critical
+    - id: business-calendar
+      stages: [authorship, implementation]
+      title: Business calendar policy
+      description: Calendar, time zone, and prior-business-day reminder timing as configuration.
+      materiality: material
+    - id: approval-invalidation
+      stages: [authorship, implementation]
+      title: Approval invalidation
+      description: Which required-check changes return an approved release to Review.
+      materiality: critical
+    - id: provider-profile
+      stages: [authorship, implementation]
+      title: Provider realization profile
+      description: How source and alternate providers realize the provider-neutral capability contract.
+      materiality: material
+    - id: package-shape
+      stages: [authorship]
+      title: Reusable package shape
+      description: One workflow or a small composed package set preserving one readiness state model.
+      materiality: minor
+  obligations:
+    - id: accountable-checks
+      stages: [authorship, implementation]
+      kind: invariant
+      description: Every readiness check has an accountable owner, state, evidence, note, actor, and timestamp history.
+      importance: critical
+    - id: blocker-gate
+      stages: [authorship, implementation]
+      kind: invariant
+      description: Any blocked required check prevents Go approval.
+      importance: critical
+    - id: human-approval
+      stages: [authorship, implementation]
+      kind: invariant
+      description: Only an authorized human release manager can approve Go.
+      importance: critical
+    - id: material-change-invalidation
+      stages: [authorship, implementation]
+      kind: behavior
+      description: A material required-check change after approval returns the release to Review while retaining prior evidence.
+      importance: critical
+    - id: provider-neutral-core
+      stages: [authorship, implementation]
+      kind: boundary
+      description: Core intent uses capabilities rather than requiring Airtable, Slack, or their data vocabulary.
+      importance: critical
+    - id: no-sensitive-source-data
+      stages: [authorship, implementation]
+      kind: forbidden-state
+      description: Deleted credentials, provider IDs, employee names, and organization-specific destinations remain absent.
+      importance: critical
+    - id: scheduled-summary
+      stages: [authorship, implementation]
+      kind: behavior
+      description: A configured prior-business-day summary is idempotent and links to the authoritative release record.
+      importance: material
+    - id: extraction-provenance
+      stages: [authorship]
+      kind: success-criterion
+      description: Extracted invariants and deliberately generalized details map back to source evidence.
+      importance: material
 
 simulatedToolResponses:
   - id: answer-invariants

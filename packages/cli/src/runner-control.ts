@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { chmod, mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, relative, resolve } from "node:path";
@@ -17,6 +17,15 @@ import type { ExecutionEnvelope } from "./contracts.js";
 
 const ControlIdSchema = z.string().regex(/^control_[a-f0-9]{64}$/);
 const DigestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
+const AuthoredInputDescriptorSchema = z.strictObject({
+  artifactId: z.string().regex(/^artifact_[a-f0-9]{64}$/),
+  digest: DigestSchema,
+  files: z.array(z.strictObject({
+    path: z.string().min(1),
+    byteLength: z.number().int().nonnegative(),
+    digest: DigestSchema,
+  })).min(1).max(2_000),
+});
 
 export const DesktopSourceEnvelopeSchema = z.strictObject({
   schemaVersion: z.literal(1),
@@ -41,6 +50,14 @@ export const DesktopSourceEnvelopeSchema = z.strictObject({
   trustedInstructions: z.array(z.string().min(1)),
   untrustedMaterial: z.string().min(1),
   availableAuthorQuestionIds: z.array(z.string().min(1)).max(128),
+  deliverables: z.array(z.strictObject({
+    id: z.string().min(1),
+    description: z.string().min(1),
+    required: z.boolean(),
+    path: z.string().min(1).optional(),
+    mediaType: z.string().min(1).optional(),
+  })).min(1).max(128),
+  authoredInput: AuthoredInputDescriptorSchema.optional(),
   authorControl: z.strictObject({
     id: ControlIdSchema,
     responsesDigest: DigestSchema,
@@ -87,6 +104,7 @@ export async function createDesktopControl(
     flag: "wx",
     mode: 0o600,
   });
+  const authoredInput = envelope.submission.config.authoredInput;
   return DesktopSourceEnvelopeSchema.parse({
     schemaVersion: 1,
     kind: "desktop-runner-source",
@@ -99,6 +117,14 @@ export async function createDesktopControl(
     trustedInstructions: envelope.submission.config.trustedInstructions,
     untrustedMaterial: envelope.submission.config.untrustedMaterial,
     availableAuthorQuestionIds: Object.keys(responses).sort(),
+    deliverables: envelope.submission.config.deliverables,
+    ...(authoredInput === undefined ? {} : {
+      authoredInput: {
+        artifactId: authoredInput.artifactId,
+        digest: authoredInput.digest,
+        files: authoredInput.files.map(({ path, byteLength, digest }) => ({ path, byteLength, digest })),
+      },
+    }),
     authorControl: { id: record.controlId, responsesDigest },
   });
 }
@@ -162,8 +188,11 @@ export async function finalizeDesktopRunner(runDirectory: string): Promise<{
       normalizedPaths.push(path);
     }
   }
-  if (!await pathExists(resolve(directory, "workspace", "instructions.md"))) {
-    throw new Error("Required evaluated deliverable is missing: workspace/instructions.md");
+  for (const deliverable of source.deliverables.filter(({ required }) => required)) {
+    if (deliverable.path === undefined) continue;
+    if (!await pathExists(resolve(directory, "workspace", deliverable.path))) {
+      throw new Error(`Required evaluated deliverable is missing: workspace/${deliverable.path}`);
+    }
   }
   const traceBody = TraceBodySchema.parse(
     JSON.parse(await readFile(resolve(directory, "trace-draft.json"), "utf8")) as unknown,
@@ -243,6 +272,13 @@ export async function preflightDesktopRunner(
     message: identityMatches ? "Runner source and manifest identities match." : "Runner source and manifest identities do not match.",
   });
 
+  if (source !== null) {
+    const inputCheck = await verifyDesktopAuthoredInput(directory, source);
+    checks.push(inputCheck);
+  } else {
+    checks.push({ id: "authored-input", passed: false, message: "Authored-input presence could not be verified without the runner source." });
+  }
+
   const outputPaths = ["workspace", "report.md", "trace-draft.json", "trace.json"];
   const presentOutputs: string[] = [];
   for (const path of outputPaths) {
@@ -276,6 +312,52 @@ export async function preflightDesktopRunner(
     sourceRunId: source?.sourceRunId ?? null,
     checks,
   };
+}
+
+async function verifyDesktopAuthoredInput(
+  directory: string,
+  source: DesktopSourceEnvelope,
+): Promise<{ id: string; passed: boolean; message: string }> {
+  const root = resolve(directory, "input", "authored");
+  if (source.stage === "authorship") {
+    const absent = !await pathExists(root);
+    return {
+      id: "authored-input",
+      passed: absent && source.authoredInput === undefined,
+      message: absent && source.authoredInput === undefined
+        ? "Authorship run has no implementation input mounted."
+        : "Authorship runs must not contain an authored implementation input.",
+    };
+  }
+  if (source.authoredInput === undefined) {
+    return { id: "authored-input", passed: false, message: "Implementation run has no authored-input descriptor." };
+  }
+  const expected = new Set(source.authoredInput.files.map(({ path }) => path));
+  const actual: string[] = [];
+  try {
+    await collectRelativeFiles(root, root, actual);
+    if (actual.length !== expected.size || actual.some((path) => !expected.has(path))) {
+      return { id: "authored-input", passed: false, message: "Mounted authored-input paths do not match the immutable descriptor." };
+    }
+    for (const file of source.authoredInput.files) {
+      const bytes = await readFile(resolve(root, file.path));
+      if (bytes.byteLength !== file.byteLength || `sha256:${createHash("sha256").update(bytes).digest("hex")}` !== file.digest) {
+        return { id: "authored-input", passed: false, message: `Mounted authored input failed verification: ${file.path}` };
+      }
+    }
+    return { id: "authored-input", passed: true, message: `Verified immutable authored input ${source.authoredInput.artifactId}.` };
+  } catch {
+    return { id: "authored-input", passed: false, message: "Implementation run authored input is missing or unreadable." };
+  }
+}
+
+async function collectRelativeFiles(root: string, directory: string, files: string[]): Promise<void> {
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = resolve(directory, entry.name);
+    if (entry.isSymbolicLink()) throw new Error("Authored input contains a symbolic link.");
+    if (entry.isDirectory()) await collectRelativeFiles(root, path, files);
+    else if (entry.isFile()) files.push(relative(root, path).split("\\").join("/"));
+  }
 }
 
 export function assertExternalRunnerDirectory(directory: string, evaluationRepositoryRoot: string): void {

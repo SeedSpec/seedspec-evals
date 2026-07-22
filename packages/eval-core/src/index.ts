@@ -1,5 +1,6 @@
 export * from "./adversarial.js";
 export * from "./artifacts.js";
+export * from "./authored-inputs.js";
 export * from "./cases.js";
 export * from "./common.js";
 export * from "./comparisons.js";
@@ -8,3 +9,6 @@ export * from "./scores.js";
 export * from "./traces.js";
 export * from "./versions.js";
 export * from "./profiles.js";
+export * from "./profile-evidence.js";
+export * from "./profile-comparisons.js";
+export * from "./evaluator-runs.js";

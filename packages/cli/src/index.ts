@@ -19,6 +19,7 @@ import { SubmissionIdSchema } from "@seedspec/eval-harness";
 import { Command, InvalidArgumentError } from "commander";
 
 import { ExecutionEnvelopeSchema, ExperimentPlanSchema, type ExecutionEnvelope } from "./contracts.js";
+import { bundleAuthoredInput, materializeAuthoredInput } from "./authored-input.js";
 import { CLI_DOCS } from "./docs.js";
 import {
   buildRubricEvaluationBrief,
@@ -28,6 +29,7 @@ import {
 import {
   buildPackageProfileBrief,
   buildRunProfileBrief,
+  compareEvaluationProfileFiles,
   finalizeDecisionLedgerFile,
   finalizeEvaluationProfileFile,
   formatEvaluationProfile,
@@ -35,6 +37,7 @@ import {
   validateDecisionLedgerFile,
 } from "./profile.js";
 import { createExperimentPlan } from "./plan.js";
+import { runCodexProfileEvaluator } from "./profile-runner.js";
 import {
   cancelRemoteMatrix,
   cancelRemoteSubmission,
@@ -56,7 +59,7 @@ import {
 } from "./runner-control.js";
 import { createVariantComparison } from "@seedspec/evaluators";
 
-const CLI_VERSION = "0.1.0-alpha.1";
+const CLI_VERSION = "0.1.0-alpha.2";
 const CLI_ENTRY_PATH = fileURLToPath(import.meta.url);
 const EVALUATION_REPOSITORY_ROOT = resolve(dirname(CLI_ENTRY_PATH), "../../..");
 const DEFAULT_DESKTOP_RUNNER_ROOT = resolve(EVALUATION_REPOSITORY_ROOT, "../..", "agent-eval-runs");
@@ -107,7 +110,7 @@ experiment.command("plan")
   .option("--gateway <id>", "Cloudflare AI Gateway ID", "seedspec-evals")
   .option("--protocol-version <version>", "frozen SeedSpec protocol package version", "0.1.0-alpha.3")
   .option("--max-steps <count>", "maximum Think steps per turn", parsePositiveInteger, 6)
-  .option("--authored-package-artifact <id>", "authored package artifact for implementation runs")
+  .option("--authored-input <directory>", "authored workspace to content-address and deliver to implementation runners")
   .option("--out <file>", "plan output path")
   .action(async (options: {
     root: string;
@@ -119,7 +122,7 @@ experiment.command("plan")
     gateway: string;
     protocolVersion: string;
     maxSteps: number;
-    authoredPackageArtifact?: string;
+    authoredInput?: string;
     out?: string;
   }) => {
     const allCases = await loadCaseLibrary(resolve(options.root));
@@ -130,6 +133,9 @@ experiment.command("plan")
     if (missing.length > 0) throw new Error(`Unknown case IDs: ${missing.join(", ")}`);
     const createdAt = new Date().toISOString();
     const variants = parseVariants(options.variant, options.stage);
+    const authoredInput = options.authoredInput === undefined
+      ? undefined
+      : await bundleAuthoredInput(options.authoredInput);
     const plan = await createExperimentPlan({
       cases: selected,
       stage: options.stage,
@@ -140,9 +146,9 @@ experiment.command("plan")
       protocolVersion: options.protocolVersion,
       createdAt,
       maxSteps: options.maxSteps,
-      ...(options.authoredPackageArtifact === undefined
+      ...(authoredInput === undefined
         ? {}
-        : { authoredPackageArtifactId: options.authoredPackageArtifact }),
+        : { authoredInput }),
     });
     const defaultPath = `runs/${createdAt.replaceAll(/[:.]/g, "-")}-${plan.planId.slice(0, 17)}.json`;
     const outPath = resolve(options.out ?? defaultPath);
@@ -284,6 +290,9 @@ runner.command("brief")
       writeFile(resolve(directory, "source-envelope.json"), `${JSON.stringify(sourceEnvelope, null, 2)}\n`, "utf8"),
       writeFile(resolve(directory, "runner-control.mjs"), desktopRunnerWrapper(CLI_ENTRY_PATH), { encoding: "utf8", mode: 0o700 }),
     ]);
+    if (envelope.submission.config.authoredInput !== undefined) {
+      await materializeAuthoredInput(envelope.submission.config.authoredInput, resolve(directory, "input", "authored"), { readOnly: true });
+    }
     output(
       { ok: true, runner: options.runner, runId: manifest.runId, sourceRunId: envelope.manifest.runId, path: directory, brief },
       options.stdout === true ? brief : `Prepared a ${options.runner} runner kit in ${directory}. Open that directory as an isolated project, then paste handoff.md into a clean agent task using the requested model.`,
@@ -458,13 +467,17 @@ evaluate.command("profile-brief")
   .argument("<run-directory>", "completed run directory")
   .requiredOption("--runner <runner>", "codex or claude-code", parseDesktopRunner)
   .requiredOption("--judge-model <model>", "exact evaluator model identifier")
+  .option("--reasoning-effort <effort>", "requested evaluator reasoning effort", "high")
   .option("--root <directory>", "case library root", "cases")
+  .option("--seedspec-cli <file>", "frozen SeedSpec CLI entrypoint", "../seedspec/packages/cli/bin/seedspec.js")
   .option("--out <file>", "handoff output path")
   .option("--stdout", "print the complete evaluator brief")
   .action(async (runDirectory: string, options: {
     runner: DesktopRunner;
     judgeModel: string;
+    reasoningEffort: string;
     root: string;
+    seedspecCli: string;
     out?: string;
     stdout?: boolean;
   }) => {
@@ -472,9 +485,11 @@ evaluate.command("profile-brief")
       runDirectory,
       runner: options.runner,
       judgeModel: options.judgeModel,
+      reasoningEffort: options.reasoningEffort,
       evaluationRepositoryRoot: EVALUATION_REPOSITORY_ROOT,
       evaluationCliEntry: CLI_ENTRY_PATH,
       caseRoot: options.root,
+      seedSpecCli: options.seedspecCli,
       ...(options.out === undefined ? {} : { out: options.out }),
     });
     output({ ok: true, ...result }, options.stdout === true
@@ -485,10 +500,12 @@ evaluate.command("profile-brief")
 evaluate.command("profile-finalize")
   .argument("<draft>", "evaluation profile body JSON without profileId")
   .option("--out <file>", "final content-addressed profile output")
-  .action(async (draft: string, options: { out?: string }) => {
+  .option("--evidence <file>", "content-addressed profile evidence envelope")
+  .action(async (draft: string, options: { out?: string; evidence?: string }) => {
     const result = await finalizeEvaluationProfileFile({
       draft,
       ...(options.out === undefined ? {} : { out: options.out }),
+      ...(options.evidence === undefined ? {} : { evidence: options.evidence }),
     });
     output({ ok: true, profileId: result.profile.profileId, path: result.path },
       `Finalized descriptive evaluation profile ${result.profile.profileId} at ${result.path}.`);
@@ -499,6 +516,43 @@ evaluate.command("profile")
   .action(async (file: string) => {
     const profile = await validateEvaluationProfileFile(file);
     output({ ok: true, profileId: profile.profileId, summary: profile.summary }, formatEvaluationProfile(profile));
+  });
+
+evaluate.command("profile-compare")
+  .description("Compare descriptive profiles over their case's shared axes without scoring them.")
+  .argument("<profiles...>", "two or more finalized evaluation profile JSON files")
+  .option("--root <directory>", "case library root", "cases")
+  .option("--out <file>", "content-addressed comparison JSON output")
+  .action(async (files: string[], options: { root: string; out?: string }) => {
+    const result = await compareEvaluationProfileFiles({
+      files,
+      caseRoot: options.root,
+      createdAt: new Date().toISOString(),
+      ...(options.out === undefined ? {} : { out: options.out }),
+    });
+    output({
+      ok: true,
+      comparisonId: result.comparison.comparisonId,
+      path: result.path,
+      markdownPath: result.markdownPath,
+    }, `Compared ${String(files.length)} profiles over shared case axes.\nJSON: ${result.path}\nReadable report: ${result.markdownPath}\nNo aggregate score or winner was produced.`);
+  });
+
+evaluate.command("profile-run")
+  .description("Run and capture a Codex profile evaluator from a prepared compact handoff.")
+  .argument("<run-directory>", "completed subject run containing profile-evidence.json and its handoff")
+  .option("--codex <file>", "Codex CLI executable", "codex")
+  .option("--confirm-model-execution", "explicitly authorize the evaluator model call")
+  .action(async (runDirectory: string, options: { codex: string; confirmModelExecution?: boolean }) => {
+    if (options.confirmModelExecution !== true) {
+      throw new Error("Evaluator model execution was not started. Review the profile handoff, then re-run with --confirm-model-execution.");
+    }
+    const result = await runCodexProfileEvaluator({ runDirectory, codexExecutable: options.codex });
+    if (result.run.status !== "succeeded") {
+      throw new Error(`Captured evaluator run ${result.run.evaluatorRunId} failed. Evidence: ${result.path}`);
+    }
+    output({ ok: true, evaluatorRunId: result.run.evaluatorRunId, profileId: result.run.profileId, path: result.path },
+      `Captured evaluator run ${result.run.evaluatorRunId}.\nProfile: ${result.run.profileId ?? "unavailable"}\nEvaluator evidence: ${result.path}`);
   });
 
 program.command("compare")

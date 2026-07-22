@@ -28,6 +28,12 @@ gradient of evidence describing whether each treatment gives an independent
 agent a better starting state while preserving legitimate implementation
 freedom.
 
+Every case predeclares shared decision and obligation axes before model
+judgment. Independent evaluators must cover those axes exactly once, while
+retaining additional subject-specific findings separately. This produces a
+stable denominator without flattening intentional differences in agent
+latitude or forcing a winner.
+
 ## Descriptive evaluation profiles
 
 Each completed run can produce a content-addressed profile containing:
@@ -78,6 +84,12 @@ Cases may later be promoted into public examples, but evaluation usefulness take
 ## Lab 4: independent implementations and congruency
 
 For each authored package, start implementation agents from clean workspaces. Vary model, runner, and—where the package permits it—implementation profile or end-user preference.
+
+Implementation plans accept an authored workspace directory, content-address
+every file, and carry the verified bytes in the execution envelope. Runners
+mount that immutable bundle at `input/authored`; an artifact identifier alone
+is never treated as delivery of the specification. The implementing agent
+writes only to its separate output workspace.
 
 Evaluate each outcome independently against the package before comparing outcomes to one another. Then classify variation across these layers:
 

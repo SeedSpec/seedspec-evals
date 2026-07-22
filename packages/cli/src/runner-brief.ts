@@ -19,12 +19,12 @@ export function buildDesktopManifest(envelope: ExecutionEnvelope, runner: Deskto
     runner: {
       id: runner === "codex" ? "codex-desktop" : "claude-code",
       kind: "agent",
-      version: "0.1.0-alpha.1",
+      version: "0.1.0-alpha.2",
     },
     tools: [
-      { name: "desktop-agent-workspace", version: "0.1.0-alpha.1", configuration: { runner } },
+      { name: "desktop-agent-workspace", version: "0.1.0-alpha.2", configuration: { runner } },
       ...(envelope.manifest.variant === "raw-source" ? [] : [
-        { name: "seedspec-simulated-author", version: "0.1.0-alpha.1" },
+        { name: "seedspec-simulated-author", version: "0.1.0-alpha.2" },
       ]),
       ...(usesSeedSpec(envelope.manifest.variant) ? [{
         name: "seedspec-cli",
@@ -118,7 +118,10 @@ export function buildDesktopBrief(
     "",
     "## Required outputs",
     "",
-    `1. Produce every deliverable requested by the case beneath \`${workspacePath}/\`. Create \`instructions.md\` only when it is a requested deliverable.`,
+    ...config.deliverables.map((deliverable) =>
+      `- ${deliverable.required ? "Required" : "Optional"}: \`${deliverable.path === undefined ? deliverable.id : `${workspacePath}/${deliverable.path}`}\` — ${deliverable.description}`),
+    "",
+    `1. Produce exactly the applicable declared deliverables beneath \`${workspacePath}/\`; do not add a broker-specific deliverable that the case did not request.`,
     `2. Write a concise evidence report at the project root: \`./${reportPath}\`.`,
     `3. Write a trace body (without \`traceId\`) at the project root: \`./${tracePath}\`. Use run ID \`${manifest.runId}\`, sourceRunId \`${envelope.manifest.runId}\`, runner ID \`${manifest.runner.id}\`, and \`reasoning: not-collected\`.`,
     `4. Finalize it with: \`${runnerControl} finalize-trace\`.` ,

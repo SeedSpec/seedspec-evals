@@ -1,0 +1,95 @@
+import { z } from "zod";
+
+import {
+  IdentifierSchema,
+  ArtifactIdSchema,
+  IsoTimestampSchema,
+  JsonObjectSchema,
+  JsonValueSchema,
+  SafeRelativePathSchema,
+  Sha256DigestSchema,
+  contentId,
+  deepFreeze,
+  type DeepReadonly,
+  type JsonValue,
+} from "./common.js";
+import {
+  AdaptationChallengeDefinitionSchema,
+  ComparisonAxesSchema,
+  TechnicalExpectationSchema,
+} from "./cases.js";
+import { EvaluationProfileSubjectSchema } from "./profiles.js";
+
+export const ProfileEvidenceArtifactSchema = z.strictObject({
+  artifactId: ArtifactIdSchema,
+  path: SafeRelativePathSchema,
+  kind: IdentifierSchema,
+  mediaType: z.string().trim().min(1).max(256),
+  byteLength: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  digest: Sha256DigestSchema,
+});
+
+export const ProfileEvidenceEnvelopeBodySchema = z.strictObject({
+  schemaVersion: z.literal(1),
+  profileSchemaVersion: z.literal(1),
+  createdAt: IsoTimestampSchema,
+  subject: EvaluationProfileSubjectSchema,
+  evaluatorRequest: z.strictObject({
+    runner: z.enum(["codex", "claude-code", "cloudflare-think"]),
+    model: z.string().trim().min(1).max(256),
+    reasoningEffort: z.string().trim().min(1).max(64),
+  }),
+  comparisonAxes: ComparisonAxesSchema,
+  technicalExpectations: z.array(TechnicalExpectationSchema).max(256),
+  adaptationChallenges: z.array(AdaptationChallengeDefinitionSchema).max(128),
+  source: z.strictObject({
+    path: SafeRelativePathSchema,
+    untrustedMaterial: z.string().min(1).max(384 * 1024),
+    availableAuthorQuestionIds: z.array(IdentifierSchema).max(128),
+  }),
+  artifacts: z.array(ProfileEvidenceArtifactSchema).min(1).max(10_000),
+  trace: z.strictObject({
+    path: SafeRelativePathSchema,
+    startedAt: IsoTimestampSchema,
+    finishedAt: IsoTimestampSchema,
+    status: z.string().trim().min(1).max(64),
+    capture: JsonObjectSchema,
+    relevantEvents: z.array(JsonValueSchema).max(256),
+    limitations: z.array(z.string().trim().min(1).max(8_000)).max(256),
+  }),
+  deterministic: z.strictObject({
+    path: SafeRelativePathSchema,
+    summary: JsonObjectSchema,
+    checks: z.array(JsonValueSchema).max(1_000),
+  }),
+  reportPath: SafeRelativePathSchema,
+  decisionLedgerPath: SafeRelativePathSchema.optional(),
+  instructions: z.array(z.string().trim().min(1).max(4_000)).min(1).max(64),
+});
+
+const ProfileEvidenceEnvelopeDataSchema = ProfileEvidenceEnvelopeBodySchema.safeExtend({
+  evidenceId: z.string().regex(/^evidence_[a-f0-9]{64}$/),
+}).superRefine((envelope, context) => {
+  const { evidenceId, ...body } = envelope;
+  const parsed = ProfileEvidenceEnvelopeBodySchema.safeParse(body);
+  if (!parsed.success) return;
+  const expected = contentId("evidence", parsed.data as unknown as JsonValue);
+  if (evidenceId !== expected) context.addIssue({ code: "custom", message: `evidenceId does not match envelope content; expected ${expected}`, path: ["evidenceId"] });
+});
+
+export const ProfileEvidenceEnvelopeSchema = ProfileEvidenceEnvelopeDataSchema.transform((value) => deepFreeze(value));
+
+export type ProfileEvidenceEnvelopeBody = z.infer<typeof ProfileEvidenceEnvelopeBodySchema>;
+export type ProfileEvidenceEnvelope = DeepReadonly<z.infer<typeof ProfileEvidenceEnvelopeDataSchema>>;
+
+export function createProfileEvidenceEnvelope(input: ProfileEvidenceEnvelopeBody): ProfileEvidenceEnvelope {
+  const body = ProfileEvidenceEnvelopeBodySchema.parse(input);
+  return ProfileEvidenceEnvelopeSchema.parse({
+    ...body,
+    evidenceId: contentId("evidence", body as unknown as JsonValue),
+  });
+}
+
+export function parseProfileEvidenceEnvelope(input: unknown): ProfileEvidenceEnvelope {
+  return ProfileEvidenceEnvelopeSchema.parse(input);
+}

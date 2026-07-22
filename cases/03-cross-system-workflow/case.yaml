@@ -1,6 +1,6 @@
 schemaVersion: 1
 id: workflow-stale-vip-support-escalation
-version: 1.0.0
+version: 1.1.0
 title: Configured outcome — stale VIP support escalation
 description: >-
   Tests whether an authoring agent specifies a configured cross-system outcome
@@ -306,6 +306,70 @@ adaptationChallenges:
       - A second schedule is represented through configuration and mapping.
       - Core escalation logic is not copied.
       - Existing replay fixtures remain passing.
+
+comparisonAxes:
+  decisions:
+    - id: vip-qualification
+      stages: [authorship, implementation]
+      title: VIP qualification
+      description: Which ticket and company signals identify a high-value support case.
+      materiality: critical
+    - id: stale-time-policy
+      stages: [authorship, implementation]
+      title: Stale business-time policy
+      description: Threshold, time zone, business intervals, holidays, and pause/resume semantics.
+      materiality: critical
+    - id: reply-reset
+      stages: [authorship, implementation]
+      title: Qualifying reply and episode reset
+      description: Which event closes an escalation episode and permits a later episode.
+      materiality: critical
+    - id: destinations
+      stages: [authorship, implementation]
+      title: Approved action destinations
+      description: Which Slack and Jira destinations receive one escalation action per episode.
+      materiality: material
+    - id: realization-profile
+      stages: [authorship, implementation]
+      title: Realization profile
+      description: Native-system or approved automation realization without a separately operated application.
+      materiality: material
+  obligations:
+    - id: configured-not-app
+      stages: [authorship, implementation]
+      kind: boundary
+      description: The outcome requires no new separately operated application, service, or persistent store.
+      importance: critical
+    - id: business-time-trigger
+      stages: [authorship, implementation]
+      kind: behavior
+      description: Staleness accrues only during the configured business calendar and resets only on a qualifying reply.
+      importance: critical
+    - id: episode-idempotency
+      stages: [authorship, implementation]
+      kind: invariant
+      description: Duplicate events and retries create one Slack alert and one Jira issue per escalation episode.
+      importance: critical
+    - id: minimum-disclosure
+      stages: [authorship, implementation]
+      kind: constraint
+      description: Actions disclose identifiers, owner, age, priority, and links but not customer message content.
+      importance: critical
+    - id: secret-references-only
+      stages: [authorship, implementation]
+      kind: forbidden-state
+      description: Configuration contains connection requirements and secret references, never credential values.
+      importance: critical
+    - id: recovery-audit
+      stages: [authorship, implementation]
+      kind: behavior
+      description: Retry, partial failure, replay, ownership, and evidence remain recoverable and auditable.
+      importance: material
+    - id: approved-systems
+      stages: [authorship, implementation]
+      kind: constraint
+      description: HubSpot, Slack, Jira Cloud, and an approved existing automation capability form the allowed system boundary.
+      importance: material
 
 simulatedToolResponses:
   - id: answer-vip-rule

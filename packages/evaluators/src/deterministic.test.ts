@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   ArtifactManifestSchema,
   EvaluationCaseSchema,
+  createArtifact,
   createRunManifest,
   sha256Hex,
 } from "@seedspec/eval-core";
@@ -68,6 +69,10 @@ describe("evaluateDeterministically", () => {
       }],
       permittedVariability: [],
       simulatedToolResponses: [],
+      comparisonAxes: {
+        decisions: [{ id: "scope", stages: ["authorship"], title: "Scope", description: "Choose the package scope.", materiality: "material" }],
+        obligations: [{ id: "valid-output", stages: ["authorship"], kind: "success-criterion", description: "Produce a valid output.", importance: "material" }],
+      },
     });
     const manifest = createRunManifest({
       schemaVersion: 1,
@@ -88,7 +93,28 @@ describe("evaluateDeterministically", () => {
     const artifacts = ArtifactManifestSchema.parse({
       schemaVersion: 1,
       runId: manifest.runId,
-      artifacts: [],
+      artifacts: [createArtifact({
+        schemaVersion: 1,
+        runId: manifest.runId,
+        stage: "authorship",
+        variant: manifest.variant,
+        kind: "authored-package",
+        path: "open-questions.yaml",
+        mediaType: "application/yaml",
+        byteLength: 12,
+        digest,
+        createdAt: "2026-07-21T12:00:30.000Z",
+        provenance: {
+          case: manifest.case,
+          variant: manifest.variant,
+          protocol: manifest.protocol,
+          runner: manifest.runner,
+          model: manifest.model,
+          harness: manifest.harness,
+          tools: [],
+          evaluators: [],
+        },
+      })],
     });
 
     const scorecard = evaluateDeterministically({
@@ -102,5 +128,6 @@ describe("evaluateDeterministically", () => {
     expect(scorecard.checks.find((check) => check.id === "hidden-expectations-isolated")?.outcome).toBe("pass");
     expect(scorecard.checks.find((check) => check.id === "deliverable-manifest")?.outcome).toBe("fail");
     expect(scorecard.checks.find((check) => check.id === "criterion-valid")?.outcome).toBe("not-applicable");
+    expect(scorecard.checks.find((check) => check.id === "authoring-state-excluded")?.outcome).toBe("fail");
   });
 });

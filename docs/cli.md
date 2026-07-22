@@ -35,18 +35,25 @@ seedspec-eval decision-ledger finalize <draft> [--out <file>]
 seedspec-eval decision-ledger validate <ledger>
 seedspec-eval evaluate deterministic <run-directory> [--seedspec-cli <file>]
 seedspec-eval evaluate package-profile-brief <package-path> --runner codex|claude-code --judge-model <model>
-seedspec-eval evaluate profile-brief <run-directory> --runner codex|claude-code --judge-model <model>
-seedspec-eval evaluate profile-finalize <draft> [--out <file>]
+seedspec-eval evaluate profile-brief <run-directory> --runner codex|claude-code --judge-model <model> [--reasoning-effort high]
+seedspec-eval evaluate profile-finalize <draft> [--out <file>] [--evidence <file>]
 seedspec-eval evaluate profile <profile>
+seedspec-eval evaluate profile-run <run-directory> --confirm-model-execution
+seedspec-eval evaluate profile-compare <profile...> [--out <file>]
 seedspec-eval evaluate rubric-brief <run-directory> --runner codex|claude-code --judge-model <model>
 seedspec-eval evaluate scorecard <scorecard>
 seedspec-eval compare <scorecard...> [--baseline raw-source]
 seedspec-eval docs [topic]
 ```
 
+Implementation planning requires `--stage implementation --authored-input
+<directory>`. The current parity profile accepts at most 384 KiB of UTF-8 files,
+rejects symlinks and binary inputs, content-addresses the exact bytes, and
+embeds the verified bundle for isolated runner mounting at `input/authored`.
+
 `experiment plan` is deterministic. It expands selectors, models, stages, evaluation variants, and repetitions into immutable Think execution envelopes and reports estimated run count. Authorship defaults to `raw-source`, `markdown-authored`, `seedspec-minimal`, `seedspec-guided`, and `seedspec-restructured`. Raw and Markdown controls receive no SeedSpec tools; the minimal package receives only scaffolding and deterministic checks; guided and restructured variants receive semantic authoring support. Every variant remains recorded in the control-plane manifest, trace, artifacts, and scorecards.
 
-`runner brief` derives a runner-specific immutable manifest and copy/paste handoff while retaining the Think run as its comparison source. It writes only to an isolated directory outside the evaluation repository and places simulated answers in control-only storage. `runner preflight` fails unless the task is operating from that clean directory, identities and broker state match, and no protected response is present in runner-visible files. `author answer` accepts only the sanitized runner source envelope and returns one exact answer. `evaluate deterministic` inventories the completed workspace and runs variant-appropriate checks. Package and run profile briefs prepare read-only agent tasks; `profile-finalize` validates and content-addresses their descriptive output. `evaluate rubric-brief` prepares an independent scored judging task but does not call a model. `compare` accepts like-for-like canonical scorecards and reports deltas from the selected baseline without claiming causality. `run submit` and `matrix start` are the actions allowed to invoke a model and therefore require an explicit confirmation flag in addition to remote authentication.
+`runner brief` derives a runner-specific immutable manifest and copy/paste handoff while retaining the Think run as its comparison source. It writes only to an isolated directory outside the evaluation repository and places simulated answers in control-only storage. `runner preflight` fails unless the task is operating from that clean directory, identities and broker state match, and no protected response is present in runner-visible files. `author answer` accepts only the sanitized runner source envelope and returns one exact answer. `evaluate deterministic` inventories the completed workspace and runs variant-appropriate checks. Run profile briefs produce a compact, content-addressed evidence envelope with predeclared comparison axes; evidence-bound `profile-finalize` rejects subject, evaluator, or axis drift. `profile-run` is the Codex captured-evaluator path and requires explicit model-execution confirmation. `profile-compare` reports shared-axis observations without an aggregate score or winner. `evaluate rubric-brief` prepares an independent scored judging task but does not call a model. `compare` accepts like-for-like canonical scorecards and reports deltas from the selected baseline without claiming causality. `run submit`, `matrix start`, and `evaluate profile-run` are the actions allowed to invoke a model and therefore require an explicit confirmation flag.
 
 Remote run commands read the bearer token from `SEEDSPEC_EVAL_API_TOKEN`; the CLI does not accept it as an ordinary command argument where it would be likely to remain in shell history. The Worker rejects all run routes when its corresponding secret is absent.
 

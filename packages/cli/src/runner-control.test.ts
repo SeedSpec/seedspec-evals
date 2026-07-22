@@ -1,6 +1,6 @@
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 
 import { loadCaseLibrary } from "@seedspec/eval-case-library";
 import { afterEach, describe, expect, it } from "vitest";
@@ -114,5 +114,60 @@ describe("desktop runner control boundary", () => {
     expect(finalized.normalizedPaths).toEqual(["report.md", "trace-draft.json"]);
     await expect(readFile(resolve(runDirectory, "trace.json"), "utf8")).resolves.toContain(finalized.traceId);
     await expect(readFile(resolve(runDirectory, "workspace", "report.md"), "utf8")).rejects.toThrow();
+  });
+
+  it("finalizes the case's declared deliverables without requiring a broker-specific instructions file", async () => {
+    const cases = await loadCaseLibrary(resolve("cases"));
+    const plan = await createExperimentPlan({
+      cases: cases.filter(({ case: evaluationCase }) => evaluationCase.id === "sparse-neighborhood-tool-lending"),
+      stage: "authorship",
+      variants: ["seedspec-minimal"],
+      models: ["openai/gpt-5.6-sol"],
+      repetitions: 1,
+      gatewayId: "seedspec-evals",
+      protocolVersion: "0.1.0-alpha.3",
+      createdAt: "2026-07-22T12:00:00.000Z",
+      maxSteps: 6,
+    });
+    const envelope = plan.envelopes[0]!;
+    const manifest = buildDesktopManifest(envelope, "codex");
+    const temporaryRoot = await mkdtemp(resolve(tmpdir(), "agent-eval-deliverables-test-"));
+    temporaryRoots.push(temporaryRoot);
+    const runDirectory = resolve(temporaryRoot, "runner");
+    const controlDirectory = resolve(temporaryRoot, "control");
+    await mkdir(resolve(runDirectory, "workspace"), { recursive: true });
+    const source = await createDesktopControl(envelope, manifest, { controlDirectory });
+    for (const deliverable of envelope.submission.config.deliverables.filter(({ required }) => required)) {
+      if (deliverable.path === undefined) continue;
+      const path = resolve(runDirectory, "workspace", deliverable.path);
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, `Fixture for ${deliverable.id}.\n`, "utf8");
+    }
+    await Promise.all([
+      writeFile(resolve(runDirectory, "source-envelope.json"), JSON.stringify(source), "utf8"),
+      writeFile(resolve(runDirectory, "run-manifest.json"), JSON.stringify(manifest), "utf8"),
+      writeFile(resolve(runDirectory, "report.md"), "Evidence report.\n", "utf8"),
+      writeFile(resolve(runDirectory, "trace-draft.json"), JSON.stringify({
+        schemaVersion: 1,
+        runId: manifest.runId,
+        sourceRunId: envelope.manifest.runId,
+        variant: manifest.variant,
+        runner: manifest.runner,
+        model: manifest.model,
+        startedAt: "2026-07-22T12:00:00.000Z",
+        finishedAt: "2026-07-22T12:00:01.000Z",
+        status: "succeeded",
+        capture: {
+          messages: "partial", toolCalls: "full", toolResults: "digests", timing: "event",
+          usage: "unavailable", artifacts: "paths-and-digests", reasoning: "not-collected",
+        },
+        events: [],
+        limitations: ["Test fixture."],
+        redactions: [],
+      }), "utf8"),
+    ]);
+
+    await expect(finalizeDesktopRunner(runDirectory)).resolves.toHaveProperty("traceId");
+    await expect(readFile(resolve(runDirectory, "workspace", "instructions.md"), "utf8")).rejects.toThrow();
   });
 });

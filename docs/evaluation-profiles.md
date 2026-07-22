@@ -14,9 +14,12 @@ A decision record separates four roles:
 - what constrained it; and
 - who implemented it.
 
-Actors may include the package author, end user, implementation profile,
-reference artifact, existing system, environment, implementing agent, or a
-mixed or unknown source. Evidence and confidence accompany every attribution.
+Actors may include the package author, end user, authoring agent,
+implementation profile, reference artifact, existing system, environment,
+implementing agent, evaluation case, evaluator, or a mixed or unknown source.
+The authoring agent is distinct from the package author whose intent it shapes.
+The evaluation case is evaluator-only authority unless the subject source also
+contains that expectation. Evidence and confidence accompany every attribution.
 The record also declares critical, material, or minor materiality and fixed,
 preferred, delegated, open, or unresolved expected latitude.
 
@@ -46,6 +49,21 @@ boundaries, and success criteria to planned and observed evidence. Coverage is
 `covered`, `partial`, `uncovered`, `not-applicable`, or `unknown`. A separate
 distinguishing field asks whether the evidence can tell success from plausible
 failure; the mere presence of a test or screenshot is not coverage.
+
+## Shared comparison axes
+
+Each evaluation case predeclares material decision and obligation axes. A
+run-profile evidence envelope filters them to the evaluated stage. The evaluator
+must create exactly one record for every applicable axis and retain its
+materiality, kind, and importance. `caseAxisId` is therefore the common
+denominator across variants; additional findings remain valuable but are listed
+as subject-specific rather than treated as directly comparable.
+
+This prevents independent evaluators from making one package appear stronger
+merely by inventorying it at a different level of detail. A comparison still
+does not decide whether fixed author control or delegated agent freedom is
+better. It shows the observed authority, latitude, alignment, evidence
+coverage, distinguishing power, and capture limitations for each axis.
 
 ## Structure
 
@@ -91,19 +109,49 @@ Prepare a completed-run profile:
 ```sh
 seedspec-eval evaluate profile-brief <run-directory> \
   --runner codex \
-  --judge-model <model>
+  --judge-model <model> \
+  --reasoning-effort high
 ```
 
-The external agent writes an evaluation-profile body without an ID. Finalize
-and inspect it deterministically:
+The command writes a compact content-addressed evidence envelope beside the
+handoff. The external agent writes an evaluation-profile body without an ID.
+The handoff's finalization command binds it to that envelope, including the
+exact subject, evaluator model and effort, and complete comparison axes.
+
+For Codex, use the captured path when evaluator usage matters:
 
 ```sh
-seedspec-eval evaluate profile-finalize evaluation-profile-draft.json
+seedspec-eval evaluate profile-run <run-directory> \
+  --confirm-model-execution
+```
+
+This preserves Codex's JSONL events and provider-reported input, cached input,
+output, and reasoning-output counts in `evaluator-run.json`. Those are evaluator
+costs; they are not mixed into the evaluated subject's process metrics.
+
+For a manual evaluator, finalize and inspect deterministically with the exact
+evidence file named in its handoff:
+
+```sh
+seedspec-eval evaluate profile-finalize evaluation-profile-draft.json \
+  --evidence profile-evidence.json
 seedspec-eval evaluate profile evaluation-profile.json
 ```
 
 The printed summary is descriptive counts and coverage. It intentionally has no
 overall quality score.
+
+Compare finalized profiles from the same case and stage over shared axes:
+
+```sh
+seedspec-eval evaluate profile-compare \
+  <run-a>/evaluation-profile.json \
+  <run-b>/evaluation-profile.json
+```
+
+The command writes content-addressed JSON and a readable Markdown table. It
+preserves subject-specific findings separately and emits no aggregate score or
+winning variant.
 
 Implementation runners finalize their observable ledger separately:
 

@@ -82,6 +82,6 @@ Desktop isolation prevents ordinary repository searches from exposing fixtures; 
 
 ## 6. Score and compare authorship variants
 
-Run `evaluate deterministic` for each completed run directory. Then use `evaluate profile-brief` to create a descriptive decision, evidence, structure, process, and technical profile. Use `evaluate rubric-brief` only when a predeclared scored comparison is required. Validate returned scorecards with `evaluate scorecard` and compare like-for-like rubric scorecards with `compare --baseline raw-source`.
+Run `evaluate deterministic` for each completed run directory. Then use `evaluate profile-brief` to create a compact evidence envelope and descriptive decision, evidence, structure, process, and technical profile. Prefer `evaluate profile-run --confirm-model-execution` when using Codex so its JSONL event stream and evaluator token/cache usage are retained. Compare finalized profiles with `evaluate profile-compare`; it uses the case's shared axes and does not infer a winner. Use `evaluate rubric-brief` only when a predeclared scored comparison is required. Validate returned scorecards with `evaluate scorecard` and compare like-for-like rubric scorecards with `compare --baseline raw-source`.
 
 The trace contract deliberately excludes hidden chain-of-thought. Comparable evidence consists of observable inputs and outputs, tool activity, artifacts, timing, usage where exposed, errors, and declared capture limitations.

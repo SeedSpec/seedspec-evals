@@ -75,6 +75,21 @@ which is ignored by Git. Plans may contain evaluator-only fixtures and must
 never be copied into a desktop runner project. Submitting one envelope is a
 separate operation and requires `--confirm-model-execution`.
 
+Implementation experiments use an actual authored workspace, not a symbolic
+artifact reference:
+
+```sh
+node packages/cli/dist/index.js experiment plan \
+  --root cases \
+  --case <case-with-an-implementation-stage> \
+  --stage implementation \
+  --model <model> \
+  --authored-input <completed-authorship-run>/workspace
+```
+
+The CLI content-addresses the files and mounts a verified read-only copy at
+`input/authored` in each implementation runner.
+
 ## Run the same experiment in Codex, Claude Code, and Think
 
 Generate a copy/paste brief for a clean Codex desktop task:
@@ -99,10 +114,14 @@ node packages/cli/dist/index.js evaluate deterministic \
 node packages/cli/dist/index.js evaluate profile-brief \
   <isolated-run-directory> \
   --runner codex \
-  --judge-model <independent-evaluator-model>
+  --judge-model <independent-evaluator-model> \
+  --reasoning-effort high
 ```
 
-The profile records decision provenance and materiality,
+The profile handoff contains a compact, content-addressed evidence envelope and
+the case's predeclared decision and obligation axes. This gives every variant
+the same comparison denominator without exposing the full case or evaluator
+implementation. The profile records decision provenance and materiality,
 obligation-to-evidence coverage, semantic file ownership, process capture,
 technical findings, and uncertainty. It does not emit a normalized score or
 declare a winner. An author can profile a package without running a full lab:
@@ -113,6 +132,30 @@ node packages/cli/dist/index.js evaluate package-profile-brief \
   --runner codex \
   --judge-model <evaluator-model>
 ```
+
+For Codex, the lab can run that handoff non-interactively and retain the raw
+JSONL event stream, exact requested model and reasoning effort, final evaluator
+message, and provider-reported token/cache usage:
+
+```sh
+node packages/cli/dist/index.js evaluate profile-run \
+  <isolated-run-directory> \
+  --confirm-model-execution
+```
+
+After two or more profiles for the same case and stage are finalized, produce a
+shared-axis comparison rather than comparing each evaluator's raw counts:
+
+```sh
+node packages/cli/dist/index.js evaluate profile-compare \
+  <run-a>/evaluation-profile.json \
+  <run-b>/evaluation-profile.json \
+  --out runs/profile-comparison.json
+```
+
+The comparison preserves missing and unknown observations, intentional agent
+latitude, subject-specific findings, and process capture. It does not select a
+winner.
 
 Use the older scored rubric only when the experiment predeclares a scored
 comparison:

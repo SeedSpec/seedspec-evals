@@ -127,6 +127,35 @@ export const AdaptationChallengeDefinitionSchema = z.strictObject({
   observations: z.array(z.string().trim().min(1).max(4_000)).min(1).max(64),
 });
 
+export const ComparisonDecisionAxisSchema = z.strictObject({
+  id: IdentifierSchema,
+  stages: z.array(EvaluationStageSchema).min(1).max(2),
+  title: z.string().trim().min(1).max(512),
+  description: z.string().trim().min(1).max(4_000),
+  materiality: z.enum(["critical", "material", "minor"]),
+});
+
+export const ComparisonObligationAxisSchema = z.strictObject({
+  id: IdentifierSchema,
+  stages: z.array(EvaluationStageSchema).min(1).max(2),
+  kind: z.enum([
+    "outcome",
+    "behavior",
+    "invariant",
+    "constraint",
+    "forbidden-state",
+    "boundary",
+    "success-criterion",
+  ]),
+  description: z.string().trim().min(1).max(4_000),
+  importance: z.enum(["critical", "material", "minor"]),
+});
+
+export const ComparisonAxesSchema = z.strictObject({
+  decisions: z.array(ComparisonDecisionAxisSchema).min(1).max(256),
+  obligations: z.array(ComparisonObligationAxisSchema).min(1).max(512),
+});
+
 export const AuthorshipVariantContractSchema = z.strictObject({
   objective: z.string().trim().min(1).max(8_000),
   deliverables: z.array(DeliverableSchema).min(1).max(128),
@@ -167,6 +196,7 @@ const EvaluationCaseDataSchema = z
     simulatedToolResponses: z.array(SimulatedToolResponseSchema).max(256),
     technicalExpectations: z.array(TechnicalExpectationSchema).max(256).default([]),
     adaptationChallenges: z.array(AdaptationChallengeDefinitionSchema).max(128).default([]),
+    comparisonAxes: ComparisonAxesSchema,
   })
   .superRefine((evaluationCase, context) => {
     addUniqueIdIssues(evaluationCase.authorship.sourceMaterials, context, ["authorship", "sourceMaterials"]);
@@ -181,6 +211,15 @@ const EvaluationCaseDataSchema = z
     addUniqueIdIssues(evaluationCase.simulatedToolResponses, context, ["simulatedToolResponses"]);
     addUniqueIdIssues(evaluationCase.technicalExpectations, context, ["technicalExpectations"]);
     addUniqueIdIssues(evaluationCase.adaptationChallenges, context, ["adaptationChallenges"]);
+    addUniqueIdIssues(evaluationCase.comparisonAxes.decisions, context, ["comparisonAxes", "decisions"]);
+    addUniqueIdIssues(evaluationCase.comparisonAxes.obligations, context, ["comparisonAxes", "obligations"]);
+    for (const [kind, axes] of Object.entries(evaluationCase.comparisonAxes)) {
+      for (const [index, axis] of axes.entries()) {
+        if (new Set(axis.stages).size !== axis.stages.length) {
+          context.addIssue({ code: "custom", message: "comparison-axis stages must be unique", path: ["comparisonAxes", kind, index, "stages"] });
+        }
+      }
+    }
 
     if (evaluationCase.implementation !== undefined) {
       addUniqueIdIssues(evaluationCase.implementation.constraints, context, ["implementation", "constraints"]);
@@ -243,6 +282,7 @@ export type PermittedVariability = z.infer<typeof PermittedVariabilitySchema>;
 export type SimulatedToolResponse = z.infer<typeof SimulatedToolResponseSchema>;
 export type TechnicalExpectation = z.infer<typeof TechnicalExpectationSchema>;
 export type AdaptationChallengeDefinition = z.infer<typeof AdaptationChallengeDefinitionSchema>;
+export type ComparisonAxes = z.infer<typeof ComparisonAxesSchema>;
 export type AuthorshipStage = z.infer<typeof AuthorshipStageSchema>;
 export type ImplementationStage = z.infer<typeof ImplementationStageSchema>;
 export type EvaluationCase = DeepReadonly<z.infer<typeof EvaluationCaseDataSchema>>;

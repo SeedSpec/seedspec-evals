@@ -135,6 +135,18 @@ async function inventoryRunEvidence(runDirectory: string, workspace: string, man
     const path = relative(workspace, file).split(sep).join("/");
     return fileArtifact(file, path, kind, manifest);
   }));
+  const authoredInputArtifacts: Artifact[] = [];
+  if (manifest.target.stage === "implementation") {
+    const inputRoot = resolve(runDirectory, "input", "authored");
+    const inputFiles: string[] = [];
+    const inputStat = await lstat(inputRoot).catch(() => null);
+    if (inputStat?.isDirectory() !== true) throw new Error(`Implementation authored input is missing: ${inputRoot}`);
+    await collectFiles(inputRoot, inputRoot, inputFiles);
+    authoredInputArtifacts.push(...await Promise.all(inputFiles.toSorted().map(async (file) => {
+      const path = `input/authored/${relative(inputRoot, file).split(sep).join("/")}`;
+      return fileArtifact(file, path, "source", manifest);
+    })));
+  }
   const evidenceKinds = {
     "run-manifest.json": "source",
     "source-envelope.json": "source",
@@ -150,7 +162,7 @@ async function inventoryRunEvidence(runDirectory: string, workspace: string, man
       evidenceArtifacts.push(await fileArtifact(file, `evidence/${name}`, evidenceKind, manifest));
     }
   }
-  return [...workspaceArtifacts, ...evidenceArtifacts];
+  return [...authoredInputArtifacts, ...workspaceArtifacts, ...evidenceArtifacts];
 }
 
 async function fileArtifact(

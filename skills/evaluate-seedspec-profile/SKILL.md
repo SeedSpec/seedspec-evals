@@ -7,6 +7,8 @@ description: Produce a descriptive SeedSpec package or implementation evaluation
 
 Inspect the subject without editing it. Produce the canonical profile body described in [references/output.md](references/output.md).
 
+When the handoff supplies `profile-evidence.json`, treat that content-addressed envelope as the complete control-plane index. Do not inspect the full case, evaluator source, TypeScript schemas, or unrelated repository files. Record the exact evaluator model and reasoning effort requested by the envelope.
+
 ## Evidence discipline
 
 - Use package-relative or run-relative evidence paths.
@@ -15,6 +17,9 @@ Inspect the subject without editing it. Produce the canonical profile body descr
 - Record observable decision summaries, not hidden reasoning.
 - Do not invent token, cache, turn, duration, or technical evidence. Mark unavailable capture explicitly.
 - Distinguish package evidence, planned verification, realization evidence, and outcome evidence.
+- For every applicable comparison decision axis in the envelope, create exactly one decision with the matching `caseAxisId` and materiality.
+- For every applicable comparison obligation axis, create exactly one obligation with the matching `caseAxisId`, kind, and importance.
+- Additional subject-specific records may omit `caseAxisId`; they do not replace a shared axis.
 
 ## Decision procedure
 
@@ -26,6 +31,23 @@ Inspect the subject without editing it. Produce the canonical profile body descr
 6. Record whether the choice was explicit, implicit, silent, not applicable, or unknown and include attribution confidence.
 7. Treat reference artifacts as normative, preferred, or illustrative only when package evidence establishes that influence. Otherwise record the uncertainty.
 8. When an implementing-agent decision ledger exists, treat it as a claim to verify against package authority, observable trace events, existing-system evidence, and the final implementation. It improves recall but does not adjudicate its own alignment.
+
+Use actor labels consistently:
+
+- `package-author`: the human or organization whose packaged intent supplies authority.
+- `end-user`: the adopter applying the package and supplying applied intent.
+- `authoring-agent`: the agent that shaped source material into the evaluated specification.
+- `implementing-agent`: the agent realizing an authored specification.
+- `implementation-profile`: packaged implementation guidance selected for the realization.
+- `reference-artifact`: supplied examples or code whose authority depends on package declarations.
+- `existing-system`: behavior or constraints already imposed by the target system.
+- `environment`: observable runtime, organizational, regulatory, or deployment constraints.
+- `evaluation-case`: evaluator-only expectations that were not necessarily visible to the subject.
+- `evaluator`: the agent or deterministic system producing this profile.
+- `mixed`: supported evidence attributes the role to more than one actor.
+- `unknown`: available evidence cannot support a more specific actor.
+
+Do not attribute an evaluator-only expectation to the package author, environment, or reference artifact. It may establish evaluation alignment, but it was not authority available to the subject unless the source or author responses also supplied it.
 
 Do not reward a larger package-author share. Evaluate whether the observed decision distribution matches the distribution the package intended.
 

@@ -198,6 +198,10 @@ function caseInput() {
     simulatedToolResponses: [
       { id: "clock", toolName: "read-clock", request: { timezone: "UTC" }, response: { hour: 12 } },
     ],
+    comparisonAxes: {
+      decisions: [{ id: "scope", stages: ["authorship", "implementation"], title: "Scope", description: "Choose the reusable scope.", materiality: "material" }],
+      obligations: [{ id: "usable", stages: ["authorship", "implementation"], kind: "success-criterion", description: "Produce a usable result.", importance: "material" }],
+    },
   };
 }
 

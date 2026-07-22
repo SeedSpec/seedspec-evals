@@ -24,6 +24,7 @@ function validConfig(runId = FALLBACK_RUN_ID) {
     gatewayId: "seedspec-evals",
     trustedInstructions: ["Produce the requested SeedSpec artifacts."],
     untrustedMaterial: "A user asks for a small inventory application.",
+    deliverables: [{ id: "manifest", description: "A package manifest.", required: true, path: "seedspec.yaml" }],
   };
 }
 
@@ -63,6 +64,7 @@ function validBoundRequest() {
       gatewayId: configWithoutRunId.gatewayId,
       maxSteps: DEFAULT_MAX_STEPS,
       untrustedMaterialDigest: `sha256:${sha256Hex(configWithoutRunId.untrustedMaterial)}`,
+      deliverablesDigest: digestJson(configWithoutRunId.deliverables),
       simulatedAuthorResponsesDigest: digestJson(simulatedAuthorResponses),
     },
   });
@@ -110,6 +112,10 @@ describe("run boundary contracts", () => {
     expect(SubmitRunRequestSchema.safeParse({
       ...request,
       config: { ...request.config, untrustedMaterial: "Different source material." },
+    }).success).toBe(false);
+    expect(SubmitRunRequestSchema.safeParse({
+      ...request,
+      config: { ...request.config, deliverables: [{ ...request.config.deliverables[0], path: "instructions.md" }] },
     }).success).toBe(false);
     expect(SubmitRunRequestSchema.safeParse({
       ...request,

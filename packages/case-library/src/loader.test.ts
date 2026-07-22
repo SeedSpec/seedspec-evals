@@ -72,6 +72,10 @@ function validCase(id: string): object {
     hiddenExpectations: [],
     permittedVariability: [],
     simulatedToolResponses: [],
+    comparisonAxes: {
+      decisions: [{ id: "scope", stages: ["authorship"], title: "Scope", description: "Choose the package scope.", materiality: "material" }],
+      obligations: [{ id: "valid-output", stages: ["authorship"], kind: "success-criterion", description: "Produce a valid output.", importance: "material" }],
+    },
   };
 }
 

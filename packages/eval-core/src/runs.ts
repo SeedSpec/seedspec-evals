@@ -25,7 +25,7 @@ export const RunTargetSchema = z.discriminatedUnion("stage", [
   z.strictObject({ stage: z.literal("authorship") }),
   z.strictObject({
     stage: z.literal("implementation"),
-    authoredPackageArtifactId: ArtifactIdSchema,
+    authoredInputArtifactId: ArtifactIdSchema,
   }),
 ]);
 

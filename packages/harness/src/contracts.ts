@@ -1,6 +1,8 @@
 import {
   EvaluationStageSchema,
   EvaluationVariantSchema,
+  DeliverableSchema,
+  AuthoredInputBundleSchema,
   IdentifierSchema,
   JsonObjectSchema,
   RunManifestSchema,
@@ -16,7 +18,7 @@ export { JsonObjectSchema, RunIdSchema } from "@seedspec/eval-core";
 export type { JsonObject, JsonPrimitive, JsonValue } from "@seedspec/eval-core";
 
 export const HARNESS_NAME = "seedspec-eval-harness";
-export const HARNESS_VERSION = "0.1.0-alpha.1";
+export const HARNESS_VERSION = "0.1.0-alpha.2";
 export const RUNNER_ID = "cloudflare-think";
 export const DEFAULT_MAX_STEPS = 6;
 export const MAX_MAX_STEPS = 12;
@@ -77,6 +79,8 @@ export const RunAgentConfigSchema = z
     maxSteps: z.number().int().min(1).max(MAX_MAX_STEPS).default(DEFAULT_MAX_STEPS),
     trustedInstructions: z.array(z.string().trim().min(1).max(8_000)).min(1).max(32),
     untrustedMaterial: z.string().min(1),
+    deliverables: z.array(DeliverableSchema).min(1).max(128),
+    authoredInput: AuthoredInputBundleSchema.optional(),
     simulatedAuthorResponses: z
       .record(IdentifierSchema, z.string().min(1).max(8_000))
       .refine((responses) => Object.keys(responses).length <= 128, {
@@ -102,6 +106,12 @@ export const RunAgentConfigSchema = z
         message: "untrusted material exceeds the size limit",
         path: ["untrustedMaterial"],
       });
+    }
+    if (config.stage === "implementation" && config.authoredInput === undefined) {
+      context.addIssue({ code: "custom", message: "implementation runs require an authored input bundle", path: ["authoredInput"] });
+    }
+    if (config.stage === "authorship" && config.authoredInput !== undefined) {
+      context.addIssue({ code: "custom", message: "authorship runs cannot include an authored input bundle", path: ["authoredInput"] });
     }
     const simulatedResponseBytes = Object.values(config.simulatedAuthorResponses).reduce(
       (total, response) => total + utf8Length(response),
@@ -279,6 +289,23 @@ function addManifestBindingIssues(
         `sha256:${sha256Hex(config.untrustedMaterial)}`,
       message: "untrusted material does not match the manifest digest",
       path: ["config", "untrustedMaterial"],
+    },
+    {
+      matches: manifest.configuration?.["deliverablesDigest"] === digestJson(
+        JSON.parse(JSON.stringify(config.deliverables)) as JsonValue,
+      ),
+      message: "declared deliverables do not match the manifest digest",
+      path: ["config", "deliverables"],
+    },
+    {
+      matches: manifest.target.stage === "authorship"
+        ? config.authoredInput === undefined
+        : config.authoredInput !== undefined
+          && manifest.target.authoredInputArtifactId === config.authoredInput.artifactId
+          && manifest.configuration?.["authoredInputArtifactId"] === config.authoredInput.artifactId
+          && manifest.configuration?.["authoredInputDigest"] === config.authoredInput.digest,
+      message: "authored input does not match the implementation target and manifest binding",
+      path: ["config", "authoredInput"],
     },
     {
       matches:
