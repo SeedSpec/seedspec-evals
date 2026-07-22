@@ -377,6 +377,8 @@ evaluate.command("rubric-brief")
       caseRoot: options.root,
       runner: options.runner,
       judgeModel: options.judgeModel,
+      evaluationRepositoryRoot: EVALUATION_REPOSITORY_ROOT,
+      evaluationCliEntry: CLI_ENTRY_PATH,
       ...(options.out === undefined ? {} : { out: options.out }),
     });
     output({ ok: true, path: result.path, brief: result.brief }, options.stdout === true

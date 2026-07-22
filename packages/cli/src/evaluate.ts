@@ -75,6 +75,8 @@ export async function buildRubricEvaluationBrief(options: {
   caseRoot: string;
   runner: "codex" | "claude-code";
   judgeModel: string;
+  evaluationRepositoryRoot: string;
+  evaluationCliEntry: string;
   out?: string;
 }): Promise<{ path: string; brief: string }> {
   const runDirectory = resolve(options.runDirectory);
@@ -108,12 +110,12 @@ export async function buildRubricEvaluationBrief(options: {
     `- Observable trace: \`${resolve(runDirectory, "trace.json")}\``,
     `- Artifact identities: \`${resolve(runDirectory, "artifact-manifest.json")}\``,
     `- Deterministic checks: \`${resolve(runDirectory, "deterministic-scorecard.json")}\``,
-    `- Evaluation procedure: \`${resolve("skills/evaluate-seedspec-authorship/SKILL.md")}\``,
-    `- Rubric: \`${resolve("skills/evaluate-seedspec-authorship/references/rubric.md")}\``,
-    `- Canonical output contract: \`${resolve("skills/evaluate-seedspec-authorship/references/output.md")}\``,
+    `- Evaluation procedure: \`${resolve(options.evaluationRepositoryRoot, "skills/evaluate-seedspec-authorship/SKILL.md")}\``,
+    `- Rubric: \`${resolve(options.evaluationRepositoryRoot, "skills/evaluate-seedspec-authorship/references/rubric.md")}\``,
+    `- Canonical output contract: \`${resolve(options.evaluationRepositoryRoot, "skills/evaluate-seedspec-authorship/references/output.md")}\``,
     "",
     "Keep protocol validity separate from semantic quality. Score the common outcome contract fairly across variants; do not award points merely because an output uses SeedSpec vocabulary or has more files.",
-    `Write the one canonical rubric scorecard to \`${scorecardPath}\`, then validate it with \`node packages/cli/dist/index.js evaluate scorecard ${scorecardPath}\`.`,
+    `Write the one canonical rubric scorecard to \`${scorecardPath}\`, then validate it with \`node ${JSON.stringify(resolve(options.evaluationCliEntry))} evaluate scorecard ${JSON.stringify(scorecardPath)}\`.`,
   ].join("\n");
   await writeFile(outputPath, `${brief}\n`, "utf8");
   return { path: outputPath, brief };
