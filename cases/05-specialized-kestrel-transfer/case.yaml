@@ -1,0 +1,384 @@
+schemaVersion: 1
+id: kestrel-warehouse-transfer
+version: 1.0.0
+title: Specialized cross-system workflow — Kestrel warehouse transfers
+description: >-
+  Tests whether package-scoped domain guidance improves a SeedSpec for an
+  unfamiliar inventory platform without turning platform constraints into
+  unattributed author intent.
+tags:
+  - workflow
+  - specialized-knowledge
+  - integration
+  - event-ordering
+
+authorship:
+  mode: cross-system-workflow
+  sourceMaterials:
+    - id: initial-note
+      label: Operations lead's initial note
+      mediaType: text/plain
+      origin:
+        kind: inline
+      trust: untrusted
+      content: |-
+        We need a small internal workflow for moving parts between our two shops
+        using Kestrel. Someone at the receiving shop requests a transfer, the
+        source shop approves and ships it, and the receiving shop confirms what
+        arrived. We have both individually serialized equipment and boxes of
+        ordinary parts. Kestrel sometimes sends a webhook twice or out of order,
+        so this cannot double-count anything. Make the main work phone friendly.
+        Keep it simple and do not replace Kestrel as our inventory system.
+  constraints:
+    - id: kestrel-integration
+      kind: requirement
+      description: The workflow integrates with the named Kestrel inventory system rather than replacing it.
+    - id: bounded-workflow
+      kind: resource-limit
+      description: Specify transfer request through receipt and exception handling, not a general warehouse-management product.
+    - id: phone-access
+      kind: compatibility
+      description: Request, dispatch, receipt, and exception review must be usable at a narrow phone viewport and by keyboard.
+  variants:
+    raw-source:
+      objective: Turn the operations note into instructions an implementation agent can use.
+      deliverables:
+        - id: implementation-ready-instructions
+          description: Standalone instructions for implementing the Kestrel transfer workflow.
+          required: true
+          path: instructions.md
+          mediaType: text/markdown
+    markdown-authored:
+      objective: >-
+        Use general specification practices to turn the operations note into
+        implementation-ready Markdown and ask the simulated author about material choices.
+      deliverables:
+        - id: implementation-ready-instructions
+          description: Standalone Markdown instructions for implementing the Kestrel transfer workflow.
+          required: true
+          path: instructions.md
+          mediaType: text/markdown
+    seedspec-minimal:
+      objective: Capture the operations note in a minimally structured, valid SeedSpec workflow package.
+      deliverables:
+        - id: manifest
+          description: A valid SeedSpec package manifest for a workflow.
+          required: true
+          path: seedspec.yaml
+          mediaType: application/yaml
+        - id: workflow-definition
+          description: A definition of actors, Kestrel boundaries, transfer lifecycle, failures, and decision latitude.
+          required: true
+          path: definition/workflow.md
+          mediaType: text/markdown
+        - id: configuration
+          description: A schema for meaningful operator-controlled workflow values.
+          required: true
+          path: configuration/schema.json
+          mediaType: application/schema+json
+        - id: acceptance
+          description: Observable acceptance scenarios for transfer, retry, event, receipt, and reconciliation behavior.
+          required: true
+          path: acceptance/criteria.md
+          mediaType: text/markdown
+
+    seedspec-guided:
+      objective: >-
+        Turn the operations note into a reviewable SeedSpec workflow package.
+        Resolve material author choices, distinguish existing-system constraints
+        from author intent, preserve uncertainty, and define distinguishing evidence.
+      deliverables:
+        - id: manifest
+          description: A valid SeedSpec package manifest for a workflow.
+          required: true
+          path: seedspec.yaml
+          mediaType: application/yaml
+        - id: workflow-definition
+          description: A definition of actors, Kestrel boundaries, transfer lifecycle, failures, and decision latitude.
+          required: true
+          path: definition/workflow.md
+          mediaType: text/markdown
+        - id: configuration
+          description: A schema for meaningful operator-controlled workflow values.
+          required: true
+          path: configuration/schema.json
+          mediaType: application/schema+json
+        - id: acceptance
+          description: Observable acceptance scenarios for transfer, retry, event, receipt, and reconciliation behavior.
+          required: true
+          path: acceptance/criteria.md
+          mediaType: text/markdown
+    seedspec-restructured:
+      objective: >-
+        Author and semantically restructure a reviewable SeedSpec workflow package.
+        Give product intent, platform constraints, configuration, and verification
+        one canonical owner each without duplicating authority.
+      deliverables:
+        - id: manifest
+          description: A valid SeedSpec package manifest for a workflow.
+          required: true
+          path: seedspec.yaml
+          mediaType: application/yaml
+        - id: workflow-definition
+          description: A definition of actors, Kestrel boundaries, transfer lifecycle, failures, and decision latitude.
+          required: true
+          path: definition/workflow.md
+          mediaType: text/markdown
+        - id: configuration
+          description: A schema for meaningful operator-controlled workflow values.
+          required: true
+          path: configuration/schema.json
+          mediaType: application/schema+json
+        - id: acceptance
+          description: Observable acceptance scenarios for transfer, retry, event, receipt, and reconciliation behavior.
+          required: true
+          path: acceptance/criteria.md
+          mediaType: text/markdown
+
+implementation:
+  objective: >-
+    Realize the authored transfer package against a deterministic local Kestrel
+    simulator and provide evidence for lifecycle, idempotency, event ordering,
+    receipt, exception, accessibility, and reconciliation behavior.
+  constraints:
+    - id: package-is-authority
+      kind: requirement
+      description: Use the authored package as the workflow boundary and document any unavoidable deviation.
+    - id: deterministic-kestrel-simulator
+      kind: resource-limit
+      description: Exercise the Kestrel contract through a reproducible local simulator rather than privileged external accounts.
+    - id: no-direct-inventory-write
+      kind: prohibition
+      description: The realization cannot bypass Kestrel transfer commands by mutating authoritative inventory directly.
+  deliverables:
+    - id: working-workflow
+      description: A runnable realization of the authored Kestrel transfer workflow.
+      required: true
+      path: realization
+    - id: acceptance-report
+      description: Machine-readable results mapping authored acceptance scenarios to evidence.
+      required: true
+      path: realization/acceptance-report.json
+      mediaType: application/json
+
+successCriteria:
+  - id: valid-package
+    stage: authorship
+    variants: [seedspec-minimal, seedspec-guided, seedspec-restructured]
+    description: The authored workflow package passes SeedSpec validation with every declared path present.
+    measure:
+      kind: deterministic
+      check: seedspec.package.valid
+      target:
+        valid: true
+        missingRequiredPaths: 0
+  - id: authoritative-boundary
+    stage: authorship
+    description: The specification keeps Kestrel authoritative for inventory transfer state and treats local data as a projection.
+    measure:
+      kind: rubric
+      rubric: >-
+        Award one point each for authoritative Kestrel state, no direct inventory
+        mutation, explicit projection status, visible reconciliation, and no
+        automatic drift repair.
+      maxPoints: 5
+  - id: failure-distinguishing-evidence
+    stage: authorship
+    description: Planned evidence distinguishes safe retries and event replay from plausible double-counting or state rollback.
+    measure:
+      kind: rubric
+      rubric: >-
+        Award one point each for same-key retry, conflicting key reuse, duplicate
+        event, sequence gap, and conflicting applied sequence scenarios.
+      maxPoints: 5
+
+hiddenExpectations:
+  - id: payload-bound-idempotency
+    stage: authorship
+    description: Reusing an idempotency key with the same payload is safe while reuse with a different payload is rejected without state change.
+    severity: critical
+    evaluation:
+      kind: rubric
+      rubric: Full credit requires both distinguishing cases and their observable state effects.
+      maxPoints: 3
+    disclosure: hidden
+  - id: sequence-not-time
+    stage: authorship
+    description: Transfer sequence, not timestamp or delivery order, controls event application and future events wait for gaps.
+    severity: critical
+    evaluation:
+      kind: rubric
+      rubric: Full credit requires deduplication, gap parking, no rollback, and conflict quarantine.
+      maxPoints: 4
+    disclosure: hidden
+  - id: no-post-dispatch-cancel
+    stage: authorship
+    description: A dispatched transfer cannot be cancelled; exceptions require a separately authorized compensating Kestrel action.
+    severity: critical
+    evaluation:
+      kind: rubric
+      rubric: Full credit requires pre-dispatch cancellation and post-dispatch exception behavior to be distinguishable.
+      maxPoints: 3
+    disclosure: hidden
+
+permittedVariability:
+  - id: workflow-vocabulary
+    stage: authorship
+    dimension: terminology
+    description: User-facing labels may vary if canonical Kestrel states and transition meaning remain unambiguous.
+  - id: implementation-stack
+    stage: authorship
+    dimension: technology
+    description: Framework, hosting, projection storage, and notification mechanism may remain open.
+    bounds: The choices cannot weaken Kestrel authority, command idempotency, or event ordering.
+
+technicalExpectations:
+  - id: transition-and-invariant-tests
+    dimension: test-quality
+    method: structured-review
+    description: Tests distinguish valid and rejected lifecycle transitions, atomic reservation, partial receipt, and serialized uniqueness.
+  - id: retry-and-replay-tests
+    dimension: test-quality
+    method: structured-review
+    description: Tests distinguish same-key retries, conflicting key reuse, duplicate events, missing sequence gaps, and conflicting applied sequences.
+  - id: projection-boundary
+    dimension: maintainability
+    method: structured-review
+    description: Kestrel command handling, local projection updates, reconciliation, and human exception review remain separable and observable.
+adaptationChallenges:
+  - id: third-site-time-zone
+    description: Add a third site in a different IANA time zone without changing event ordering or duplicating transfer-state logic.
+    purpose: Test whether site-local reporting is separated from UTC storage and sequence-based state application.
+    authorization: declared-by-case
+    constraints:
+      - id: preserve-sequence-ordering
+        kind: requirement
+        description: Transfer sequence remains authoritative regardless of site time zone.
+    observations:
+      - The additional site requires configuration rather than copied workflow logic.
+      - UTC event storage and transfer-sequence behavior remain unchanged.
+      - Existing two-site acceptance behavior remains passing.
+
+comparisonAxes:
+  decisions:
+    - id: platform-authority
+      stages: [authorship]
+      title: Authoritative transfer state
+      description: Whether Kestrel or the local workflow owns reservation, custody, receipt, and reconciliation truth.
+      materiality: critical
+    - id: transfer-lifecycle
+      stages: [authorship]
+      title: Canonical transfer lifecycle
+      description: How request, reservation, dispatch, partial receipt, receipt, exception, and cancellation states relate.
+      materiality: critical
+    - id: retry-semantics
+      stages: [authorship]
+      title: Command retry semantics
+      description: How idempotency keys behave for matching, conflicting, timed-out, and retried commands.
+      materiality: critical
+    - id: event-ordering
+      stages: [authorship]
+      title: Event ordering and replay
+      description: Whether event ID and per-transfer sequence prevent duplicate, out-of-order, conflicting, or rollback effects.
+      materiality: critical
+    - id: cancellation-boundary
+      stages: [authorship]
+      title: Cancellation and post-dispatch exceptions
+      description: When cancellation is permitted and how dispatched discrepancies are handled without rewriting history.
+      materiality: critical
+    - id: role-authority
+      stages: [authorship]
+      title: Human workflow authority
+      description: Who requests, accepts, dispatches, receives, and resolves transfer exceptions.
+      materiality: material
+    - id: inventory-scope
+      stages: [authorship]
+      title: Inventory classes and receipt granularity
+      description: Whether serialized and bulk inventory and partial receipts are in scope.
+      materiality: material
+    - id: implementation-stack
+      stages: [authorship]
+      title: Implementation technology
+      description: Whether framework, hosting, storage, and interface architecture are fixed or delegated.
+      materiality: minor
+  obligations:
+    - id: authoritative-state
+      stages: [authorship]
+      kind: boundary
+      description: Kestrel remains authoritative and local projections do not directly overwrite Kestrel inventory.
+      importance: critical
+    - id: atomic-reservation
+      stages: [authorship]
+      kind: invariant
+      description: Accepted reservations are atomic, never make available inventory negative, and cannot reserve one serial twice.
+      importance: critical
+    - id: complete-lifecycle
+      stages: [authorship]
+      kind: behavior
+      description: The canonical lifecycle includes request, reserve, dispatch, partial receipt, full receipt, exception, and valid cancellation.
+      importance: critical
+    - id: command-idempotency
+      stages: [authorship]
+      kind: invariant
+      description: Matching idempotency-key retries reuse the original result while conflicting payload reuse changes no state.
+      importance: critical
+    - id: event-deduplication
+      stages: [authorship]
+      kind: invariant
+      description: Replayed at-least-once events create no duplicate projection, notification, custody, or receipt effect.
+      importance: critical
+    - id: event-sequence-gaps
+      stages: [authorship]
+      kind: invariant
+      description: Only the next transfer sequence applies; future events wait for gaps and conflicting applied sequences are quarantined without rollback.
+      importance: critical
+    - id: cancellation-and-exception
+      stages: [authorship]
+      kind: forbidden-state
+      description: Cancellation occurs only before dispatch; post-dispatch problems cannot delete or backdate history and require an authorized compensating action.
+      importance: critical
+    - id: inventory-class-validation
+      stages: [authorship]
+      kind: constraint
+      description: Serialized lines enumerate unique serials while bulk lines use positive whole quantities and lot identity; partial receipt preserves missing units.
+      importance: material
+    - id: transfer-time-semantics
+      stages: [authorship]
+      kind: behavior
+      description: Events are stored in UTC, site IANA time zones control display and operational day, and timestamps never determine ordering.
+      importance: material
+    - id: reconciliation-safety
+      stages: [authorship]
+      kind: constraint
+      description: Projection drift becomes visible and reviewable without authorizing an automatic inventory mutation.
+      importance: material
+    - id: phone-keyboard
+      stages: [authorship]
+      kind: constraint
+      description: Request, dispatch, receipt, and exception review are usable at a narrow phone viewport and by keyboard.
+      importance: material
+    - id: material-ambiguity-visible
+      stages: [authorship]
+      kind: success-criterion
+      description: Human policy choices are answered or visibly unresolved while platform constraints retain existing-system provenance.
+      importance: material
+
+simulatedToolResponses:
+  - id: answer-role-authority
+    toolName: author.ask
+    request:
+      questionId: role-authority
+    response:
+      answer: Destination staff may request and receive. A source inventory manager accepts and dispatches. Site managers review exceptions and authorize any compensating Kestrel action.
+  - id: answer-inventory-scope
+    toolName: author.ask
+    request:
+      questionId: inventory-scope
+    response:
+      answer: Include both individually serialized equipment and lot-based bulk parts. Partial receipts are allowed and missing units must stay visible.
+  - id: answer-approval-policy
+    toolName: author.ask
+    request:
+      questionId: approval-policy
+    response:
+      answer: Any destination staff member can request. Only a source inventory manager can approve or dispatch; do not add a separate dollar or quantity threshold.

@@ -12,6 +12,7 @@ import {
   ProfileEvidenceEnvelopeBodySchema,
   createProfileEvidenceEnvelope,
   parseProfileEvidenceEnvelope,
+  parseSubjectRun,
   parseTrace,
   sha256Hex,
   stableJson,
@@ -288,6 +289,9 @@ export async function buildRunProfileBrief(options: {
     JSON.parse(await readFile(resolve(runDirectory, "artifact-manifest.json"), "utf8")) as unknown,
   );
   const trace = parseTrace(JSON.parse(await readFile(resolve(runDirectory, "trace.json"), "utf8")) as unknown);
+  const subjectRun = await fileExists(resolve(runDirectory, "subject-run.json"))
+    ? parseSubjectRun(JSON.parse(await readFile(resolve(runDirectory, "subject-run.json"), "utf8")) as unknown)
+    : undefined;
   const deterministic = ScorecardSchema.parse(
     JSON.parse(await readFile(resolve(runDirectory, "deterministic-scorecard.json"), "utf8")) as unknown,
   );
@@ -302,6 +306,9 @@ export async function buildRunProfileBrief(options: {
     || deterministic.case.version !== manifest.case.version
     || deterministic.case.digest !== manifest.case.digest) {
     throw new Error("Profile evidence artifacts do not share the immutable run identity.");
+  }
+  if (subjectRun !== undefined && subjectRun.runId !== manifest.runId) {
+    throw new Error("Captured subject-run evidence does not share the immutable run identity.");
   }
   const sourceEnvelope = JSON.parse(await readFile(resolve(runDirectory, "source-envelope.json"), "utf8")) as {
     untrustedMaterial?: unknown;
@@ -373,6 +380,19 @@ export async function buildRunProfileBrief(options: {
       relevantEvents: trace.events.map((event) => compactTraceEvent(event as unknown as TraceEvent)),
       limitations: [...trace.limitations],
     },
+    ...(subjectRun === undefined ? {} : {
+      subjectRun: {
+        path: "subject-run.json",
+        subjectRunId: subjectRun.subjectRunId,
+        startedAt: subjectRun.startedAt,
+        finishedAt: subjectRun.finishedAt,
+        status: subjectRun.status,
+        usage: subjectRun.usage,
+        eventCount: subjectRun.events.count,
+        ...(subjectRun.events.threadId === undefined ? {} : { threadId: subjectRun.events.threadId }),
+        limitations: [...subjectRun.limitations],
+      },
+    }),
     deterministic: {
       path: "deterministic-scorecard.json",
       summary: deterministic.summary,
@@ -390,6 +410,7 @@ export async function buildRunProfileBrief(options: {
       "A case expectation may establish evaluation alignment but was not authority available to the subject unless the source or author answers also supplied it.",
       "For authorship, a request to complete or improve a specification is not blanket delegation of material product policy. Use ambient when the authoring agent selected a material product choice without attributable authority, and use not-observed only when the authored material contains no choice to compare.",
       "Do not estimate tokens, cache activity, turns, timing, technical outcomes, or provenance that the envelope and cited files do not establish.",
+      "When subjectRun is present, use its provider-reported usage and exact outer run interval for process metrics instead of the subject-authored trace's unavailable or reconstructed values.",
     ],
   });
   const evidenceEnvelope = createProfileEvidenceEnvelope(evidenceBody);

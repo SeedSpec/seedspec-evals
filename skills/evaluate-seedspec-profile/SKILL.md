@@ -62,6 +62,13 @@ Inspect semantic ownership across files. Report duplicated authority, misplaced 
 
 Record process metrics only at their available capture level. Separate input, cached input reads and writes, output, clarification turns, correction turns, tool calls, and duration when the harness exposes them.
 
+When the evidence envelope includes `subjectRun`, use its provider-reported
+usage, event count, and outer started/finished interval for process metrics.
+These captured runner observations take precedence over unavailable or
+reconstructed process claims in the subject-authored trace. Preserve both sets
+of limitations rather than silently treating an outer capture as evidence of
+hidden reasoning or unrecorded decision provenance.
+
 For implementation subjects, use the technical-review skill named by the handoff and place its findings in `technical`. Do not collapse technical quality, adherence, decision alignment, or cost into a single score.
 
 ## Finalization

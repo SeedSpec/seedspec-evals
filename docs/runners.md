@@ -32,6 +32,21 @@ The runner-safe `source-envelope.json` contains source material, trusted instruc
 
 The agent that plans an experiment may build this repository and generate the kit. The evaluated agent must receive only the isolated runner project; do not open it on `seedspec-evals`, because committed cases and control-plane plans contain evaluator-only material.
 
+For a non-interactive Codex run with durable outer capture, use the evaluation
+repository CLI after generating the kit:
+
+```sh
+node packages/cli/dist/index.js runner codex-run \
+  <isolated-run-directory> \
+  --reasoning-effort high \
+  --confirm-model-execution
+```
+
+This writes `subject-events.jsonl`, `subject-stderr.log`, `subject-final.md`, and
+content-addressed `subject-run.json` beside the subject's own finalized trace.
+Profile evidence prefers this provider-reported usage and outer run interval
+without treating it as hidden reasoning or decision provenance.
+
 ## 3. Claude Code
 
 ```sh

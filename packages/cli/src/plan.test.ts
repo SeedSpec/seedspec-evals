@@ -48,6 +48,33 @@ describe("createExperimentPlan", () => {
       .toBe(true);
   });
 
+  it("uses the selected skill identity and case kind instead of hardcoded intent guidance", async () => {
+    const cases = await loadCaseLibrary(resolve("cases"));
+    const selected = cases.filter(({ case: evaluationCase }) =>
+      evaluationCase.id === "kestrel-warehouse-transfer");
+    const plan = await createSkillExperimentPlan({
+      cases: selected,
+      models: ["openai/gpt-5.6-sol"],
+      repetitions: 1,
+      gatewayId: "seedspec-evals",
+      protocolVersion: "0.1.0-alpha.4",
+      createdAt: "2026-07-22T12:00:00.000Z",
+      maxSteps: 8,
+      skillPath: resolve("skills/specify-kestrel-transfers/SKILL.md"),
+    });
+
+    const skillEnvelope = plan.envelopes.find(({ manifest }) =>
+      manifest.configuration?.["treatmentId"] === "skill-guidance")!;
+    const manifest = buildDesktopManifest(skillEnvelope, "codex");
+    const brief = buildDesktopBrief(skillEnvelope, manifest, "codex");
+    expect(skillEnvelope.manifest.configuration?.["skillId"]).toBe("specify-kestrel-transfers");
+    expect(skillEnvelope.submission.metadata?.["skillSource"]).toContain("Kestrel Transfer API 3.2");
+    expect(manifest.tools.map(({ name }) => name)).toContain("specify-kestrel-transfers");
+    expect(brief).toContain("guidance/specify-kestrel-transfers/SKILL.md");
+    expect(brief).toContain("valid SeedSpec workflow package");
+    expect(brief).not.toContain("guidance/shape-solution-intent/SKILL.md");
+  });
+
   it("creates one isolated run for every standard authorship variant", async () => {
     const cases = await loadCaseLibrary(resolve("cases"));
     const plan = await createExperimentPlan({

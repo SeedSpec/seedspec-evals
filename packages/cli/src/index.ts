@@ -40,6 +40,7 @@ import {
 import { createExperimentPlan } from "./plan.js";
 import { createSkillExperimentPlan, SKILL_TREATMENTS } from "./skill-plan.js";
 import { runCodexProfileEvaluator } from "./profile-runner.js";
+import { runCodexSubject } from "./subject-runner.js";
 import {
   cancelRemoteMatrix,
   cancelRemoteSubmission,
@@ -170,7 +171,7 @@ experiment.command("skill-plan")
   .option("--gateway <id>", "Cloudflare AI Gateway ID", "seedspec-evals")
   .option("--protocol-version <version>", "frozen SeedSpec protocol package version", "0.1.0-alpha.4")
   .option("--max-steps <count>", "maximum Think steps per turn", parsePositiveInteger, 8)
-  .option("--skill <file>", "shape-solution-intent SKILL.md", SHAPE_SOLUTION_INTENT_SKILL)
+  .option("--skill <file>", "package-scoped SKILL.md to deliver in controlled treatments", SHAPE_SOLUTION_INTENT_SKILL)
   .option("--out <file>", "plan output path")
   .action(async (options: {
     root: string;
@@ -376,6 +377,38 @@ runner.command("finalize")
           : `Normalized misplaced evidence sidecars: ${result.normalizedPaths.join(", ")}.`,
       ].join("\n"),
     );
+  });
+
+runner.command("codex-run")
+  .description("Run and capture one isolated Codex subject from a prepared runner kit.")
+  .argument("<run-directory>", "isolated Codex runner directory")
+  .option("--codex <file>", "Codex CLI executable", "codex")
+  .option("--reasoning-effort <effort>", "Codex reasoning effort", "high")
+  .option("--confirm-model-execution", "explicitly authorize the subject model call")
+  .action(async (runDirectory: string, options: {
+    codex: string;
+    reasoningEffort: string;
+    confirmModelExecution?: boolean;
+  }) => {
+    if (options.confirmModelExecution !== true) {
+      throw new Error("Subject model execution was not started. Review the runner handoff, then re-run with --confirm-model-execution.");
+    }
+    const result = await runCodexSubject({
+      runDirectory,
+      evaluationRepositoryRoot: EVALUATION_REPOSITORY_ROOT,
+      codexExecutable: options.codex,
+      reasoningEffort: options.reasoningEffort,
+    });
+    if (result.run.status !== "succeeded") {
+      throw new Error(`Captured subject run ${result.run.subjectRunId} failed. Evidence: ${result.path}`);
+    }
+    output({
+      ok: true,
+      subjectRunId: result.run.subjectRunId,
+      runId: result.run.runId,
+      traceId: result.run.trace?.traceId,
+      path: result.path,
+    }, `Captured subject run ${result.run.subjectRunId}.\nTrace: ${result.run.trace?.traceId ?? "unavailable"}\nSubject evidence: ${result.path}`);
   });
 
 const author = program.command("author").description("Expose pre-declared simulated author responses one question at a time.");
@@ -687,12 +720,19 @@ async function materializeSkillExperimentGuidance(
   const treatment = envelope.manifest.configuration?.["treatmentId"];
   if (treatment !== "skill-guidance" && treatment !== "skill-and-audit") return;
   const expectedDigest = envelope.manifest.configuration?.["skillDigest"];
-  const source = await readFile(SHAPE_SOLUTION_INTENT_SKILL, "utf8");
+  const selectedSkillId = envelope.manifest.configuration?.["skillId"];
+  const source = envelope.submission.metadata?.["skillSource"];
+  if (typeof selectedSkillId !== "string" || !/^[a-z0-9-]+$/.test(selectedSkillId)) {
+    throw new Error("Skill forward-test guidance has an invalid skill ID.");
+  }
+  if (typeof source !== "string") {
+    throw new Error("Skill forward-test plan does not contain its content-addressed skill source.");
+  }
   const actualDigest = `sha256:${sha256Hex(source)}`;
   if (typeof expectedDigest !== "string" || expectedDigest !== actualDigest) {
     throw new Error(`Skill forward-test guidance digest mismatch: expected ${typeof expectedDigest === "string" ? expectedDigest : "<invalid>"}, found ${actualDigest}.`);
   }
-  const target = resolve(directory, "guidance", "shape-solution-intent", "SKILL.md");
+  const target = resolve(directory, "guidance", selectedSkillId, "SKILL.md");
   await mkdir(dirname(target), { recursive: true });
   await writeFile(target, source, { encoding: "utf8", flag: "wx" });
 }

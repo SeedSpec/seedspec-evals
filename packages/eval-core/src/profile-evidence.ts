@@ -57,6 +57,17 @@ export const ProfileEvidenceEnvelopeBodySchema = z.strictObject({
     relevantEvents: z.array(JsonValueSchema).max(256),
     limitations: z.array(z.string().trim().min(1).max(8_000)).max(256),
   }),
+  subjectRun: z.strictObject({
+    path: SafeRelativePathSchema,
+    subjectRunId: z.string().regex(/^subject_run_[a-f0-9]{64}$/),
+    startedAt: IsoTimestampSchema,
+    finishedAt: IsoTimestampSchema,
+    status: z.enum(["succeeded", "failed"]),
+    usage: JsonObjectSchema,
+    eventCount: z.number().int().nonnegative(),
+    threadId: z.string().trim().min(1).max(256).optional(),
+    limitations: z.array(z.string().trim().min(1).max(8_000)).max(256),
+  }).optional(),
   deterministic: z.strictObject({
     path: SafeRelativePathSchema,
     summary: JsonObjectSchema,
