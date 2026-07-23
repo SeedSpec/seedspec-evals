@@ -42,6 +42,11 @@ export const ProfileEvidenceEnvelopeBodySchema = z.strictObject({
   comparisonAxes: ComparisonAxesSchema,
   technicalExpectations: z.array(TechnicalExpectationSchema).max(256),
   adaptationChallenges: z.array(AdaptationChallengeDefinitionSchema).max(128),
+  evaluatorGuidance: z.array(z.strictObject({
+    id: IdentifierSchema,
+    path: SafeRelativePathSchema,
+    digest: Sha256DigestSchema,
+  })).max(32).default([]),
   source: z.strictObject({
     path: SafeRelativePathSchema,
     untrustedMaterial: z.string().min(1).max(384 * 1024),
@@ -91,9 +96,10 @@ const ProfileEvidenceEnvelopeDataSchema = ProfileEvidenceEnvelopeBodySchema.safe
 export const ProfileEvidenceEnvelopeSchema = ProfileEvidenceEnvelopeDataSchema.transform((value) => deepFreeze(value));
 
 export type ProfileEvidenceEnvelopeBody = z.infer<typeof ProfileEvidenceEnvelopeBodySchema>;
+export type ProfileEvidenceEnvelopeBodyInput = z.input<typeof ProfileEvidenceEnvelopeBodySchema>;
 export type ProfileEvidenceEnvelope = DeepReadonly<z.infer<typeof ProfileEvidenceEnvelopeDataSchema>>;
 
-export function createProfileEvidenceEnvelope(input: ProfileEvidenceEnvelopeBody): ProfileEvidenceEnvelope {
+export function createProfileEvidenceEnvelope(input: ProfileEvidenceEnvelopeBodyInput): ProfileEvidenceEnvelope {
   const body = ProfileEvidenceEnvelopeBodySchema.parse(input);
   return ProfileEvidenceEnvelopeSchema.parse({
     ...body,

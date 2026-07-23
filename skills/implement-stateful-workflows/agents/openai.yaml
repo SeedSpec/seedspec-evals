@@ -1,0 +1,4 @@
+interface:
+  display_name: "Implement Stateful Workflows"
+  short_description: "Build maintainable invariant-driven workflows"
+  default_prompt: "Use $implement-stateful-workflows to implement this stateful workflow with explicit invariants, meaningful tests, and adaptable boundaries."

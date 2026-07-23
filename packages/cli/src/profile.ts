@@ -342,6 +342,11 @@ export async function buildRunProfileBrief(options: {
       package: { ...packageReference, path: packagePath },
     }),
   };
+  const evaluatorGuidance = await materializeRunEvaluatorGuidance(
+    runDirectory,
+    options.evaluationRepositoryRoot,
+    manifest.target.stage,
+  );
   const evidenceBody = ProfileEvidenceEnvelopeBodySchema.parse({
     schemaVersion: 1,
     profileSchemaVersion: 1,
@@ -358,6 +363,7 @@ export async function buildRunProfileBrief(options: {
     },
     technicalExpectations: matched.case.technicalExpectations,
     adaptationChallenges: matched.case.adaptationChallenges,
+    evaluatorGuidance: evaluatorGuidance.entries,
     source: {
       path: "source-envelope.json",
       untrustedMaterial: sourceEnvelope.untrustedMaterial,
@@ -431,6 +437,10 @@ export async function buildRunProfileBrief(options: {
     evaluationRepositoryRoot: options.evaluationRepositoryRoot,
     evaluationCliEntry: options.evaluationCliEntry,
     evidencePath,
+    profileSkillPath: evaluatorGuidance.profileSkillPath,
+    ...(evaluatorGuidance.technicalSkillPath === undefined
+      ? {}
+      : { technicalSkillPath: evaluatorGuidance.technicalSkillPath }),
   });
   await Promise.all([
     writeFile(path, `${brief}\n`, "utf8"),
@@ -452,9 +462,13 @@ function profileBrief(options: {
   evaluationCliEntry: string;
   reasoningEffort?: string;
   evidencePath?: string;
+  profileSkillPath?: string;
+  technicalSkillPath?: string;
 }): string {
-  const profileSkill = resolve(options.evaluationRepositoryRoot, "skills/evaluate-seedspec-profile/SKILL.md");
-  const technicalSkill = resolve(options.evaluationRepositoryRoot, "skills/review-seedspec-technical-quality/SKILL.md");
+  const profileSkill = options.profileSkillPath
+    ?? resolve(options.evaluationRepositoryRoot, "skills/evaluate-seedspec-profile/SKILL.md");
+  const technicalSkill = options.technicalSkillPath
+    ?? resolve(options.evaluationRepositoryRoot, "skills/review-seedspec-technical-quality/SKILL.md");
   return [
     `# ${options.title}`,
     "",
@@ -482,6 +496,60 @@ function profileBrief(options: {
     "",
     "Do not emit a normalized score or declare a winning variant. Findings must remain traceable to cited evidence, and limitations must state what the environment could not establish.",
   ].join("\n");
+}
+
+async function materializeRunEvaluatorGuidance(
+  runDirectory: string,
+  evaluationRepositoryRoot: string,
+  stage: "authorship" | "implementation",
+): Promise<{
+  readonly entries: readonly { readonly id: string; readonly path: string; readonly digest: string }[];
+  readonly profileSkillPath: string;
+  readonly technicalSkillPath?: string;
+}> {
+  const sources = [
+    {
+      id: "profile-skill",
+      source: resolve(evaluationRepositoryRoot, "skills/evaluate-seedspec-profile/SKILL.md"),
+      target: "evaluator-guidance/evaluate-seedspec-profile/SKILL.md",
+    },
+    {
+      id: "profile-output",
+      source: resolve(evaluationRepositoryRoot, "skills/evaluate-seedspec-profile/references/output.md"),
+      target: "evaluator-guidance/evaluate-seedspec-profile/references/output.md",
+    },
+    ...(stage === "implementation" ? [
+      {
+        id: "technical-review-skill",
+        source: resolve(evaluationRepositoryRoot, "skills/review-seedspec-technical-quality/SKILL.md"),
+        target: "evaluator-guidance/review-seedspec-technical-quality/SKILL.md",
+      },
+      {
+        id: "technical-review-output",
+        source: resolve(evaluationRepositoryRoot, "skills/review-seedspec-technical-quality/references/output.md"),
+        target: "evaluator-guidance/review-seedspec-technical-quality/references/output.md",
+      },
+    ] : []),
+  ];
+  const entries = await Promise.all(sources.map(async ({ id, source, target }) => {
+    const content = await readFile(source, "utf8");
+    const output = resolve(runDirectory, target);
+    await mkdir(dirname(output), { recursive: true });
+    await writeFile(output, content, "utf8");
+    return { id, path: target, digest: `sha256:${sha256Hex(content)}` };
+  }));
+  return {
+    entries,
+    profileSkillPath: resolve(runDirectory, "evaluator-guidance/evaluate-seedspec-profile/SKILL.md"),
+    ...(stage === "implementation"
+      ? {
+          technicalSkillPath: resolve(
+            runDirectory,
+            "evaluator-guidance/review-seedspec-technical-quality/SKILL.md",
+          ),
+        }
+      : {}),
+  };
 }
 
 function inspectPackage(packagePath: string, seedSpecCli: string): {

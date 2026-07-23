@@ -90,6 +90,35 @@ node packages/cli/dist/index.js experiment plan \
 The CLI content-addresses the files and mounts a verified read-only copy at
 `input/authored` in each implementation runner.
 
+### Package-scoped implementation skill experiment
+
+The first implementation-skill lab holds the authored package, case, model,
+runner, and output contract constant across three treatments:
+
+1. `no-guidance` — ordinary implementation judgment and no supplied skill;
+2. `embedded-guidance` — the exact skill text embedded in trusted runner
+   instructions, without a separately consulted skill;
+3. `skill-guidance` — the same text delivered as a package-scoped `SKILL.md`
+   that the implementing agent must consult and record.
+
+Create that matrix with:
+
+```sh
+node packages/cli/dist/index.js experiment implementation-skill-plan \
+  --root cases \
+  --case sparse-neighborhood-tool-lending \
+  --model openai/gpt-5.6-sol \
+  --repetitions 3 \
+  --authored-input <completed-authorship-run>/workspace \
+  --out runs/implementation-skill-v1-plan.json
+```
+
+Every treatment receives the same content-addressed authored package. Only the
+skill treatment receives a materialized `guidance/implement-stateful-workflows/SKILL.md`;
+the control cannot inspect the skill source, and the embedded treatment cannot
+claim skill consultation. The skill guides implementation but does not judge
+its own output.
+
 ## Run the same experiment in Codex, Claude Code, and Think
 
 Generate a copy/paste brief for a clean Codex desktop task:
@@ -108,6 +137,10 @@ After a desktop run finishes, inventory its deterministic evidence and prepare
 a descriptive evaluation profile:
 
 ```sh
+node packages/cli/dist/index.js implementation verify \
+  <isolated-run-directory> \
+  --confirm-code-execution
+
 node packages/cli/dist/index.js evaluate deterministic \
   <isolated-run-directory>
 
@@ -117,6 +150,15 @@ node packages/cli/dist/index.js evaluate profile-brief \
   --judge-model <independent-evaluator-model> \
   --reasoning-effort high
 ```
+
+Implementation verification is a separate, explicitly authorized step. It
+executes only the realization's declared local verification commands, captures
+their actual outcomes, and checks that acceptance and accessibility claims link
+to existing evidence. A passing command does not prove that its tests are
+meaningful. The independent, read-only technical reviewer evaluates
+correctness, placeholder behavior, test quality, maintainability, flexibility,
+and declared adaptation challenges from a frozen evaluator skill that is
+content-addressed in the evidence envelope.
 
 The profile handoff contains a compact, content-addressed evidence envelope and
 the case's predeclared decision and obligation axes. This gives every variant
@@ -199,4 +241,4 @@ while keeping deterministic failures separate from semantic evaluation.
 
 Copy `apps/worker/.dev.vars.example` only when you are ready to test authenticated remote operation. Never commit `.dev.vars`.
 
-See [the full lab plan](docs/labs.md), [descriptive evaluation profiles](docs/evaluation-profiles.md), [execution architecture](docs/architecture.md), [parity runners and traces](docs/runners.md), [CLI contract](docs/cli.md), and [open decisions](docs/open-decisions.md).
+See [the full lab plan](docs/labs.md), [the package-scoped implementation skill experiment](docs/implementation-skills.md), [descriptive evaluation profiles](docs/evaluation-profiles.md), [execution architecture](docs/architecture.md), [parity runners and traces](docs/runners.md), [CLI contract](docs/cli.md), and [open decisions](docs/open-decisions.md).

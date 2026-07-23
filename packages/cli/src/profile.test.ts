@@ -16,6 +16,7 @@ import {
 } from "./profile.js";
 import { createExperimentPlan } from "./plan.js";
 import { evaluateRunDirectoryDeterministically } from "./evaluate.js";
+import { verifyImplementationRun } from "./implementation-verification.js";
 import { bundleAuthoredInput, materializeAuthoredInput } from "./authored-input.js";
 
 const temporaryDirectories: string[] = [];
@@ -121,8 +122,8 @@ describe("evaluation profile CLI helpers", () => {
       runner: "codex",
       judgeModel: "openai/example",
       reasoningEffort: "high",
-      evaluationRepositoryRoot: "/evaluation-repository",
-      evaluationCliEntry: "/evaluation-repository/packages/cli/dist/index.js",
+      evaluationRepositoryRoot: resolve("."),
+      evaluationCliEntry: resolve("packages/cli/dist/index.js"),
       caseRoot: resolve("cases"),
       seedSpecCli: resolve("../seedspec/packages/cli/bin/seedspec.js"),
     });
@@ -187,7 +188,27 @@ describe("evaluation profile CLI helpers", () => {
         availableAuthorQuestionIds: [],
       }), "utf8"),
       writeFile(resolve(runDirectory, "workspace", "realization", "app.txt"), "Working realization.\n", "utf8"),
-      writeFile(resolve(runDirectory, "workspace", "realization", "acceptance-report.json"), "{}\n", "utf8"),
+      writeFile(resolve(runDirectory, "workspace", "realization", "verification.test.js"), "process.exit(0);\n", "utf8"),
+      writeFile(resolve(runDirectory, "workspace", "realization", "acceptance-report.json"), JSON.stringify({
+        schemaVersion: 1,
+        verificationCommands: [{ id: "test", argv: ["node", "verification.test.js"] }],
+        scenarios: Array.from({ length: 8 }, (_, index) => ({
+          id: index === 0 ? "concurrent-reservation" : `scenario-${String(index + 1)}`,
+          outcome: "pass",
+          commandIds: ["test"],
+          evidence: ["verification.test.js"],
+        })),
+        accessibility: {
+          viewportWidth: 360,
+          keyboardTasks: Array.from({ length: 4 }, (_, index) => ({
+            id: `keyboard-task-${String(index + 1)}`,
+            outcome: "pass",
+            commandIds: ["test"],
+            evidence: ["verification.test.js"],
+          })),
+        },
+        limitations: [],
+      }), "utf8"),
       writeFile(resolve(runDirectory, "report.md"), "Implementation evidence.\n", "utf8"),
       writeFile(resolve(runDirectory, "trace.json"), JSON.stringify(createTrace({
         schemaVersion: 1,
@@ -205,6 +226,11 @@ describe("evaluation profile CLI helpers", () => {
         events: [], limitations: ["Fixture trace."], redactions: [],
       })), "utf8"),
     ]);
+    await verifyImplementationRun({
+      runDirectory,
+      createdAt: "2026-07-22T12:00:01.500Z",
+      allowUnsandboxed: process.platform !== "darwin",
+    });
     await evaluateRunDirectoryDeterministically({
       runDirectory,
       caseRoot: resolve("cases"),
@@ -219,8 +245,8 @@ describe("evaluation profile CLI helpers", () => {
       runner: "codex",
       judgeModel: "openai/example-judge",
       reasoningEffort: "high",
-      evaluationRepositoryRoot: "/evaluation-repository",
-      evaluationCliEntry: "/evaluation-repository/packages/cli/dist/index.js",
+      evaluationRepositoryRoot: resolve("."),
+      evaluationCliEntry: resolve("packages/cli/dist/index.js"),
       caseRoot: resolve("cases"),
       seedSpecCli: fakeSeedSpecCli,
     });
@@ -231,6 +257,8 @@ describe("evaluation profile CLI helpers", () => {
     expect(evidence.subject.package?.path).toBe(resolve(runDirectory, "input", "authored"));
     expect(evidence.artifacts.map(({ path }) => path)).toContain("input/authored/seedspec.yaml");
     expect(evidence.artifacts.map(({ path }) => path)).toContain("workspace/realization/app.txt");
+    expect(evidence).toHaveProperty("evaluatorGuidance");
+    expect(result.brief).toContain(resolve(runDirectory, "evaluator-guidance/review-seedspec-technical-quality/SKILL.md"));
   });
 
   it("binds a run profile to the exact subject, evaluator request, and comparison axes", async () => {

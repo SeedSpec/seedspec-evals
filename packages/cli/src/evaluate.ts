@@ -6,6 +6,7 @@ import { relative, resolve, sep } from "node:path";
 import { loadCaseLibrary } from "@seedspec/eval-case-library";
 import {
   ArtifactManifestSchema,
+  ImplementationVerificationSchema,
   RunManifestSchema,
   ScorecardSchema,
   createArtifact,
@@ -46,9 +47,11 @@ export async function evaluateRunDirectoryDeterministically(options: {
   const workspace = resolve(runDirectory, "workspace");
   const artifacts = await inventoryRunEvidence(runDirectory, workspace, manifest);
   const artifactManifest = ArtifactManifestSchema.parse({ schemaVersion: 1, runId: manifest.runId, artifacts });
-  const adapters = ["raw-source", "markdown-authored"].includes(manifest.variant)
-    ? []
-    : packageValidationAdapters(workspace, resolve(options.seedSpecCli), artifacts);
+  const adapters = manifest.target.stage === "implementation"
+    ? await implementationVerificationAdapters(runDirectory, artifacts)
+    : ["raw-source", "markdown-authored"].includes(manifest.variant)
+      ? []
+      : packageValidationAdapters(workspace, resolve(options.seedSpecCli), artifacts);
   const scorecard = evaluateDeterministically({
     manifest,
     evaluationCase: loaded.case,
@@ -153,6 +156,7 @@ async function inventoryRunEvidence(runDirectory: string, workspace: string, man
     "report.md": "log",
     "trace.json": "tool-trace",
     "decision-ledger.json": "tool-trace",
+    "implementation-verification.json": "tool-trace",
   } as const;
   const evidenceArtifacts: Artifact[] = [];
   for (const [name, evidenceKind] of Object.entries(evidenceKinds)) {
@@ -235,6 +239,111 @@ function packageValidationAdapters(
       }
     },
   }));
+}
+
+async function implementationVerificationAdapters(
+  runDirectory: string,
+  artifacts: readonly Artifact[],
+): Promise<DeterministicCheckAdapter[]> {
+  const path = resolve(runDirectory, "implementation-verification.json");
+  const verification = ImplementationVerificationSchema.parse(
+    JSON.parse(await readFile(path, "utf8").catch(() => {
+      throw new Error(
+        "Implementation verification is missing. Run `seedspec-eval implementation verify "
+        + "<run-directory> --confirm-code-execution` before deterministic evaluation.",
+      );
+    })) as unknown,
+  );
+  const verificationArtifact = artifacts.find(({ path: artifactPath }) =>
+    artifactPath === "evidence/implementation-verification.json");
+  const evidence = verificationArtifact === undefined
+    ? []
+    : [{ artifactId: verificationArtifact.artifactId, path: verificationArtifact.path }];
+  const commandOutcomes = new Map(verification.commands.map((command) => [command.id, command.outcome]));
+  const evidenceOutcomes = new Map(verification.evidence.map((observation) => [observation.path, observation.exists]));
+  const linkedPasses = (result: {
+    readonly outcome: "pass" | "fail";
+    readonly commandIds: readonly string[];
+    readonly evidence: readonly string[];
+  }): boolean =>
+    result.outcome === "pass"
+    && result.commandIds.every((id) => commandOutcomes.get(id) === "pass")
+    && result.evidence.every((file) => evidenceOutcomes.get(file) === true);
+
+  return [
+    {
+      id: "realization.acceptance.pass",
+      description: "Every required acceptance scenario passes through executed, linked local evidence.",
+      evaluate: (_context, target) => {
+        const targetRecord = isRecord(target) ? target : {};
+        const minimumScenarios = typeof targetRecord["minimumScenarios"] === "number"
+          ? targetRecord["minimumScenarios"]
+          : 1;
+        const requiredPassRate = typeof targetRecord["passRate"] === "number"
+          ? targetRecord["passRate"]
+          : 1;
+        const passed = verification.report.scenarios.filter(linkedPasses).length;
+        const total = verification.report.scenarios.length;
+        const passRate = total === 0 ? 0 : passed / total;
+        const allCommandsPassed = verification.commands.every(({ outcome }) => outcome === "pass");
+        const outcome = total >= minimumScenarios
+          && passRate >= requiredPassRate
+          && allCommandsPassed;
+        return {
+          outcome: outcome ? "pass" as const : "fail" as const,
+          message: `${String(passed)}/${String(total)} scenarios have passing declared outcomes, executed commands, and existing linked evidence; ${String(verification.commands.filter(({ outcome: commandOutcome }) => commandOutcome === "pass").length)}/${String(verification.commands.length)} commands passed.`,
+          evidence,
+        };
+      },
+    },
+    {
+      id: "realization.accessibility.core-tasks",
+      description: "Declared narrow-viewport keyboard tasks pass through executed, linked local evidence.",
+      evaluate: (_context, target) => {
+        const targetRecord = isRecord(target) ? target : {};
+        const viewportWidth = typeof targetRecord["viewportWidth"] === "number"
+          ? targetRecord["viewportWidth"]
+          : undefined;
+        const minimumTasks = typeof targetRecord["keyboardTasksPassed"] === "number"
+          ? targetRecord["keyboardTasksPassed"]
+          : 1;
+        const accessibility = verification.report.accessibility;
+        if (accessibility === undefined) {
+          return { outcome: "fail" as const, message: "The acceptance report contains no accessibility evidence.", evidence };
+        }
+        const passed = accessibility.keyboardTasks.filter(linkedPasses).length;
+        const widthMatches = viewportWidth === undefined || accessibility.viewportWidth === viewportWidth;
+        const outcome = widthMatches
+          && passed >= minimumTasks
+          && passed === accessibility.keyboardTasks.length;
+        return {
+          outcome: outcome ? "pass" as const : "fail" as const,
+          message: `${String(passed)}/${String(accessibility.keyboardTasks.length)} keyboard tasks have executed, linked evidence at viewport width ${String(accessibility.viewportWidth)}${viewportWidth === undefined ? "" : `; required width ${String(viewportWidth)}`}.`,
+          evidence,
+        };
+      },
+    },
+    {
+      id: "realization.concurrency.exclusive-reservation",
+      description: "At least one executed acceptance scenario distinguishes conflicting or concurrent reservations.",
+      evaluate: () => {
+        const concurrency = verification.report.scenarios.filter(({ id }) =>
+          /(concurr|conflict|exclusive|overlap|reservation)/i.test(id));
+        const passed = concurrency.filter(linkedPasses).length;
+        return {
+          outcome: concurrency.length > 0 && passed === concurrency.length ? "pass" as const : "fail" as const,
+          message: concurrency.length === 0
+            ? "No scenario identifies concurrent, conflicting, overlapping, exclusive, or reservation behavior."
+            : `${String(passed)}/${String(concurrency.length)} concurrency-related scenarios have executed, linked evidence.`,
+          evidence,
+        };
+      },
+    },
+  ];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function mediaTypeForPath(path: string): string {

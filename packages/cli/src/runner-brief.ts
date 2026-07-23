@@ -107,7 +107,7 @@ export function buildDesktopBrief(
     `- Case: \`${config.caseId}\``,
     `- Stage: \`${config.stage}\``,
     `- Requested model: \`${config.model}\``,
-    ...(treatment === undefined ? [] : [`- Authoring treatment: \`${treatment}\``]),
+    ...(treatment === undefined ? [] : [`- Guidance treatment: \`${treatment}\``]),
     `- Harness version: \`${manifest.harness.version}\``,
     ...(usesSeedSpec(config.variant) ? [`- Protocol version: \`${manifest.protocol.version}\``] : []),
     "",
@@ -128,9 +128,9 @@ export function buildDesktopBrief(
     ...(!usesSeedSpec(config.variant) ? [
       `${sharedInstructions.length + 7}. Use only the supplied case material, explicit author answers, and ordinary capabilities of this environment. Do not inspect or invoke unavailable authoring tooling.`,
     ] : [
-      `${sharedInstructions.length + 7}. Use the frozen local SeedSpec CLI through \`${seedSpecCli}\`. Begin by recording \`${seedSpecCli} version --json\`.`,
+      `${sharedInstructions.length + 7}. Use the frozen local SeedSpec CLI through \`${seedSpecCli}\` for package inspection and any supported protocol operation. Begin by recording \`${seedSpecCli} version --json\`.`,
       treatment !== undefined
-        ? `${sharedInstructions.length + 8}. ${skillTreatmentInstruction(treatment, seedSpecCli, skillId(manifest))}`
+        ? `${sharedInstructions.length + 8}. ${skillTreatmentInstruction(config.stage, treatment, seedSpecCli, skillId(manifest))}`
         : config.variant === "seedspec-minimal"
         ? `${sharedInstructions.length + 8}. Use \`seedspec init\` and deterministic validation, but do not use \`seedspec audit\`, guided authoring skills, or authoring audit documentation.`
         : config.variant === "seedspec-restructured"
@@ -205,12 +205,55 @@ export function buildDesktopBrief(
       }, null, 2),
       "```",
       "",
+      "Use this contract for `workspace/realization/acceptance-report.json`. Every scenario and keyboard task must link to at least one declared local verification command and at least one evidence file relative to `workspace/realization/`. The lab executes these commands only after separate operator approval and independently reviews whether the tests are meaningful:",
+      "",
+      "```json",
+      JSON.stringify({
+        schemaVersion: 1,
+        verificationCommands: [{
+          id: "test",
+          argv: ["node", "--test"],
+        }],
+        scenarios: [{
+          id: "authorized-transition",
+          outcome: "pass",
+          commandIds: ["test"],
+          evidence: ["test/authorized-transition.test.js"],
+          assessment: "The test executes the real transition boundary.",
+        }],
+        accessibility: {
+          viewportWidth: 360,
+          keyboardTasks: [{
+            id: "keyboard-list-and-request",
+            outcome: "pass",
+            commandIds: ["test"],
+            evidence: ["test/accessibility.test.js"],
+          }],
+        },
+        limitations: [],
+      }, null, 2),
+      "```",
+      "",
     ] : []),
     `The run is complete only when artifacts, report, finalized trace${config.stage === "implementation" ? ", and finalized decision ledger" : ""} exist.`,
   ].join("\n");
 }
 
-function skillTreatmentInstruction(treatment: string, seedSpecCli: string, selectedSkillId: string): string {
+function skillTreatmentInstruction(
+  stage: "authorship" | "implementation",
+  treatment: string,
+  seedSpecCli: string,
+  selectedSkillId: string,
+): string {
+  if (stage === "implementation") {
+    if (treatment === "no-guidance" || treatment === "embedded-guidance") {
+      return "Inspect the authored package normally, but do not read or claim consultation of a separate implementation skill.";
+    }
+    if (treatment === "skill-guidance") {
+      return `Read \`guidance/${selectedSkillId}/SKILL.md\` completely before implementation and record its consultation and observable influence.`;
+    }
+    throw new Error(`Unknown implementation-skill treatment: ${treatment}`);
+  }
   if (treatment === "no-guidance" || treatment === "embedded-guidance") {
     return `Use \`${seedSpecCli} init\`, validation, inspection, and digest operations, but do not use \`seedspec audit\` or read a separate authoring skill.`;
   }

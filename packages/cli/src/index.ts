@@ -27,6 +27,7 @@ import {
   evaluateRunDirectoryDeterministically,
   validateScorecardFile,
 } from "./evaluate.js";
+import { verifyImplementationRun } from "./implementation-verification.js";
 import {
   buildPackageProfileBrief,
   buildRunProfileBrief,
@@ -39,6 +40,10 @@ import {
 } from "./profile.js";
 import { createExperimentPlan } from "./plan.js";
 import { createSkillExperimentPlan, SKILL_TREATMENTS } from "./skill-plan.js";
+import {
+  createImplementationSkillExperimentPlan,
+  IMPLEMENTATION_SKILL_TREATMENTS,
+} from "./implementation-skill-plan.js";
 import { runCodexProfileEvaluator } from "./profile-runner.js";
 import { runCodexSubject } from "./subject-runner.js";
 import {
@@ -68,6 +73,10 @@ const EVALUATION_REPOSITORY_ROOT = resolve(dirname(CLI_ENTRY_PATH), "../../..");
 const DEFAULT_DESKTOP_RUNNER_ROOT = resolve(EVALUATION_REPOSITORY_ROOT, "../..", "agent-eval-runs");
 const SEEDSPEC_CLI_ENTRY = resolve(EVALUATION_REPOSITORY_ROOT, "../seedspec/packages/cli/bin/seedspec.js");
 const SHAPE_SOLUTION_INTENT_SKILL = resolve(EVALUATION_REPOSITORY_ROOT, "../seedspec/skills/shape-solution-intent/SKILL.md");
+const IMPLEMENT_STATEFUL_WORKFLOWS_SKILL = resolve(
+  EVALUATION_REPOSITORY_ROOT,
+  "skills/implement-stateful-workflows/SKILL.md",
+);
 const program = new Command();
 
 program
@@ -205,6 +214,64 @@ experiment.command("skill-plan")
     await writeFile(outPath, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
     output({ ok: true, planId: plan.planId, runs: plan.envelopes.length, treatments: SKILL_TREATMENTS, path: outPath },
       `Planned ${String(plan.envelopes.length)} controlled authoring-skill runs across ${String(SKILL_TREATMENTS.length)} same-output treatments in ${outPath}.\nNo model was called. Generate isolated runner kits before execution.`);
+  });
+
+experiment.command("implementation-skill-plan")
+  .description("Create a controlled same-package implementation-skill treatment matrix.")
+  .option("--root <directory>", "case library root", "cases")
+  .option("--case <id...>", "case IDs to include", ["sparse-neighborhood-tool-lending"])
+  .requiredOption("--model <model...>", "AI Gateway model slug(s)")
+  .requiredOption("--authored-input <directory>", "completed authored package to freeze for every implementation treatment")
+  .option("--repetitions <count>", "runs per case/model/treatment", parsePositiveInteger, 1)
+  .option("--gateway <id>", "Cloudflare AI Gateway ID", "seedspec-evals")
+  .option("--protocol-version <version>", "frozen SeedSpec protocol package version", "0.1.0-alpha.4")
+  .option("--max-steps <count>", "maximum Think steps per turn", parsePositiveInteger, 8)
+  .option("--skill <file>", "package-scoped implementation SKILL.md to deliver in the controlled treatment", IMPLEMENT_STATEFUL_WORKFLOWS_SKILL)
+  .option("--out <file>", "plan output path")
+  .action(async (options: {
+    root: string;
+    case: string[];
+    model: string[];
+    authoredInput: string;
+    repetitions: number;
+    gateway: string;
+    protocolVersion: string;
+    maxSteps: number;
+    skill: string;
+    out?: string;
+  }) => {
+    const allCases = await loadCaseLibrary(resolve(options.root));
+    const selected = allCases.filter((entry) => options.case.includes(entry.case.id));
+    const missing = options.case.filter((id) => !selected.some((entry) => entry.case.id === id));
+    if (missing.length > 0) throw new Error(`Unknown case IDs: ${missing.join(", ")}`);
+    const createdAt = new Date().toISOString();
+    const authoredInput = await bundleAuthoredInput(options.authoredInput);
+    const plan = await createImplementationSkillExperimentPlan({
+      cases: selected,
+      models: options.model,
+      repetitions: options.repetitions,
+      gatewayId: options.gateway,
+      protocolVersion: options.protocolVersion,
+      createdAt,
+      maxSteps: options.maxSteps,
+      skillPath: resolve(options.skill),
+      authoredInput,
+    });
+    const defaultPath = `runs/${createdAt.replaceAll(/[:.]/g, "-")}-implementation-skill-${plan.planId.slice(0, 17)}.json`;
+    const outPath = resolve(options.out ?? defaultPath);
+    await mkdir(dirname(outPath), { recursive: true });
+    await writeFile(outPath, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
+    output(
+      {
+        ok: true,
+        planId: plan.planId,
+        runs: plan.envelopes.length,
+        treatments: IMPLEMENTATION_SKILL_TREATMENTS,
+        authoredInputArtifactId: authoredInput.artifactId,
+        path: outPath,
+      },
+      `Planned ${String(plan.envelopes.length)} controlled implementation-skill runs against one frozen authored package across ${String(IMPLEMENTATION_SKILL_TREATMENTS.length)} treatments in ${outPath}.\nNo model was called. Generate isolated runner kits before execution.`,
+    );
   });
 
 experiment.command("inspect")
@@ -465,6 +532,45 @@ decisionLedger.command("validate")
     const ledger = await validateDecisionLedgerFile(file);
     output({ ok: true, ledgerId: ledger.ledgerId, runId: ledger.runId, entries: ledger.entries.length },
       `Validated decision ledger ${ledger.ledgerId}: ${String(ledger.entries.length)} observable material decision record${ledger.entries.length === 1 ? "" : "s"}.`);
+  });
+
+const implementation = program.command("implementation")
+  .description("Verify implementation evidence without changing the realization.");
+
+implementation.command("verify")
+  .argument("<run-directory>", "completed isolated implementation run directory")
+  .option("--confirm-code-execution", "authorize execution of the realization's declared local verification commands")
+  .option("--allow-unsandboxed", "allow execution only when an external disposable sandbox is already in place")
+  .action(async (runDirectory: string, options: {
+    confirmCodeExecution?: boolean;
+    allowUnsandboxed?: boolean;
+  }) => {
+    if (options.confirmCodeExecution !== true) {
+      throw new Error(
+        "Implementation code was not executed. Review the declared local verification commands, "
+        + "then re-run with --confirm-code-execution.",
+      );
+    }
+    const result = await verifyImplementationRun({
+      runDirectory,
+      createdAt: new Date().toISOString(),
+      allowUnsandboxed: options.allowUnsandboxed === true,
+    });
+    output(
+      {
+        ok: true,
+        runId: result.verification.runId,
+        verificationId: result.verification.verificationId,
+        commands: result.verification.commands,
+        path: result.path,
+      },
+      [
+        `Executed ${String(result.verification.commands.length)} declared local verification command${result.verification.commands.length === 1 ? "" : "s"}.`,
+        ...result.verification.commands.map((command) =>
+          `- ${command.id}: ${command.outcome}${command.exitCode === null ? "" : ` (exit ${String(command.exitCode)})`}`),
+        `Evidence: ${result.path}`,
+      ].join("\n"),
+    );
   });
 
 const evaluate = program.command("evaluate").description("Profile or score completed evidence without changing evaluated output.");

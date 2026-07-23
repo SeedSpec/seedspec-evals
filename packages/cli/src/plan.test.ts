@@ -1,14 +1,88 @@
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
 import { loadCaseLibrary } from "@seedspec/eval-case-library";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { createExperimentPlan } from "./plan.js";
 import { createSkillExperimentPlan, SKILL_TREATMENTS } from "./skill-plan.js";
+import {
+  createImplementationSkillExperimentPlan,
+  IMPLEMENTATION_SKILL_TREATMENTS,
+} from "./implementation-skill-plan.js";
+import { bundleAuthoredInput } from "./authored-input.js";
 import { ExperimentPlanSchema } from "./contracts.js";
 import { buildDesktopBrief, buildDesktopManifest } from "./runner-brief.js";
 
+const temporaryDirectories: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(temporaryDirectories.splice(0).map((directory) =>
+    rm(directory, { recursive: true, force: true })));
+});
+
+async function authoredInputFixture(): Promise<string> {
+  const directory = await mkdtemp(resolve(tmpdir(), "seedspec-plan-authored-input-"));
+  temporaryDirectories.push(directory);
+  await mkdir(resolve(directory, "definition"));
+  await Promise.all([
+    writeFile(resolve(directory, "seedspec.yaml"), [
+      "seedspec: 0.1",
+      "id: test.tool-lending",
+      "version: 0.1.0",
+      "kind: application",
+      "definition: definition/application.md",
+      "",
+    ].join("\n"), "utf8"),
+    writeFile(resolve(directory, "definition/application.md"), "# Neighborhood tool lending\n", "utf8"),
+  ]);
+  return directory;
+}
+
 describe("createExperimentPlan", () => {
+  it("creates a same-package implementation skill matrix without leaking the separate skill to controls", async () => {
+    const cases = await loadCaseLibrary(resolve("cases"));
+    const selected = cases.filter(({ case: evaluationCase }) =>
+      evaluationCase.id === "sparse-neighborhood-tool-lending");
+    const authoredInput = await bundleAuthoredInput(await authoredInputFixture());
+    const plan = await createImplementationSkillExperimentPlan({
+      cases: selected,
+      models: ["openai/gpt-5.6-sol"],
+      repetitions: 1,
+      gatewayId: "seedspec-evals",
+      protocolVersion: "0.1.0-alpha.4",
+      createdAt: "2026-07-22T12:00:00.000Z",
+      maxSteps: 8,
+      skillPath: resolve("skills/implement-stateful-workflows/SKILL.md"),
+      authoredInput,
+    });
+
+    expect(plan.envelopes).toHaveLength(IMPLEMENTATION_SKILL_TREATMENTS.length);
+    expect(plan.envelopes.map(({ manifest }) => manifest.configuration?.["treatmentId"]))
+      .toEqual(IMPLEMENTATION_SKILL_TREATMENTS);
+    expect(plan.envelopes.every(({ manifest }) => manifest.target.stage === "implementation")).toBe(true);
+    expect(new Set(plan.envelopes.map(({ submission }) => submission.config.authoredInput?.artifactId)))
+      .toEqual(new Set([authoredInput.artifactId]));
+
+    const control = plan.envelopes[0]!;
+    expect(control.submission.metadata?.["skillSource"]).toBeUndefined();
+    expect(control.submission.config.trustedInstructions.join("\n")).not.toContain("# Implement Stateful Workflows");
+
+    const embedded = plan.envelopes[1]!;
+    expect(embedded.submission.metadata?.["skillSource"]).toBeUndefined();
+    expect(embedded.submission.config.trustedInstructions.join("\n")).toContain("# Implement Stateful Workflows");
+
+    const skillEnvelope = plan.envelopes[2]!;
+    expect(skillEnvelope.submission.metadata?.["skillSource"]).toContain("# Implement Stateful Workflows");
+    const manifest = buildDesktopManifest(skillEnvelope, "codex");
+    const brief = buildDesktopBrief(skillEnvelope, manifest, "codex");
+    expect(manifest.tools.map(({ name }) => name)).toContain("implement-stateful-workflows");
+    expect(brief).toContain("Guidance treatment: `skill-guidance`");
+    expect(brief).toContain("before implementation");
+    expect(brief).not.toContain("before authoring");
+  });
+
   it("creates a same-output skill treatment matrix with identical author access", async () => {
     const cases = await loadCaseLibrary(resolve("cases"));
     const selected = cases.filter(({ case: evaluationCase }) =>

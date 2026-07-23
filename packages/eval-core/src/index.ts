@@ -13,3 +13,4 @@ export * from "./profile-evidence.js";
 export * from "./profile-comparisons.js";
 export * from "./evaluator-runs.js";
 export * from "./subject-runs.js";
+export * from "./implementation-evidence.js";
