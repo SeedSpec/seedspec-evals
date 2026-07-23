@@ -237,7 +237,7 @@ experiment.command("implementation-skill-plan")
   .option("--skill-treatment-id <id>", "comparison label for the skill-guidance arm", "skill-guidance")
   .option(
     "--skill-adapter <adapter>",
-    "none, gstack-plan-eng-review, or compound-engineering-core-loop",
+    "none, gstack-plan-eng-review, gstack-engineering-suite, or compound-engineering-core-loop",
     parseImplementationSkillAdapter,
     "none",
   )
@@ -853,10 +853,11 @@ function parseImplementationSkillAdapter(value: string): ImplementationSkillAdap
   if (
     value !== "none"
     && value !== "gstack-plan-eng-review"
+    && value !== "gstack-engineering-suite"
     && value !== "compound-engineering-core-loop"
   ) {
     throw new InvalidArgumentError(
-      "must be none, gstack-plan-eng-review, or compound-engineering-core-loop",
+      "must be none, gstack-plan-eng-review, gstack-engineering-suite, or compound-engineering-core-loop",
     );
   }
   return value;

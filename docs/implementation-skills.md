@@ -176,6 +176,15 @@ treatment with the observed Compound Engineering suite treatment; it cannot by
 itself attribute a difference solely to skill count because the methodologies
 also differ.
 
+For a cleaner same-family comparison, the `gstack-engineering-suite` adapter
+extends the already-tested `plan-eng-review` treatment with gstack's `review`,
+conditional `qa`, and local `ship` quality gates. This preserves the same
+upstream project and revision while adding a coordinated post-implementation
+tail. Release mutations and unavailable global integrations remain explicitly
+disabled. Compare this arm with the single-skill gstack evidence before using
+the Compound Engineering arm to test whether any observed suite effect
+generalizes across methodologies.
+
 ## Runbook
 
 Build the local CLI:

@@ -229,6 +229,47 @@ describe("createExperimentPlan", () => {
     expect(brief).toContain("workspace/realization/SUITE_EXECUTION.md");
   });
 
+  it("adapts a gstack engineering suite without enabling release mutations", async () => {
+    const cases = await loadCaseLibrary(resolve("cases"));
+    const selected = cases.filter(({ case: evaluationCase }) =>
+      evaluationCase.id === "sparse-neighborhood-tool-lending");
+    const authoredInput = await bundleAuthoredInput(await authoredInputFixture());
+    const suiteDirectory = await mkdtemp(resolve(tmpdir(), "seedspec-gstack-suite-"));
+    temporaryDirectories.push(suiteDirectory);
+    await writeFile(resolve(suiteDirectory, "SKILL.md"), [
+      "---",
+      "name: gstack-engineering-suite",
+      "version: 0.1.0",
+      "description: Coordinated gstack suite.",
+      "---",
+      "# gstack suite",
+      "",
+    ].join("\n"), "utf8");
+    const guidanceInput = await bundleGuidanceInput(suiteDirectory, "gstack-engineering-suite");
+    const plan = await createImplementationSkillExperimentPlan({
+      cases: selected,
+      models: ["openai/gpt-5.6-sol"],
+      repetitions: 1,
+      gatewayId: "seedspec-evals",
+      protocolVersion: "0.1.0-alpha.4",
+      createdAt: "2026-07-23T14:00:00.000Z",
+      maxSteps: 8,
+      skillPath: resolve(suiteDirectory, "SKILL.md"),
+      guidanceInput,
+      authoredInput,
+      treatments: ["skill-guidance"],
+      skillTreatmentId: "gstack-engineering-suite",
+      skillAdapter: "gstack-engineering-suite",
+    });
+
+    const envelope = plan.envelopes[0]!;
+    const brief = buildDesktopBrief(envelope, buildDesktopManifest(envelope, "codex"), "codex");
+    expect(brief).toContain("plan-eng-review");
+    expect(brief).toContain("conditional qa");
+    expect(brief).toContain("Stop before release mutation");
+    expect(brief).toContain("workspace/realization/SUITE_EXECUTION.md");
+  });
+
   it("creates a same-output skill treatment matrix with identical author access", async () => {
     const cases = await loadCaseLibrary(resolve("cases"));
     const selected = cases.filter(({ case: evaluationCase }) =>

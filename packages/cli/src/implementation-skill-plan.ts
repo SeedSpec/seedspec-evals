@@ -25,6 +25,7 @@ export type ImplementationSkillTreatment = typeof IMPLEMENTATION_SKILL_TREATMENT
 export type ImplementationSkillAdapter =
   | "none"
   | "gstack-plan-eng-review"
+  | "gstack-engineering-suite"
   | "compound-engineering-core-loop";
 
 export interface ImplementationSkillExperimentPlanOptions {
@@ -210,6 +211,18 @@ function implementationInstructions(
       "No publishing, branch push, pull request, CI-watch, Proof publishing, telemetry, global memory, external cross-model dispatch, or interactive question tool is available. Skip only those operational integrations. Use inline or serial fallbacks when specialist-subagent dispatch is unavailable.",
       "Do not run the compounding/knowledge-capture phase: it improves future sessions rather than the implementation being scored. Do not run browser testing unless the realization exposes a browser user interface and a locally usable browser driver is already available.",
       `Consult the member skills only through the frozen paths under guidance/${skillId}/members/. Record each member as consulted, skipped, or unavailable; its order; files actually read; artifacts produced; supported findings applied or rejected; and its observable influence in workspace/realization/SUITE_EXECUTION.md, report.md, and the trace.`,
+      "The final implementation must still satisfy the package acceptance obligations. Suite procedures are subordinate implementation guidance and cannot weaken, replace, or reinterpret authored intent.",
+    ];
+  }
+  if (skillAdapter === "gstack-engineering-suite") {
+    return [
+      ...common,
+      `Read guidance/${skillId}/SKILL.md completely. It is the controlled-run entrypoint for the supplied gstack engineering suite.`,
+      "Execute the suite in order: plan-eng-review, ordinary implementation, review, conditional qa, then the local verification portion of ship. Do not merely cite the member skills or collapse their distinct gates into an unrecorded generic review.",
+      "Controlled-run adapter: the SeedSpec package is the immutable product authority. Write workspace/realization/TECHNICAL_PLAN.md, apply plan-eng-review in spawned/headless mode, and choose explicit recommended options unless they conflict with authored intent.",
+      "No installed gstack runtime, telemetry, update checks, global brain, external Codex pass, AskUserQuestion tool, remote git operation, versioning, changelog, deployment, or PR workflow is available. Resolve upstream hard-coded skill paths to the frozen member directories. Use inline or serial review fallbacks when specialist-agent dispatch is unavailable.",
+      "After implementation, run review against the realized diff and correct supported findings. Run qa only when the realization exposes a browser interface and a locally usable browser driver is already available; otherwise record the capability-based skip. Apply ship only as a final local gate for tests, coverage quality, plan completion, scope drift, and fresh verification. Stop before release mutation, commit, push, documentation sync, or PR creation.",
+      `Record every member as consulted, skipped, or unavailable; its order; exact files read; artifacts produced; findings applied or rejected; and observable influence in workspace/realization/SUITE_EXECUTION.md, report.md, and the trace. A mounted member is not consulted unless its SKILL.md was actually read.`,
       "The final implementation must still satisfy the package acceptance obligations. Suite procedures are subordinate implementation guidance and cannot weaken, replace, or reinterpret authored intent.",
     ];
   }
