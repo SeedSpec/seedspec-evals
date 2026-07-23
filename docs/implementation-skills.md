@@ -137,6 +137,45 @@ The resulting profiles can be compared with the existing `no-guidance`,
 descriptive and must retain process cost, adapter limitations, and skill
 identity rather than collapsing the treatments into one winner score.
 
+## Comparing one skill with a coordinated suite
+
+The `compound-engineering-core-loop` adapter tests a different question from
+the gstack treatment:
+
+> Does a coordinated suite of strong engineering skills improve implementation
+> quality enough to justify the additional context, execution phases, and token
+> cost?
+
+It freezes Compound Engineering's implementation-quality spine at one upstream
+revision:
+
+1. `ce-plan`
+2. `ce-work`
+3. `ce-simplify-code`
+4. `ce-code-review`
+
+The adapter omits `ce-brainstorm` because the immutable SeedSpec package already
+provides the requirements and intent being tested. It omits `ce-compound`
+because knowledge capture benefits later work rather than the current
+implementation. Publishing, PR, remote CI, telemetry, global-memory, and
+interactive integrations are also unavailable in the isolated runner.
+
+Every member skill and its on-demand support files remain individually visible
+inside the frozen guidance bundle. The subject must record whether each member
+was consulted, skipped, or unavailable and retain the suite execution record at
+`workspace/realization/SUITE_EXECUTION.md`. A mounted member is not treated as
+consulted merely because it was available.
+
+The first suite experiment uses local parity runners. A multi-run remote Think
+matrix still embeds the guidance bundle in every envelope and is subject to the
+smaller matrix-request limit; remote suite execution should move frozen
+guidance to content-addressed object storage before that path is used.
+
+This comparison is descriptive. It compares the observed gstack single-skill
+treatment with the observed Compound Engineering suite treatment; it cannot by
+itself attribute a difference solely to skill count because the methodologies
+also differ.
+
 ## Runbook
 
 Build the local CLI:

@@ -22,7 +22,10 @@ export const IMPLEMENTATION_SKILL_TREATMENTS = [
 ] as const;
 
 export type ImplementationSkillTreatment = typeof IMPLEMENTATION_SKILL_TREATMENTS[number];
-export type ImplementationSkillAdapter = "none" | "gstack-plan-eng-review";
+export type ImplementationSkillAdapter =
+  | "none"
+  | "gstack-plan-eng-review"
+  | "compound-engineering-core-loop";
 
 export interface ImplementationSkillExperimentPlanOptions {
   readonly cases: readonly LoadedEvaluationCase[];
@@ -59,8 +62,8 @@ export async function createImplementationSkillExperimentPlan(
     throw new Error("Skill treatment ID must be a lowercase hyphenated identifier.");
   }
   const skillAdapter = options.skillAdapter ?? "none";
-  if (skillAdapter === "gstack-plan-eng-review" && treatments.includes("embedded-guidance")) {
-    throw new Error("The gstack plan-review adapter is a multi-file workflow and cannot be embedded as one trusted instruction.");
+  if (skillAdapter !== "none" && treatments.includes("embedded-guidance")) {
+    throw new Error("Multi-file skill adapters cannot be embedded as one trusted instruction.");
   }
   const base = await createExperimentPlan({
     cases: options.cases,
@@ -196,6 +199,18 @@ function implementationInstructions(
       "Controlled-run adapter: the upstream skill assumes an installed gstack environment and an interactive user. No gstack binaries, telemetry, global brain, update checks, external Codex review, or AskUserQuestion tool are available here. Skip only those operational integrations. Treat this run as a spawned/headless review, choose each explicitly recommended option unless it conflicts with fixed package intent, and record every such choice in workspace/realization/TECHNICAL_PLAN.md.",
       "Execute all substantive scope, architecture, code-quality, test, performance, failure-mode, evidence-calibration, and completion-gate steps that can operate on the local plan and repository. After implementation, review the realized code against the accepted plan, correct supported findings, and preserve the review report in workspace/realization/TECHNICAL_PLAN.md.",
       "Record the exact upstream skill files consulted, the controlled-run adaptations applied, and their observable influence in report.md and the trace.",
+    ];
+  }
+  if (skillAdapter === "compound-engineering-core-loop") {
+    return [
+      ...common,
+      `Read guidance/${skillId}/SKILL.md completely. It is the controlled-run entrypoint for the supplied Compound Engineering suite.`,
+      "Execute the suite's implementation-quality spine in order: ce-plan, ce-work, ce-simplify-code, then ce-code-review. Plan the implementation, implement and locally verify it, simplify substantive code where useful, then review the realized code and correct supported findings. Do not merely cite the skills or collapse their distinct gates into an unrecorded generic review.",
+      "Controlled-run adapter: the SeedSpec package is the immutable requirements source, so do not invoke upstream brainstorming or revise product intent. Run planning non-interactively from the package and resolved end-user choices. Run work in caller-owned-tail mode so the suite adapter—not upstream shipping automation—owns completion.",
+      "No publishing, branch push, pull request, CI-watch, Proof publishing, telemetry, global memory, external cross-model dispatch, or interactive question tool is available. Skip only those operational integrations. Use inline or serial fallbacks when specialist-subagent dispatch is unavailable.",
+      "Do not run the compounding/knowledge-capture phase: it improves future sessions rather than the implementation being scored. Do not run browser testing unless the realization exposes a browser user interface and a locally usable browser driver is already available.",
+      `Consult the member skills only through the frozen paths under guidance/${skillId}/members/. Record each member as consulted, skipped, or unavailable; its order; files actually read; artifacts produced; supported findings applied or rejected; and its observable influence in workspace/realization/SUITE_EXECUTION.md, report.md, and the trace.`,
+      "The final implementation must still satisfy the package acceptance obligations. Suite procedures are subordinate implementation guidance and cannot weaken, replace, or reinterpret authored intent.",
     ];
   }
   return [

@@ -10,11 +10,13 @@ import {
 } from "@seedspec/eval-core";
 
 const MAX_AUTHORED_INPUT_BYTES = 384 * 1024;
+const MAX_GUIDANCE_INPUT_BYTES = 2 * 1024 * 1024;
 
 export async function bundleAuthoredInput(directory: string): Promise<AuthoredInputBundle> {
   return bundleTextDirectory(directory, {
     label: "Authored input",
     includeSourceIdentity: true,
+    maxBytes: MAX_AUTHORED_INPUT_BYTES,
   });
 }
 
@@ -29,6 +31,7 @@ export async function bundleGuidanceInput(
     label: "Guidance input",
     prefix,
     includeSourceIdentity: false,
+    maxBytes: MAX_GUIDANCE_INPUT_BYTES,
   });
 }
 
@@ -38,6 +41,7 @@ async function bundleTextDirectory(
     readonly label: string;
     readonly prefix?: string;
     readonly includeSourceIdentity: boolean;
+    readonly maxBytes: number;
   },
 ): Promise<AuthoredInputBundle> {
   const root = resolve(directory);
@@ -57,8 +61,8 @@ async function bundleTextDirectory(
       throw new Error(`${options.label} is not UTF-8 text and cannot be mounted by every parity runner: ${relative(root, file)}`);
     }
     totalBytes += bytes.byteLength;
-    if (totalBytes > MAX_AUTHORED_INPUT_BYTES) {
-      throw new Error(`${options.label} exceeds the ${String(MAX_AUTHORED_INPUT_BYTES)}-byte evaluation limit.`);
+    if (totalBytes > options.maxBytes) {
+      throw new Error(`${options.label} exceeds the ${String(options.maxBytes)}-byte evaluation limit.`);
     }
     const relativePath = relative(root, file).split(sep).join("/");
     const path = options.prefix === undefined ? relativePath : `${options.prefix}/${relativePath}`;

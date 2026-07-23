@@ -155,6 +155,80 @@ describe("createExperimentPlan", () => {
     expect(brief).toContain("workspace/realization/TECHNICAL_PLAN.md");
   });
 
+  it("freezes a coordinated Compound Engineering suite as one labeled treatment", async () => {
+    const cases = await loadCaseLibrary(resolve("cases"));
+    const selected = cases.filter(({ case: evaluationCase }) =>
+      evaluationCase.id === "sparse-neighborhood-tool-lending");
+    const authoredInput = await bundleAuthoredInput(await authoredInputFixture());
+    const suiteDirectory = await mkdtemp(resolve(tmpdir(), "seedspec-compound-suite-"));
+    temporaryDirectories.push(suiteDirectory);
+    await mkdir(resolve(suiteDirectory, "members/ce-plan"), { recursive: true });
+    await mkdir(resolve(suiteDirectory, "members/ce-work"), { recursive: true });
+    await Promise.all([
+      writeFile(resolve(suiteDirectory, "SKILL.md"), [
+        "---",
+        "name: compound-engineering-core-loop",
+        "version: 0.1.0",
+        "description: Coordinated engineering suite.",
+        "---",
+        "# Core loop",
+        "",
+      ].join("\n"), "utf8"),
+      writeFile(
+        resolve(suiteDirectory, "members/ce-plan/SKILL.md"),
+        "---\nname: ce-plan\ndescription: Plan implementation.\n---\n# Plan\n",
+        "utf8",
+      ),
+      writeFile(
+        resolve(suiteDirectory, "members/ce-work/SKILL.md"),
+        "---\nname: ce-work\ndescription: Execute implementation.\n---\n# Work\n",
+        "utf8",
+      ),
+    ]);
+    const guidanceInput = await bundleGuidanceInput(
+      suiteDirectory,
+      "compound-engineering-core-loop",
+    );
+    const plan = await createImplementationSkillExperimentPlan({
+      cases: selected,
+      models: ["openai/gpt-5.6-sol"],
+      repetitions: 1,
+      gatewayId: "seedspec-evals",
+      protocolVersion: "0.1.0-alpha.4",
+      createdAt: "2026-07-23T13:00:00.000Z",
+      maxSteps: 8,
+      skillPath: resolve(suiteDirectory, "SKILL.md"),
+      guidanceInput,
+      authoredInput,
+      treatments: ["skill-guidance"],
+      skillTreatmentId: "compound-engineering-core-loop",
+      skillAdapter: "compound-engineering-core-loop",
+      skillSourceRepository: "https://github.com/EveryInc/compound-engineering-plugin",
+      skillSourceRevision: "def456",
+      skillLicense: "MIT",
+    });
+
+    const envelope = plan.envelopes[0]!;
+    expect(envelope.manifest.configuration).toMatchObject({
+      treatmentId: "compound-engineering-core-loop",
+      skillAdapter: "compound-engineering-core-loop",
+      skillSourceRevision: "def456",
+      guidanceInputArtifactId: guidanceInput.artifactId,
+    });
+    expect(envelope.submission.config.guidanceInput?.files.map(({ path }) => path)).toEqual([
+      "compound-engineering-core-loop/SKILL.md",
+      "compound-engineering-core-loop/members/ce-plan/SKILL.md",
+      "compound-engineering-core-loop/members/ce-work/SKILL.md",
+    ]);
+    const manifest = buildDesktopManifest(envelope, "codex");
+    const brief = buildDesktopBrief(envelope, manifest, "codex");
+    expect(manifest.tools.map(({ name }) => name)).toContain("compound-engineering-core-loop");
+    expect(brief).toContain("Guidance treatment: `compound-engineering-core-loop`");
+    expect(brief).toContain("ce-plan");
+    expect(brief).toContain("ce-code-review");
+    expect(brief).toContain("workspace/realization/SUITE_EXECUTION.md");
+  });
+
   it("creates a same-output skill treatment matrix with identical author access", async () => {
     const cases = await loadCaseLibrary(resolve("cases"));
     const selected = cases.filter(({ case: evaluationCase }) =>

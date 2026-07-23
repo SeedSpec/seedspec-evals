@@ -235,7 +235,12 @@ experiment.command("implementation-skill-plan")
   .option("--skill <file>", "package-scoped implementation SKILL.md to deliver in the controlled treatment", IMPLEMENT_STATEFUL_WORKFLOWS_SKILL)
   .option("--treatment <id...>", "treatments to plan: no-guidance, embedded-guidance, or skill-guidance")
   .option("--skill-treatment-id <id>", "comparison label for the skill-guidance arm", "skill-guidance")
-  .option("--skill-adapter <adapter>", "none or gstack-plan-eng-review", parseImplementationSkillAdapter, "none")
+  .option(
+    "--skill-adapter <adapter>",
+    "none, gstack-plan-eng-review, or compound-engineering-core-loop",
+    parseImplementationSkillAdapter,
+    "none",
+  )
   .option("--skill-source-repository <url>", "upstream repository recorded in the immutable manifest")
   .option("--skill-source-revision <revision>", "upstream commit recorded in the immutable manifest")
   .option("--skill-license <license>", "upstream license identifier recorded in the immutable manifest")
@@ -845,8 +850,14 @@ function parseImplementationSkillTreatments(
 }
 
 function parseImplementationSkillAdapter(value: string): ImplementationSkillAdapter {
-  if (value !== "none" && value !== "gstack-plan-eng-review") {
-    throw new InvalidArgumentError("must be none or gstack-plan-eng-review");
+  if (
+    value !== "none"
+    && value !== "gstack-plan-eng-review"
+    && value !== "compound-engineering-core-loop"
+  ) {
+    throw new InvalidArgumentError(
+      "must be none, gstack-plan-eng-review, or compound-engineering-core-loop",
+    );
   }
   return value;
 }
