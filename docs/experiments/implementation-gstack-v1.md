@@ -43,6 +43,9 @@ represented as an unmodified interactive gstack session.
 
 Three repetitions used `openai/gpt-5.6-sol` at high reasoning effort.
 
+A later matched Terra treatment is recorded in
+[`implementation-model-skill-v1.md`](implementation-model-skill-v1.md).
+
 ## Result
 
 All three subjects produced substantive applications, passed their declared

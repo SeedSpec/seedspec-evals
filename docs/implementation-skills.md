@@ -10,6 +10,11 @@ The completed stronger treatment and its interpretation are recorded in
 It shows a larger quality gradient and a materially higher process cost under a
 declared headless adaptation of gstack's workflow.
 
+The completed Sol-versus-Terra matrix is recorded in
+[`docs/experiments/implementation-model-skill-v1.md`](experiments/implementation-model-skill-v1.md).
+It tests whether stronger procedural guidance can compensate for a less-capable
+implementing model while holding the Sol evaluator constant.
+
 This lab asks a narrow question:
 
 > Does a package-scoped technical skill cause an implementing agent to produce
