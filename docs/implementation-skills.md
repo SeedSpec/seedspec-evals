@@ -5,6 +5,11 @@ The completed first baseline and its interpretation are recorded in
 Treat that run as a lightweight-guidance calibration. It does not establish the
 ceiling for deeply procedural skills.
 
+The completed stronger treatment and its interpretation are recorded in
+[`docs/experiments/implementation-gstack-v1.md`](experiments/implementation-gstack-v1.md).
+It shows a larger quality gradient and a materially higher process cost under a
+declared headless adaptation of gstack's workflow.
+
 This lab asks a narrow question:
 
 > Does a package-scoped technical skill cause an implementing agent to produce

@@ -10,7 +10,8 @@ test of how much value a deeply procedural implementation or engineering-review
 skill can create. The tested skill is a concise set of stateful-workflow
 principles that a capable model may already know. A follow-up treatment uses
 gstack's substantially more operational `plan-eng-review` workflow to test
-whether skill quality creates a stronger gradient.
+whether skill quality creates a stronger gradient. That follow-up is complete;
+see [`implementation-gstack-v1.md`](implementation-gstack-v1.md).
 
 ## Question
 

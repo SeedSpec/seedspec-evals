@@ -43,7 +43,20 @@ export async function verifyImplementationRun(options: {
   const realizationRoot = resolve(runDirectory, "workspace", "realization");
   const reportPath = resolve(realizationRoot, "acceptance-report.json");
   const reportSource = await readFile(reportPath, "utf8");
-  const report = ImplementationAcceptanceReportSchema.parse(JSON.parse(reportSource) as unknown);
+  const reportInput = JSON.parse(reportSource) as unknown;
+  const strictReport = ImplementationAcceptanceReportSchema.safeParse(reportInput);
+  const reportDiagnostics = strictReport.success
+    ? []
+    : strictReport.error.issues.filter(({ code }) => code === "unrecognized_keys").map((issue) => ({
+        path: formatIssuePath(issue.path),
+        keys: issue.code === "unrecognized_keys" ? issue.keys.toSorted() : [],
+      }));
+  if (!strictReport.success && reportDiagnostics.length !== strictReport.error.issues.length) {
+    throw strictReport.error;
+  }
+  const report = strictReport.success
+    ? strictReport.data
+    : ImplementationAcceptanceReportSchema.parse(stripAcceptanceReportExtraFields(reportInput));
 
   const sandbox = verificationSandbox(options.allowUnsandboxed === true);
   const temporaryRoot = await realpath(
@@ -145,17 +158,67 @@ export async function verifyImplementationRun(options: {
     commands,
     evidence,
     report,
+    reportConformance: {
+      outcome: reportDiagnostics.length === 0 ? "conformant" : "normalized-extra-fields",
+      diagnostics: reportDiagnostics,
+    },
     limitations: [
       sandbox === "darwin-sandbox-exec"
         ? "The verifier executed declared local commands against a disposable realization copy in a macOS sandbox that denied network access and writes outside the temporary copy."
         : "The verifier executed declared local commands against a disposable realization copy without an operating-system sandbox after explicit unsandboxed approval.",
       "The verifier did not provide a browser.",
       "A passing command establishes execution, not that the subject-authored test is semantically distinguishing; the independent technical review assesses test quality.",
+      ...(reportDiagnostics.length === 0 ? [] : [
+        `The subject acceptance report contained undeclared fields at ${String(reportDiagnostics.length)} location${reportDiagnostics.length === 1 ? "" : "s"}. The verifier preserved the original report digest, recorded every extra key, stripped only those keys for compatibility, and did not edit the subject artifact.`,
+      ]),
     ],
   });
   const path = resolve(runDirectory, "implementation-verification.json");
   await writeFile(path, `${JSON.stringify(verification, null, 2)}\n`, "utf8");
   return { verification, path };
+}
+
+function stripAcceptanceReportExtraFields(input: unknown): unknown {
+  if (!isRecord(input)) return input;
+  return {
+    ...pick(input, ["schemaVersion", "limitations"]),
+    verificationCommands: Array.isArray(input["verificationCommands"])
+      ? (input["verificationCommands"] as unknown[]).map((command: unknown) =>
+          isRecord(command) ? pick(command, ["id", "argv", "cwd"]) : command)
+      : input["verificationCommands"],
+    scenarios: Array.isArray(input["scenarios"])
+      ? (input["scenarios"] as unknown[]).map(stripLinkedResultExtraFields)
+      : input["scenarios"],
+    ...(isRecord(input["accessibility"]) ? {
+      accessibility: {
+        ...pick(input["accessibility"], ["viewportWidth"]),
+        keyboardTasks: Array.isArray(input["accessibility"]["keyboardTasks"])
+          ? (input["accessibility"]["keyboardTasks"] as unknown[]).map(stripLinkedResultExtraFields)
+          : input["accessibility"]["keyboardTasks"],
+      },
+    } : input["accessibility"] === undefined ? {} : { accessibility: input["accessibility"] }),
+  };
+}
+
+function stripLinkedResultExtraFields(input: unknown): unknown {
+  return isRecord(input)
+    ? pick(input, ["id", "outcome", "commandIds", "evidence", "assessment"])
+    : input;
+}
+
+function pick(record: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> {
+  return Object.fromEntries(keys.flatMap((key) =>
+    Object.prototype.hasOwnProperty.call(record, key) ? [[key, record[key]]] : []));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function formatIssuePath(path: readonly PropertyKey[]): string {
+  return path.length === 0
+    ? "$"
+    : `$${path.map((part) => typeof part === "number" ? `[${String(part)}]` : `.${String(part)}`).join("")}`;
 }
 
 function containedPath(root: string, requested: string): string {

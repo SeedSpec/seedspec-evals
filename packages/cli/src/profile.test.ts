@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 import { loadCaseLibrary } from "@seedspec/eval-case-library";
-import { createProfileEvidenceEnvelope, createTrace } from "@seedspec/eval-core";
+import { createProfileEvidenceEnvelope, createTrace, sha256Hex } from "@seedspec/eval-core";
 
 import {
   buildRunProfileBrief,
@@ -197,6 +197,7 @@ describe("evaluation profile CLI helpers", () => {
           outcome: "pass",
           commandIds: ["test"],
           evidence: ["verification.test.js"],
+          ...(index === 0 ? { criterion: "An undeclared subject annotation." } : {}),
         })),
         accessibility: {
           viewportWidth: 360,
@@ -226,11 +227,21 @@ describe("evaluation profile CLI helpers", () => {
         events: [], limitations: ["Fixture trace."], redactions: [],
       })), "utf8"),
     ]);
-    await verifyImplementationRun({
+    const verificationResult = await verifyImplementationRun({
       runDirectory,
       createdAt: "2026-07-22T12:00:01.500Z",
       allowUnsandboxed: process.platform !== "darwin",
     });
+    const originalReport = await readFile(
+      resolve(runDirectory, "workspace", "realization", "acceptance-report.json"),
+      "utf8",
+    );
+    expect(verificationResult.verification.reportDigest).toBe(`sha256:${sha256Hex(originalReport)}`);
+    expect(verificationResult.verification.reportConformance).toEqual({
+      outcome: "normalized-extra-fields",
+      diagnostics: [{ path: "$.scenarios[0]", keys: ["criterion"] }],
+    });
+    expect(verificationResult.verification.report.scenarios[0]).not.toHaveProperty("criterion");
     await evaluateRunDirectoryDeterministically({
       runDirectory,
       caseRoot: resolve("cases"),

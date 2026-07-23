@@ -80,6 +80,14 @@ const EvidenceObservationSchema = z.strictObject({
   digest: Sha256DigestSchema.optional(),
 });
 
+const ReportConformanceSchema = z.strictObject({
+  outcome: z.enum(["conformant", "normalized-extra-fields"]),
+  diagnostics: z.array(z.strictObject({
+    path: z.string().min(1).max(1_000),
+    keys: z.array(z.string().min(1).max(256)).min(1).max(128),
+  })).max(1_000),
+});
+
 export const ImplementationVerificationBodySchema = z.strictObject({
   schemaVersion: z.literal(1),
   runId: RunIdSchema,
@@ -89,6 +97,7 @@ export const ImplementationVerificationBodySchema = z.strictObject({
   commands: z.array(CommandExecutionSchema).min(1).max(32),
   evidence: z.array(EvidenceObservationSchema).max(10_000),
   report: ImplementationAcceptanceReportSchema,
+  reportConformance: ReportConformanceSchema.optional(),
   limitations: z.array(z.string().trim().min(1).max(8_000)).max(128),
 });
 
