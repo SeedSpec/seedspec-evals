@@ -70,6 +70,7 @@ export const ProfileEvidenceEnvelopeBodySchema = z.strictObject({
     status: z.enum(["succeeded", "failed"]),
     usage: JsonObjectSchema,
     eventCount: z.number().int().nonnegative(),
+    turnCount: z.number().int().nonnegative().optional(),
     threadId: z.string().trim().min(1).max(256).optional(),
     limitations: z.array(z.string().trim().min(1).max(8_000)).max(256),
   }).optional(),

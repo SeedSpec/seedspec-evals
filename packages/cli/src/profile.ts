@@ -292,6 +292,9 @@ export async function buildRunProfileBrief(options: {
   const subjectRun = await fileExists(resolve(runDirectory, "subject-run.json"))
     ? parseSubjectRun(JSON.parse(await readFile(resolve(runDirectory, "subject-run.json"), "utf8")) as unknown)
     : undefined;
+  const capturedTurnCount = subjectRun === undefined
+    ? undefined
+    : await capturedSubjectTurnCount(runDirectory, subjectRun.events.digest);
   const deterministic = ScorecardSchema.parse(
     JSON.parse(await readFile(resolve(runDirectory, "deterministic-scorecard.json"), "utf8")) as unknown,
   );
@@ -395,6 +398,7 @@ export async function buildRunProfileBrief(options: {
         status: subjectRun.status,
         usage: subjectRun.usage,
         eventCount: subjectRun.events.count,
+        ...(capturedTurnCount === undefined ? {} : { turnCount: capturedTurnCount }),
         ...(subjectRun.events.threadId === undefined ? {} : { threadId: subjectRun.events.threadId }),
         limitations: [...subjectRun.limitations],
       },
@@ -417,6 +421,8 @@ export async function buildRunProfileBrief(options: {
       "For authorship, a request to complete or improve a specification is not blanket delegation of material product policy. Use ambient when the authoring agent selected a material product choice without attributable authority, and use not-observed only when the authored material contains no choice to compare.",
       "Do not estimate tokens, cache activity, turns, timing, technical outcomes, or provenance that the envelope and cited files do not establish.",
       "When subjectRun is present, use its provider-reported usage and exact outer run interval for process metrics instead of the subject-authored trace's unavailable or reconstructed values.",
+      "When subjectRun.turnCount is present, use it as the reported total turn count. Do not infer a different count from subject-authored trace events.",
+      "Adaptation challenge definitions are evaluation prompts, not captured outcomes. Do not execute a challenge during profile evaluation; emit not-run unless the envelope supplies a separate captured adaptation run.",
     ],
   });
   const evidenceEnvelope = createProfileEvidenceEnvelope(evidenceBody);
@@ -480,6 +486,9 @@ function profileBrief(options: {
     "",
     "Do not reward author control over intentional agent latitude. Classify a decision as ambient only when a material choice lacks attributable authority; a deliberately delegated or open choice is not ambient. Preserve unknown and mixed attribution and include confidence.",
     ...(options.stage === "authorship" ? ["A request to complete or improve a specification is not blanket delegation of material product policy. Compare authored choices at the authorship stage; do not mark them not-observed merely because no implementation exists.", ""] : []),
+    ...(options.stage === "implementation"
+      ? ["Do not execute an adaptation challenge during this profile run. Only consume a separately captured adaptation run when the evidence envelope explicitly supplies one; otherwise record the challenge as `not-run`.", ""]
+      : []),
     "",
     "## Evidence",
     "",
@@ -592,6 +601,28 @@ function compactTraceEvent(event: TraceEvent): JsonValue {
     dataDigest: `sha256:${sha256Hex(stableJson(event.data))}`,
     data: compactJson(event.data, 0),
   };
+}
+
+async function capturedSubjectTurnCount(
+  runDirectory: string,
+  expectedDigest: string,
+): Promise<number | undefined> {
+  const path = resolve(runDirectory, "subject-events.jsonl");
+  const source = await readFile(path).catch(() => null);
+  if (source === null || `sha256:${sha256Hex(source.toString("utf8"))}` !== expectedDigest) {
+    return undefined;
+  }
+  let count = 0;
+  for (const line of source.toString("utf8").split(/\r?\n/)) {
+    if (line.trim().length === 0) continue;
+    try {
+      const event = JSON.parse(line) as { type?: unknown };
+      if (event.type === "turn.completed") count += 1;
+    } catch {
+      return undefined;
+    }
+  }
+  return count;
 }
 
 function compactJson(value: JsonValue, depth: number): JsonValue {

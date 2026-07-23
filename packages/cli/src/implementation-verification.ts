@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { lstat, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { relative, resolve, sep } from "node:path";
 
@@ -46,7 +46,11 @@ export async function verifyImplementationRun(options: {
   const report = ImplementationAcceptanceReportSchema.parse(JSON.parse(reportSource) as unknown);
 
   const sandbox = verificationSandbox(options.allowUnsandboxed === true);
-  const temporaryHome = await mkdtemp(resolve(tmpdir(), "seedspec-implementation-verifier-"));
+  const temporaryRoot = await realpath(
+    await mkdtemp(resolve(tmpdir(), "seedspec-implementation-verifier-")),
+  );
+  const verificationRoot = resolve(temporaryRoot, "realization");
+  await cp(realizationRoot, verificationRoot, { recursive: true, errorOnExist: true });
   const commands = [];
   try {
     for (const command of report.verificationCommands) {
@@ -58,10 +62,10 @@ export async function verifyImplementationRun(options: {
         );
       }
       const cwd = command.cwd === undefined
-        ? realizationRoot
-        : containedPath(realizationRoot, command.cwd);
+        ? verificationRoot
+        : containedPath(verificationRoot, command.cwd);
       const startedAt = new Date().toISOString();
-      const invocation = sandboxInvocation(sandbox, executable, command.argv.slice(1), temporaryHome);
+      const invocation = sandboxInvocation(sandbox, executable, command.argv.slice(1), temporaryRoot);
       try {
         const stdout = execFileSync(invocation.executable, invocation.args, {
           cwd,
@@ -72,8 +76,8 @@ export async function verifyImplementationRun(options: {
           env: {
             PATH: process.env["PATH"] ?? "",
             LANG: "C.UTF-8",
-            HOME: temporaryHome,
-            TMPDIR: temporaryHome,
+            HOME: temporaryRoot,
+            TMPDIR: temporaryRoot,
             CI: "1",
             npm_config_offline: "true",
             npm_config_audit: "false",
@@ -111,7 +115,7 @@ export async function verifyImplementationRun(options: {
       }
     }
   } finally {
-    await rm(temporaryHome, { recursive: true, force: true });
+    await rm(temporaryRoot, { recursive: true, force: true });
   }
 
   const requestedEvidence = new Set([
@@ -143,8 +147,8 @@ export async function verifyImplementationRun(options: {
     report,
     limitations: [
       sandbox === "darwin-sandbox-exec"
-        ? "The verifier executed declared local commands in a macOS sandbox that denied network access and writes outside a temporary directory."
-        : "The verifier executed declared local commands without an operating-system sandbox after explicit unsandboxed approval.",
+        ? "The verifier executed declared local commands against a disposable realization copy in a macOS sandbox that denied network access and writes outside the temporary copy."
+        : "The verifier executed declared local commands against a disposable realization copy without an operating-system sandbox after explicit unsandboxed approval.",
       "The verifier did not provide a browser.",
       "A passing command establishes execution, not that the subject-authored test is semantically distinguishing; the independent technical review assesses test quality.",
     ],

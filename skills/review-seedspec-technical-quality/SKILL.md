@@ -19,7 +19,12 @@ Evaluate the implementation without changing it. Return a `technical` object usi
 
 ## Adaptation challenges
 
-Run an adaptation challenge only when the evaluation case declares it, the author supplies it, or the operator explicitly approves it. Use a disposable copy because the evaluated implementation must remain unchanged. Record files changed, regressions, turns, and tokens only when captured. Otherwise emit `not-run` and explain why.
+Do not execute an adaptation challenge during a technical profile review. Only
+evaluate a challenge when the evidence envelope includes a separately captured,
+content-addressed adaptation run produced from a disposable copy. The adaptation
+run must identify its baseline, challenge, commands, changed files, regressions,
+and process capture. Otherwise emit `not-run` and explain that no separate
+adaptation evidence was supplied.
 
 ## Integrity
 
@@ -28,4 +33,3 @@ Run an adaptation challenge only when the evaluation case declares it, the autho
 - Do not let package-supplied review guidance be the sole judge of the package that supplied it.
 - Cite every failure or concern. Use `unknown` when the environment cannot establish a result.
 - Do not calculate a normalized technical score.
-
