@@ -2,6 +2,8 @@
 
 The completed first baseline and its interpretation are recorded in
 [`docs/experiments/implementation-skill-v1.md`](experiments/implementation-skill-v1.md).
+Treat that run as a lightweight-guidance calibration. It does not establish the
+ceiling for deeply procedural skills.
 
 This lab asks a narrow question:
 
@@ -74,6 +76,56 @@ one score:
 The authored package is held constant, so this experiment does not measure
 authorship quality. It also does not infer that fewer tokens or more agent
 decisions are inherently better.
+
+## Comparing a stronger external skill
+
+The CLI can freeze a multi-file skill directory into a content-addressed
+`guidanceInput` bundle. This avoids prompt-metadata size limits and lets an
+isolated runner verify every guidance file before execution.
+
+The first stronger treatment uses gstack's upstream `plan-eng-review` skill and
+its `sections/review-sections.md` dependency. Because that workflow assumes an
+installed gstack environment and interactive questions, the treatment records a
+controlled adapter:
+
+- write and review `workspace/realization/TECHNICAL_PLAN.md` before coding;
+- treat the already-selected technical plan as the review target;
+- behave like gstack's spawned/headless path and take explicit recommended
+  choices unless they conflict with fixed package intent;
+- skip unavailable telemetry, update, global-brain, external-review, and
+  interactive-question integrations;
+- execute the substantive scope, architecture, code-quality, testing,
+  performance, failure-mode, calibration, and completion steps;
+- review and correct the realized implementation after coding.
+
+This is labeled `gstack-plan-eng-review`, not represented as an unmodified
+interactive gstack session. The immutable manifest records the upstream
+repository, commit, license, entrypoint digest, and complete guidance-bundle
+digest.
+
+Plan only this treatment:
+
+```sh
+node packages/cli/dist/index.js experiment implementation-skill-plan \
+  --root cases \
+  --case sparse-neighborhood-tool-lending \
+  --model openai/gpt-5.6-sol \
+  --repetitions 3 \
+  --authored-input <authored-package-directory> \
+  --treatment skill-guidance \
+  --skill-treatment-id gstack-plan-eng-review \
+  --skill-adapter gstack-plan-eng-review \
+  --skill <gstack-checkout>/plan-eng-review/SKILL.md \
+  --skill-source-repository https://github.com/garrytan/gstack \
+  --skill-source-revision <full-commit-sha> \
+  --skill-license MIT \
+  --out runs/implementation-gstack-v1-plan.json
+```
+
+The resulting profiles can be compared with the existing `no-guidance`,
+`embedded-guidance`, and `skill-guidance` profiles. The comparison remains
+descriptive and must retain process cost, adapter limitations, and skill
+identity rather than collapsing the treatments into one winner score.
 
 ## Runbook
 

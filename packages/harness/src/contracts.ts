@@ -26,6 +26,7 @@ export const MAX_MAX_STEPS = 12;
 const MAX_TRUSTED_INSTRUCTION_BYTES = 32 * 1024;
 const MAX_UNTRUSTED_MATERIAL_BYTES = 256 * 1024;
 const MAX_SIMULATED_AUTHOR_RESPONSE_BYTES = 128 * 1024;
+const MAX_GUIDANCE_INPUT_BYTES = 384 * 1024;
 const MAX_METADATA_BYTES = 16 * 1024;
 export const MAX_MATRIX_PLAN_BYTES = 900 * 1024;
 
@@ -81,6 +82,7 @@ export const RunAgentConfigSchema = z
     untrustedMaterial: z.string().min(1),
     deliverables: z.array(DeliverableSchema).min(1).max(128),
     authoredInput: AuthoredInputBundleSchema.optional(),
+    guidanceInput: AuthoredInputBundleSchema.optional(),
     simulatedAuthorResponses: z
       .record(IdentifierSchema, z.string().min(1).max(8_000))
       .refine((responses) => Object.keys(responses).length <= 128, {
@@ -112,6 +114,17 @@ export const RunAgentConfigSchema = z
     }
     if (config.stage === "authorship" && config.authoredInput !== undefined) {
       context.addIssue({ code: "custom", message: "authorship runs cannot include an authored input bundle", path: ["authoredInput"] });
+    }
+    const guidanceBytes = config.guidanceInput?.files.reduce(
+      (total, file) => total + file.byteLength,
+      0,
+    ) ?? 0;
+    if (guidanceBytes > MAX_GUIDANCE_INPUT_BYTES) {
+      context.addIssue({
+        code: "custom",
+        message: "guidance input exceeds the evaluation limit",
+        path: ["guidanceInput"],
+      });
     }
     const simulatedResponseBytes = Object.values(config.simulatedAuthorResponses).reduce(
       (total, response) => total + utf8Length(response),
@@ -306,6 +319,15 @@ function addManifestBindingIssues(
           && manifest.configuration?.["authoredInputDigest"] === config.authoredInput.digest,
       message: "authored input does not match the implementation target and manifest binding",
       path: ["config", "authoredInput"],
+    },
+    {
+      matches: config.guidanceInput === undefined
+        ? manifest.configuration?.["guidanceInputArtifactId"] === undefined
+          && manifest.configuration?.["guidanceInputDigest"] === undefined
+        : manifest.configuration?.["guidanceInputArtifactId"] === config.guidanceInput.artifactId
+          && manifest.configuration?.["guidanceInputDigest"] === config.guidanceInput.digest,
+      message: "guidance input does not match the manifest binding",
+      path: ["config", "guidanceInput"],
     },
     {
       matches:

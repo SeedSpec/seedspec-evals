@@ -14,6 +14,11 @@ function skillTreatment(manifest: RunManifest): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+function guidanceDelivery(manifest: RunManifest): string | undefined {
+  const value = manifest.configuration?.["guidanceDelivery"];
+  return typeof value === "string" ? value : skillTreatment(manifest);
+}
+
 function skillId(manifest: RunManifest): string {
   const value = manifest.configuration?.["skillId"];
   return typeof value === "string" ? value : "shape-solution-intent";
@@ -25,10 +30,11 @@ export function buildDesktopManifest(envelope: ExecutionEnvelope, runner: Deskto
   void _runner;
   const body = JSON.parse(JSON.stringify(immutableBody)) as RunManifestInput;
   const treatment = skillTreatment(envelope.manifest);
+  const delivery = guidanceDelivery(envelope.manifest);
   const guidedAudit = treatment === undefined
     ? ["seedspec-guided", "seedspec-restructured"].includes(envelope.manifest.variant)
     : treatment === "audit-guidance" || treatment === "skill-and-audit";
-  const usesSkill = treatment === "skill-guidance" || treatment === "skill-and-audit";
+  const usesSkill = delivery === "skill-guidance" || delivery === "skill-and-audit";
   const selectedSkillId = skillId(envelope.manifest);
   return createRunManifest({
     ...body,
@@ -95,6 +101,7 @@ export function buildDesktopBrief(
     ? "seedspec"
     : `node ${JSON.stringify(runtime.seedSpecCliEntry)}`;
   const treatment = skillTreatment(manifest);
+  const delivery = guidanceDelivery(manifest);
   return [
     `# Controlled ${config.stage} evaluation runner brief`,
     "",
@@ -130,7 +137,7 @@ export function buildDesktopBrief(
     ] : [
       `${sharedInstructions.length + 7}. Use the frozen local SeedSpec CLI through \`${seedSpecCli}\` for package inspection and any supported protocol operation. Begin by recording \`${seedSpecCli} version --json\`.`,
       treatment !== undefined
-        ? `${sharedInstructions.length + 8}. ${skillTreatmentInstruction(config.stage, treatment, seedSpecCli, skillId(manifest))}`
+        ? `${sharedInstructions.length + 8}. ${skillTreatmentInstruction(config.stage, delivery ?? treatment, seedSpecCli, skillId(manifest))}`
         : config.variant === "seedspec-minimal"
         ? `${sharedInstructions.length + 8}. Use \`seedspec init\` and deterministic validation, but do not use \`seedspec audit\`, guided authoring skills, or authoring audit documentation.`
         : config.variant === "seedspec-restructured"

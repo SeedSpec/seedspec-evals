@@ -5,9 +5,16 @@ Date: 2026-07-22
 Plan ID:
 `plan_fad8f91293fc73e45cc6044e272b2393c9556a45ac7bc5d2c796f49efc3408a1`
 
+Interpretation note: this is a lightweight-guidance calibration, not a general
+test of how much value a deeply procedural implementation or engineering-review
+skill can create. The tested skill is a concise set of stateful-workflow
+principles that a capable model may already know. A follow-up treatment uses
+gstack's substantially more operational `plan-eng-review` workflow to test
+whether skill quality creates a stronger gradient.
+
 ## Question
 
-Does a package-scoped technical skill cause an implementing agent to produce a
+Does this package-scoped technical skill cause an implementing agent to produce a
 more meaningful, verifiable, and adaptable realization than either no
 additional guidance or the same guidance embedded directly in its trusted
 instructions?
@@ -114,9 +121,10 @@ which deviated from the fixed private-membership boundary.
 
 ## Interpretation
 
-This baseline does not support either of the simple claims that package-scoped
-implementation skills are an anti-pattern or that they are categorically
-superior.
+This baseline does not support a claim about package-scoped implementation
+skills in general. It supports a narrower claim: packaging this lightweight set
+of generic engineering principles as a skill did not improve results enough to
+justify its measured consultation cost.
 
 The strongest supported interpretation is:
 

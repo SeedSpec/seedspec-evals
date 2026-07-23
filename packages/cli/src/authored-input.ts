@@ -12,12 +12,40 @@ import {
 const MAX_AUTHORED_INPUT_BYTES = 384 * 1024;
 
 export async function bundleAuthoredInput(directory: string): Promise<AuthoredInputBundle> {
+  return bundleTextDirectory(directory, {
+    label: "Authored input",
+    includeSourceIdentity: true,
+  });
+}
+
+export async function bundleGuidanceInput(
+  directory: string,
+  prefix: string,
+): Promise<AuthoredInputBundle> {
+  if (!/^[a-z0-9-]+$/.test(prefix)) {
+    throw new Error("Guidance input prefix must be a lowercase hyphenated identifier.");
+  }
+  return bundleTextDirectory(directory, {
+    label: "Guidance input",
+    prefix,
+    includeSourceIdentity: false,
+  });
+}
+
+async function bundleTextDirectory(
+  directory: string,
+  options: {
+    readonly label: string;
+    readonly prefix?: string;
+    readonly includeSourceIdentity: boolean;
+  },
+): Promise<AuthoredInputBundle> {
   const root = resolve(directory);
   const rootStat = await lstat(root).catch(() => null);
-  if (rootStat?.isDirectory() !== true) throw new Error(`Authored input directory is missing: ${root}`);
+  if (rootStat?.isDirectory() !== true) throw new Error(`${options.label} directory is missing: ${root}`);
   const paths: string[] = [];
   await collectFiles(root, root, paths);
-  if (paths.length === 0) throw new Error("Authored input directory contains no files.");
+  if (paths.length === 0) throw new Error(`${options.label} directory contains no files.`);
   let totalBytes = 0;
   let digestInput = "";
   const files = [];
@@ -26,13 +54,14 @@ export async function bundleAuthoredInput(directory: string): Promise<AuthoredIn
     try {
       new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     } catch {
-      throw new Error(`Authored input is not UTF-8 text and cannot be mounted by every parity runner: ${relative(root, file)}`);
+      throw new Error(`${options.label} is not UTF-8 text and cannot be mounted by every parity runner: ${relative(root, file)}`);
     }
     totalBytes += bytes.byteLength;
     if (totalBytes > MAX_AUTHORED_INPUT_BYTES) {
-      throw new Error(`Authored input exceeds the ${String(MAX_AUTHORED_INPUT_BYTES)}-byte evaluation limit.`);
+      throw new Error(`${options.label} exceeds the ${String(MAX_AUTHORED_INPUT_BYTES)}-byte evaluation limit.`);
     }
-    const path = relative(root, file).split(sep).join("/");
+    const relativePath = relative(root, file).split(sep).join("/");
+    const path = options.prefix === undefined ? relativePath : `${options.prefix}/${relativePath}`;
     const digest = createHash("sha256").update(bytes).digest("hex");
     digestInput += `${path}\0${digest}\n`;
     files.push({
@@ -43,7 +72,7 @@ export async function bundleAuthoredInput(directory: string): Promise<AuthoredIn
       contentBase64: bytes.toString("base64"),
     });
   }
-  const source = await sourceIdentity(root);
+  const source = options.includeSourceIdentity ? await sourceIdentity(root) : undefined;
   return createAuthoredInputBundle({
     schemaVersion: 1,
     digest: `sha256:${createHash("sha256").update(digestInput).digest("hex")}`,

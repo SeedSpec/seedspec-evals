@@ -58,6 +58,7 @@ export const DesktopSourceEnvelopeSchema = z.strictObject({
     mediaType: z.string().min(1).optional(),
   })).min(1).max(128),
   authoredInput: AuthoredInputDescriptorSchema.optional(),
+  guidanceInput: AuthoredInputDescriptorSchema.optional(),
   authorControl: z.strictObject({
     id: ControlIdSchema,
     responsesDigest: DigestSchema,
@@ -105,6 +106,7 @@ export async function createDesktopControl(
     mode: 0o600,
   });
   const authoredInput = envelope.submission.config.authoredInput;
+  const guidanceInput = envelope.submission.config.guidanceInput;
   return DesktopSourceEnvelopeSchema.parse({
     schemaVersion: 1,
     kind: "desktop-runner-source",
@@ -123,6 +125,13 @@ export async function createDesktopControl(
         artifactId: authoredInput.artifactId,
         digest: authoredInput.digest,
         files: authoredInput.files.map(({ path, byteLength, digest }) => ({ path, byteLength, digest })),
+      },
+    }),
+    ...(guidanceInput === undefined ? {} : {
+      guidanceInput: {
+        artifactId: guidanceInput.artifactId,
+        digest: guidanceInput.digest,
+        files: guidanceInput.files.map(({ path, byteLength, digest }) => ({ path, byteLength, digest })),
       },
     }),
     authorControl: { id: record.controlId, responsesDigest },
@@ -275,8 +284,11 @@ export async function preflightDesktopRunner(
   if (source !== null) {
     const inputCheck = await verifyDesktopAuthoredInput(directory, source);
     checks.push(inputCheck);
+    const guidanceCheck = await verifyDesktopGuidanceInput(directory, source);
+    checks.push(guidanceCheck);
   } else {
     checks.push({ id: "authored-input", passed: false, message: "Authored-input presence could not be verified without the runner source." });
+    checks.push({ id: "guidance-input", passed: false, message: "Guidance-input presence could not be verified without the runner source." });
   }
 
   const outputPaths = ["workspace", "report.md", "trace-draft.json", "trace.json"];
@@ -318,6 +330,44 @@ export async function preflightDesktopRunner(
     sourceRunId: source?.sourceRunId ?? null,
     checks,
   };
+}
+
+async function verifyDesktopGuidanceInput(
+  directory: string,
+  source: DesktopSourceEnvelope,
+): Promise<{ id: string; passed: boolean; message: string }> {
+  const root = resolve(directory, "guidance");
+  if (source.guidanceInput === undefined) {
+    const absent = !await pathExists(root);
+    return {
+      id: "guidance-input",
+      passed: absent,
+      message: absent
+        ? "This treatment has no evaluator-supplied guidance bundle."
+        : "A guidance directory exists without an immutable guidance descriptor.",
+    };
+  }
+  const expected = new Set(source.guidanceInput.files.map(({ path }) => path));
+  const actual: string[] = [];
+  try {
+    await collectRelativeFiles(root, root, actual);
+    if (actual.length !== expected.size || actual.some((path) => !expected.has(path))) {
+      return { id: "guidance-input", passed: false, message: "Mounted guidance paths do not match the immutable descriptor." };
+    }
+    for (const file of source.guidanceInput.files) {
+      const bytes = await readFile(resolve(root, file.path));
+      if (bytes.byteLength !== file.byteLength || `sha256:${createHash("sha256").update(bytes).digest("hex")}` !== file.digest) {
+        return { id: "guidance-input", passed: false, message: `Mounted guidance failed verification: ${file.path}` };
+      }
+    }
+    return {
+      id: "guidance-input",
+      passed: true,
+      message: `Verified immutable guidance input ${source.guidanceInput.artifactId}.`,
+    };
+  } catch {
+    return { id: "guidance-input", passed: false, message: "Guidance input is missing or unreadable." };
+  }
 }
 
 async function verifyDesktopAuthoredInput(

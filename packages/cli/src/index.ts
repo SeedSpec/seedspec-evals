@@ -20,7 +20,11 @@ import { SubmissionIdSchema } from "@seedspec/eval-harness";
 import { Command, InvalidArgumentError } from "commander";
 
 import { ExecutionEnvelopeSchema, ExperimentPlanSchema, type ExecutionEnvelope } from "./contracts.js";
-import { bundleAuthoredInput, materializeAuthoredInput } from "./authored-input.js";
+import {
+  bundleAuthoredInput,
+  bundleGuidanceInput,
+  materializeAuthoredInput,
+} from "./authored-input.js";
 import { CLI_DOCS } from "./docs.js";
 import {
   buildRubricEvaluationBrief,
@@ -43,6 +47,8 @@ import { createSkillExperimentPlan, SKILL_TREATMENTS } from "./skill-plan.js";
 import {
   createImplementationSkillExperimentPlan,
   IMPLEMENTATION_SKILL_TREATMENTS,
+  type ImplementationSkillAdapter,
+  type ImplementationSkillTreatment,
 } from "./implementation-skill-plan.js";
 import { runCodexProfileEvaluator } from "./profile-runner.js";
 import { runCodexSubject } from "./subject-runner.js";
@@ -227,6 +233,12 @@ experiment.command("implementation-skill-plan")
   .option("--protocol-version <version>", "frozen SeedSpec protocol package version", "0.1.0-alpha.4")
   .option("--max-steps <count>", "maximum Think steps per turn", parsePositiveInteger, 8)
   .option("--skill <file>", "package-scoped implementation SKILL.md to deliver in the controlled treatment", IMPLEMENT_STATEFUL_WORKFLOWS_SKILL)
+  .option("--treatment <id...>", "treatments to plan: no-guidance, embedded-guidance, or skill-guidance")
+  .option("--skill-treatment-id <id>", "comparison label for the skill-guidance arm", "skill-guidance")
+  .option("--skill-adapter <adapter>", "none or gstack-plan-eng-review", parseImplementationSkillAdapter, "none")
+  .option("--skill-source-repository <url>", "upstream repository recorded in the immutable manifest")
+  .option("--skill-source-revision <revision>", "upstream commit recorded in the immutable manifest")
+  .option("--skill-license <license>", "upstream license identifier recorded in the immutable manifest")
   .option("--out <file>", "plan output path")
   .action(async (options: {
     root: string;
@@ -238,6 +250,12 @@ experiment.command("implementation-skill-plan")
     protocolVersion: string;
     maxSteps: number;
     skill: string;
+    treatment?: string[];
+    skillTreatmentId: string;
+    skillAdapter: ImplementationSkillAdapter;
+    skillSourceRepository?: string;
+    skillSourceRevision?: string;
+    skillLicense?: string;
     out?: string;
   }) => {
     const allCases = await loadCaseLibrary(resolve(options.root));
@@ -246,6 +264,11 @@ experiment.command("implementation-skill-plan")
     if (missing.length > 0) throw new Error(`Unknown case IDs: ${missing.join(", ")}`);
     const createdAt = new Date().toISOString();
     const authoredInput = await bundleAuthoredInput(options.authoredInput);
+    const skillPath = resolve(options.skill);
+    const skillSource = await readFile(skillPath, "utf8");
+    const skillId = skillNameFromSource(skillSource);
+    const guidanceInput = await bundleGuidanceInput(dirname(skillPath), skillId);
+    const treatments = parseImplementationSkillTreatments(options.treatment);
     const plan = await createImplementationSkillExperimentPlan({
       cases: selected,
       models: options.model,
@@ -254,8 +277,19 @@ experiment.command("implementation-skill-plan")
       protocolVersion: options.protocolVersion,
       createdAt,
       maxSteps: options.maxSteps,
-      skillPath: resolve(options.skill),
+      skillPath,
+      guidanceInput,
       authoredInput,
+      treatments,
+      skillTreatmentId: options.skillTreatmentId,
+      skillAdapter: options.skillAdapter,
+      ...(options.skillSourceRepository === undefined
+        ? {}
+        : { skillSourceRepository: options.skillSourceRepository }),
+      ...(options.skillSourceRevision === undefined
+        ? {}
+        : { skillSourceRevision: options.skillSourceRevision }),
+      ...(options.skillLicense === undefined ? {} : { skillLicense: options.skillLicense }),
     });
     const defaultPath = `runs/${createdAt.replaceAll(/[:.]/g, "-")}-implementation-skill-${plan.planId.slice(0, 17)}.json`;
     const outPath = resolve(options.out ?? defaultPath);
@@ -266,11 +300,12 @@ experiment.command("implementation-skill-plan")
         ok: true,
         planId: plan.planId,
         runs: plan.envelopes.length,
-        treatments: IMPLEMENTATION_SKILL_TREATMENTS,
+        treatments: plan.envelopes.map(({ manifest }) => manifest.configuration?.["treatmentId"]),
         authoredInputArtifactId: authoredInput.artifactId,
+        guidanceInputArtifactId: guidanceInput.artifactId,
         path: outPath,
       },
-      `Planned ${String(plan.envelopes.length)} controlled implementation-skill runs against one frozen authored package across ${String(IMPLEMENTATION_SKILL_TREATMENTS.length)} treatments in ${outPath}.\nNo model was called. Generate isolated runner kits before execution.`,
+      `Planned ${String(plan.envelopes.length)} controlled implementation-skill runs against one frozen authored package across ${String(treatments.length)} treatment${treatments.length === 1 ? "" : "s"} in ${outPath}.\nNo model was called. Generate isolated runner kits before execution.`,
     );
   });
 
@@ -412,6 +447,9 @@ runner.command("brief")
     await materializeSkillExperimentGuidance(envelope, directory);
     if (envelope.submission.config.authoredInput !== undefined) {
       await materializeAuthoredInput(envelope.submission.config.authoredInput, resolve(directory, "input", "authored"), { readOnly: true });
+    }
+    if (envelope.submission.config.guidanceInput !== undefined) {
+      await materializeAuthoredInput(envelope.submission.config.guidanceInput, resolve(directory, "guidance"), { readOnly: true });
     }
     output(
       { ok: true, runner: options.runner, runId: manifest.runId, sourceRunId: envelope.manifest.runId, path: directory, brief },
@@ -791,6 +829,36 @@ function parsePositiveInteger(value: string): number {
   return parsed;
 }
 
+function parseImplementationSkillTreatments(
+  values: string[] | undefined,
+): ImplementationSkillTreatment[] {
+  const selected = values ?? [...IMPLEMENTATION_SKILL_TREATMENTS];
+  const allowed = new Set<string>(IMPLEMENTATION_SKILL_TREATMENTS);
+  const invalid = selected.filter((value) => !allowed.has(value));
+  if (invalid.length > 0) {
+    throw new InvalidArgumentError(`unknown implementation-skill treatment: ${invalid.join(", ")}`);
+  }
+  if (new Set(selected).size !== selected.length) {
+    throw new InvalidArgumentError("implementation-skill treatments must be unique");
+  }
+  return selected as ImplementationSkillTreatment[];
+}
+
+function parseImplementationSkillAdapter(value: string): ImplementationSkillAdapter {
+  if (value !== "none" && value !== "gstack-plan-eng-review") {
+    throw new InvalidArgumentError("must be none or gstack-plan-eng-review");
+  }
+  return value;
+}
+
+function skillNameFromSource(source: string): string {
+  const match = /^---\s*\n[\s\S]*?^name:\s*([a-z0-9-]+)\s*$[\s\S]*?^---\s*$/m.exec(source);
+  if (match?.[1] === undefined) {
+    throw new Error("Implementation-skill input must declare a lowercase hyphenated frontmatter name.");
+  }
+  return match[1];
+}
+
 function parseStage(value: string): EvaluationStage {
   if (value !== "authorship" && value !== "implementation") {
     throw new InvalidArgumentError("must be authorship or implementation");
@@ -823,6 +891,7 @@ async function materializeSkillExperimentGuidance(
   envelope: ExecutionEnvelope,
   directory: string,
 ): Promise<void> {
+  if (envelope.submission.config.guidanceInput !== undefined) return;
   const treatment = envelope.manifest.configuration?.["treatmentId"];
   if (treatment !== "skill-guidance" && treatment !== "skill-and-audit") return;
   const expectedDigest = envelope.manifest.configuration?.["skillDigest"];

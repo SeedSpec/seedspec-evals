@@ -11,7 +11,7 @@ import {
   createImplementationSkillExperimentPlan,
   IMPLEMENTATION_SKILL_TREATMENTS,
 } from "./implementation-skill-plan.js";
-import { bundleAuthoredInput } from "./authored-input.js";
+import { bundleAuthoredInput, bundleGuidanceInput } from "./authored-input.js";
 import { ExperimentPlanSchema } from "./contracts.js";
 import { buildDesktopBrief, buildDesktopManifest } from "./runner-brief.js";
 
@@ -46,6 +46,10 @@ describe("createExperimentPlan", () => {
     const selected = cases.filter(({ case: evaluationCase }) =>
       evaluationCase.id === "sparse-neighborhood-tool-lending");
     const authoredInput = await bundleAuthoredInput(await authoredInputFixture());
+    const guidanceInput = await bundleGuidanceInput(
+      resolve("skills/implement-stateful-workflows"),
+      "implement-stateful-workflows",
+    );
     const plan = await createImplementationSkillExperimentPlan({
       cases: selected,
       models: ["openai/gpt-5.6-sol"],
@@ -55,6 +59,7 @@ describe("createExperimentPlan", () => {
       createdAt: "2026-07-22T12:00:00.000Z",
       maxSteps: 8,
       skillPath: resolve("skills/implement-stateful-workflows/SKILL.md"),
+      guidanceInput,
       authoredInput,
     });
 
@@ -74,13 +79,80 @@ describe("createExperimentPlan", () => {
     expect(embedded.submission.config.trustedInstructions.join("\n")).toContain("# Implement Stateful Workflows");
 
     const skillEnvelope = plan.envelopes[2]!;
-    expect(skillEnvelope.submission.metadata?.["skillSource"]).toContain("# Implement Stateful Workflows");
+    expect(skillEnvelope.submission.metadata?.["skillSource"]).toBeUndefined();
+    expect(skillEnvelope.submission.config.guidanceInput?.artifactId).toBe(guidanceInput.artifactId);
     const manifest = buildDesktopManifest(skillEnvelope, "codex");
     const brief = buildDesktopBrief(skillEnvelope, manifest, "codex");
     expect(manifest.tools.map(({ name }) => name)).toContain("implement-stateful-workflows");
     expect(brief).toContain("Guidance treatment: `skill-guidance`");
     expect(brief).toContain("before implementation");
     expect(brief).not.toContain("before authoring");
+  });
+
+  it("freezes a multi-file gstack plan review as one labeled skill treatment", async () => {
+    const cases = await loadCaseLibrary(resolve("cases"));
+    const selected = cases.filter(({ case: evaluationCase }) =>
+      evaluationCase.id === "sparse-neighborhood-tool-lending");
+    const authoredInput = await bundleAuthoredInput(await authoredInputFixture());
+    const skillDirectory = await mkdtemp(resolve(tmpdir(), "seedspec-gstack-skill-"));
+    temporaryDirectories.push(skillDirectory);
+    await mkdir(resolve(skillDirectory, "sections"));
+    await Promise.all([
+      writeFile(resolve(skillDirectory, "SKILL.md"), [
+        "---",
+        "name: plan-eng-review",
+        "version: 1.0.0",
+        "description: Engineering plan review.",
+        "---",
+        "# Plan Review Mode",
+        "Read sections/review-sections.md.",
+        "",
+      ].join("\n"), "utf8"),
+      writeFile(
+        resolve(skillDirectory, "sections/review-sections.md"),
+        "# Review Sections\n\nReview architecture, code quality, tests, and performance.\n",
+        "utf8",
+      ),
+    ]);
+    const guidanceInput = await bundleGuidanceInput(skillDirectory, "plan-eng-review");
+    const plan = await createImplementationSkillExperimentPlan({
+      cases: selected,
+      models: ["openai/gpt-5.6-sol"],
+      repetitions: 1,
+      gatewayId: "seedspec-evals",
+      protocolVersion: "0.1.0-alpha.4",
+      createdAt: "2026-07-23T12:00:00.000Z",
+      maxSteps: 8,
+      skillPath: resolve(skillDirectory, "SKILL.md"),
+      guidanceInput,
+      authoredInput,
+      treatments: ["skill-guidance"],
+      skillTreatmentId: "gstack-plan-eng-review",
+      skillAdapter: "gstack-plan-eng-review",
+      skillSourceRepository: "https://github.com/garrytan/gstack",
+      skillSourceRevision: "abc123",
+      skillLicense: "MIT",
+    });
+
+    expect(plan.envelopes).toHaveLength(1);
+    const envelope = plan.envelopes[0]!;
+    expect(envelope.manifest.configuration).toMatchObject({
+      treatmentId: "gstack-plan-eng-review",
+      guidanceDelivery: "skill-guidance",
+      skillAdapter: "gstack-plan-eng-review",
+      skillSourceRevision: "abc123",
+      guidanceInputArtifactId: guidanceInput.artifactId,
+    });
+    expect(envelope.submission.config.guidanceInput?.files.map(({ path }) => path)).toEqual([
+      "plan-eng-review/SKILL.md",
+      "plan-eng-review/sections/review-sections.md",
+    ]);
+    const manifest = buildDesktopManifest(envelope, "codex");
+    const brief = buildDesktopBrief(envelope, manifest, "codex");
+    expect(manifest.tools.map(({ name }) => name)).toContain("plan-eng-review");
+    expect(brief).toContain("Guidance treatment: `gstack-plan-eng-review`");
+    expect(brief).toContain("guidance/plan-eng-review/SKILL.md");
+    expect(brief).toContain("workspace/realization/TECHNICAL_PLAN.md");
   });
 
   it("creates a same-output skill treatment matrix with identical author access", async () => {

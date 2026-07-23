@@ -22,6 +22,7 @@ export const IMPLEMENTATION_SKILL_TREATMENTS = [
 ] as const;
 
 export type ImplementationSkillTreatment = typeof IMPLEMENTATION_SKILL_TREATMENTS[number];
+export type ImplementationSkillAdapter = "none" | "gstack-plan-eng-review";
 
 export interface ImplementationSkillExperimentPlanOptions {
   readonly cases: readonly LoadedEvaluationCase[];
@@ -32,7 +33,14 @@ export interface ImplementationSkillExperimentPlanOptions {
   readonly createdAt: string;
   readonly maxSteps: number;
   readonly skillPath: string;
+  readonly guidanceInput: AuthoredInputBundle;
   readonly authoredInput: AuthoredInputBundle;
+  readonly treatments?: readonly ImplementationSkillTreatment[];
+  readonly skillTreatmentId?: string;
+  readonly skillAdapter?: ImplementationSkillAdapter;
+  readonly skillSourceRepository?: string;
+  readonly skillSourceRevision?: string;
+  readonly skillLicense?: string;
 }
 
 export async function createImplementationSkillExperimentPlan(
@@ -40,7 +48,20 @@ export async function createImplementationSkillExperimentPlan(
 ): Promise<ExperimentPlan> {
   const skillSource = await readFile(options.skillPath, "utf8");
   const skillId = skillName(skillSource);
-  const skillDigest = `sha256:${sha256Hex(skillSource)}`;
+  const skillDigest = options.guidanceInput.digest;
+  const skillEntrypointDigest = `sha256:${sha256Hex(skillSource)}`;
+  const treatments = options.treatments ?? IMPLEMENTATION_SKILL_TREATMENTS;
+  if (treatments.length === 0 || new Set(treatments).size !== treatments.length) {
+    throw new Error("Implementation-skill treatments must be non-empty and unique.");
+  }
+  const skillTreatmentId = options.skillTreatmentId ?? "skill-guidance";
+  if (!/^[a-z0-9-]+$/.test(skillTreatmentId)) {
+    throw new Error("Skill treatment ID must be a lowercase hyphenated identifier.");
+  }
+  const skillAdapter = options.skillAdapter ?? "none";
+  if (skillAdapter === "gstack-plan-eng-review" && treatments.includes("embedded-guidance")) {
+    throw new Error("The gstack plan-review adapter is a multi-file workflow and cannot be embedded as one trusted instruction.");
+  }
   const base = await createExperimentPlan({
     cases: options.cases,
     stage: "implementation",
@@ -55,11 +76,12 @@ export async function createImplementationSkillExperimentPlan(
   });
 
   const envelopes = base.envelopes.flatMap((envelope) =>
-    IMPLEMENTATION_SKILL_TREATMENTS.map((treatment, treatmentIndex) => {
+    treatments.map((treatment, treatmentIndex) => {
       const trustedInstructions = implementationInstructions(
         treatment,
         skillSource,
         skillId,
+        skillAdapter,
       ).map((instruction) => instruction.trim());
       const instructionsDigest = `sha256:${sha256Hex(stableJson(trustedInstructions))}`;
       const { runId: _baseRunId, ...readonlyBaseManifest } = envelope.manifest;
@@ -70,28 +92,49 @@ export async function createImplementationSkillExperimentPlan(
       if (skillEnabled) {
         tools.push({
           name: skillId,
-          version: "0.1.0-alpha.1",
-          configuration: { digest: skillDigest, delivery: "runner-local-skill" },
+          version: skillVersion(skillSource),
+          configuration: {
+            digest: skillDigest,
+            entrypointDigest: skillEntrypointDigest,
+            delivery: "runner-local-skill",
+          },
         });
       }
+      const treatmentId = skillEnabled ? skillTreatmentId : treatment;
       const manifest = createRunManifest({
         ...baseManifest,
-        repetition: envelope.manifest.repetition * IMPLEMENTATION_SKILL_TREATMENTS.length + treatmentIndex,
+        repetition: envelope.manifest.repetition * treatments.length + treatmentIndex,
         instructionsDigest,
         tools,
         configuration: {
           ...(envelope.manifest.configuration ?? {}),
           experimentKind: "implementation-skill",
-          treatmentId: treatment,
+          treatmentId,
           guidanceDelivery: treatment,
           skillId,
           skillDigest,
+          skillEntrypointDigest,
+          skillAdapter,
+          ...(skillEnabled ? {
+            guidanceInputArtifactId: options.guidanceInput.artifactId,
+            guidanceInputDigest: options.guidanceInput.digest,
+          } : {}),
+          ...(options.skillSourceRepository === undefined
+            ? {}
+            : { skillSourceRepository: options.skillSourceRepository }),
+          ...(options.skillSourceRevision === undefined
+            ? {}
+            : { skillSourceRevision: options.skillSourceRevision }),
+          ...(options.skillLicense === undefined
+            ? {}
+            : { skillLicense: options.skillLicense }),
         },
       });
       const config = RunAgentConfigSchema.parse({
         ...envelope.submission.config,
         runId: manifest.runId,
         trustedInstructions,
+        ...(skillEnabled ? { guidanceInput: options.guidanceInput } : {}),
       });
       return {
         schemaVersion: 1 as const,
@@ -102,10 +145,10 @@ export async function createImplementationSkillExperimentPlan(
           metadata: {
             ...(envelope.submission.metadata ?? {}),
             experimentKind: "implementation-skill",
-            treatment,
+            treatment: treatmentId,
+            guidanceDelivery: treatment,
             skillId,
             skillDigest,
-            ...(skillEnabled ? { skillSource } : {}),
           },
         },
       };
@@ -123,6 +166,7 @@ function implementationInstructions(
   treatment: ImplementationSkillTreatment,
   skillSource: string,
   skillId: string,
+  skillAdapter: ImplementationSkillAdapter,
 ): string[] {
   const common = [
     "Implement the immutable authored package mounted at input/authored. Produce the case's declared working realization and acceptance evidence beneath workspace/; do not rewrite the authored package.",
@@ -144,10 +188,24 @@ function implementationInstructions(
       skillSource,
     ];
   }
+  if (skillAdapter === "gstack-plan-eng-review") {
+    return [
+      ...common,
+      "Before consulting the supplied review skill, inspect the authored package and write workspace/realization/TECHNICAL_PLAN.md inside the declared realization deliverable. The plan must identify the intended architecture, authority boundaries, state and data flow, failure modes, verification strategy, and implementation sequence.",
+      `Then read guidance/${skillId}/SKILL.md and guidance/${skillId}/sections/review-sections.md completely. Use their technical plan-review method against workspace/realization/TECHNICAL_PLAN.md before writing implementation code.`,
+      "Controlled-run adapter: the upstream skill assumes an installed gstack environment and an interactive user. No gstack binaries, telemetry, global brain, update checks, external Codex review, or AskUserQuestion tool are available here. Skip only those operational integrations. Treat this run as a spawned/headless review, choose each explicitly recommended option unless it conflicts with fixed package intent, and record every such choice in workspace/realization/TECHNICAL_PLAN.md.",
+      "Execute all substantive scope, architecture, code-quality, test, performance, failure-mode, evidence-calibration, and completion-gate steps that can operate on the local plan and repository. After implementation, review the realized code against the accepted plan, correct supported findings, and preserve the review report in workspace/realization/TECHNICAL_PLAN.md.",
+      "Record the exact upstream skill files consulted, the controlled-run adaptations applied, and their observable influence in report.md and the trace.",
+    ];
+  }
   return [
     ...common,
     `Before implementation, read guidance/${skillId}/SKILL.md completely and consult it as package-scoped implementation guidance. Record the consultation and its observable influence in the report and trace.`,
   ];
+}
+
+function skillVersion(source: string): string {
+  return /^version:\s*([A-Za-z0-9._-]+)\s*$/m.exec(source)?.[1] ?? "0.1.0-alpha.1";
 }
 
 function skillName(source: string): string {

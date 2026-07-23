@@ -10,6 +10,8 @@ export function equalRunAgentConfigs(left: RunAgentConfig, right: RunAgentConfig
     left.gatewayId === right.gatewayId &&
     left.maxSteps === right.maxSteps &&
     left.untrustedMaterial === right.untrustedMaterial &&
+    left.authoredInput?.artifactId === right.authoredInput?.artifactId &&
+    left.guidanceInput?.artifactId === right.guidanceInput?.artifactId &&
     equalStringRecords(left.simulatedAuthorResponses, right.simulatedAuthorResponses) &&
     left.trustedInstructions.length === right.trustedInstructions.length &&
     left.trustedInstructions.every(
@@ -31,6 +33,12 @@ export function conflictingRunConfigFields(
   if (existing.gatewayId !== requested.gatewayId) fields.push("gatewayId");
   if (existing.maxSteps !== requested.maxSteps) fields.push("maxSteps");
   if (existing.untrustedMaterial !== requested.untrustedMaterial) fields.push("untrustedMaterial");
+  if (existing.authoredInput?.artifactId !== requested.authoredInput?.artifactId) {
+    fields.push("authoredInput");
+  }
+  if (existing.guidanceInput?.artifactId !== requested.guidanceInput?.artifactId) {
+    fields.push("guidanceInput");
+  }
   if (!equalStringRecords(existing.simulatedAuthorResponses, requested.simulatedAuthorResponses)) {
     fields.push("simulatedAuthorResponses");
   }

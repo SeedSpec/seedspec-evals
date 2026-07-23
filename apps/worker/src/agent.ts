@@ -301,12 +301,13 @@ export class SeedSpecEvalAgent extends Think<Env> {
 
     try {
       await this.ensureAuthoredInputMounted(parsed.data.config);
+      await this.ensureGuidanceInputMounted(parsed.data.config);
     } catch (error) {
-      structuredLog("error", "eval.authored_input.mount_failed", {
+      structuredLog("error", "eval.input.mount_failed", {
         runId: parsed.data.config.runId,
         errorClass: errorClass(error),
       });
-      return { ok: false, value: null, error: { code: "authored_input_invalid", message: "The authored input could not be verified and mounted." } };
+      return { ok: false, value: null, error: { code: "run_input_invalid", message: "A content-addressed run input could not be verified and mounted." } };
     }
 
     const message: UIMessage = {
@@ -481,6 +482,30 @@ export class SeedSpecEvalAgent extends Think<Env> {
       digest: config.authoredInput.digest,
       fileCount: config.authoredInput.files.length,
       path: "input/authored",
+    });
+  }
+
+  private async ensureGuidanceInputMounted(config: RunAgentConfig): Promise<void> {
+    if (config.guidanceInput === undefined) return;
+    for (const file of config.guidanceInput.files) {
+      const bytes = decodeBase64(file.contentBase64);
+      if (bytes.byteLength !== file.byteLength || `sha256:${await sha256Bytes(bytes)}` !== file.digest) {
+        throw new Error(`Guidance input failed digest verification: ${file.path}`);
+      }
+      const path = `guidance/${file.path}`;
+      const existing = await this.workspace.readFileBytes(path);
+      if (existing !== null) {
+        if (`sha256:${await sha256Bytes(existing)}` !== file.digest) throw new Error(`Mounted guidance input changed: ${file.path}`);
+        continue;
+      }
+      const content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      await this.workspace.writeFile(path, content);
+    }
+    this.appendTraceEvent("artifact", "runner", "guidance-input-mounted", {
+      artifactId: config.guidanceInput.artifactId,
+      digest: config.guidanceInput.digest,
+      fileCount: config.guidanceInput.files.length,
+      path: "guidance",
     });
   }
 
