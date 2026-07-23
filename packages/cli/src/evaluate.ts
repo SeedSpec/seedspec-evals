@@ -327,8 +327,9 @@ async function implementationVerificationAdapters(
       id: "realization.concurrency.exclusive-reservation",
       description: "At least one executed acceptance scenario distinguishes conflicting or concurrent reservations.",
       evaluate: () => {
-        const concurrency = verification.report.scenarios.filter(({ id }) =>
-          /(concurr|conflict|exclusive|overlap|reservation)/i.test(id));
+        const concurrency = verification.report.scenarios.filter(({ id, assessment }) =>
+          /(concurr|conflict|exclusive|overlap|reservation|one winner|simultaneous)/i
+            .test(`${id}\n${assessment ?? ""}`));
         const passed = concurrency.filter(linkedPasses).length;
         return {
           outcome: concurrency.length > 0 && passed === concurrency.length ? "pass" as const : "fail" as const,

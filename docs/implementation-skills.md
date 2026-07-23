@@ -1,5 +1,8 @@
 # Package-scoped implementation skill experiment
 
+The completed first baseline and its interpretation are recorded in
+[`docs/experiments/implementation-skill-v1.md`](experiments/implementation-skill-v1.md).
+
 This lab asks a narrow question:
 
 > Does a package-scoped technical skill cause an implementing agent to produce
