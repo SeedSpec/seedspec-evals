@@ -1,0 +1,66 @@
+schemaVersion: 1
+case:
+  id: extract-release-readiness-coordination
+  version: 1.1.0
+  digest: sha256:54dc19becec718fec3c9bf303367eef0ec6634c3a8618c250dd3bdfc2cecc808
+createdAt: 2026-07-24T20:00:00.000Z
+status: draft
+candidates:
+  - id: known-bad
+    classification: known-bad
+    description: A source-shaped extraction that makes Airtable and Slack mandatory, seeks deleted credentials, and drops approval invalidation.
+    artifact:
+      path: candidates/known-bad
+      digest: sha256:87b5801a8972007cb011c92f2b7c1766859fa036def72ceafa630b871d5c9d5f
+    expected:
+      acceptability: reject
+      rationale: Surface fidelity cannot replace portable capability boundaries, preserved invariants, and secret safety.
+      dimensions:
+        - dimension: meaningfulness
+          expectation: must-detect-concern
+          rationale: Accidental source-provider details are incorrectly promoted into universal intent.
+        - dimension: security
+          expectation: must-detect-concern
+          rationale: The candidate instructs the implementer to recover a deleted credential.
+  - id: valid-alternative
+    classification: valid-alternative
+    description: A GitHub Projects and Teams realization using provider-native structures rather than Airtable-shaped shims.
+    artifact:
+      path: candidates/valid-alternative
+      digest: sha256:b5932728e4487f4be3e5aeb3eb03b51c0c7be24404382750b5ddd8ab6ea3c5f1
+    expected:
+      acceptability: accept
+      rationale: It preserves the provider-neutral outcomes while deliberately changing provider concepts and data shape.
+      dimensions:
+        - dimension: meaningfulness
+          expectation: must-not-penalize
+          rationale: Provider-native alternate concepts are stronger portability evidence than source-shaped wrappers.
+probes:
+  - id: source-similarity-hack
+    candidateId: known-bad
+    kind: false-positive
+    technique: Reward vocabulary and structural similarity to the source without checking which details were accidental.
+    expectedDisposition: reject
+    observedDisposition: not-run
+    assessment: Awaiting a blinded evaluator run against this counterfactual.
+    evidence:
+      - path: hack-report.md
+        digest: sha256:5159a565e829914555e81530469f8f1b230a92b611804eb38e10a58eb1a26612
+        note: Planned false-positive attack and expected rejection.
+  - id: provider-native-check
+    candidateId: valid-alternative
+    kind: false-negative
+    technique: Use alternate-provider-native records and notification automation instead of Airtable-shaped concepts.
+    expectedDisposition: accept
+    observedDisposition: not-run
+    assessment: Awaiting a blinded evaluator run against this alternative.
+    evidence:
+      - path: hack-report.md
+        digest: sha256:5159a565e829914555e81530469f8f1b230a92b611804eb38e10a58eb1a26612
+        note: Planned false-negative attack and expected acceptance.
+review:
+  reviewer: seedspec-eval-maintainers
+  reviewedAt: 2026-07-24T20:00:00.000Z
+  summary: Counterfactual candidates and attack hypotheses are frozen; the case remains draft until observed blinded dispositions are attached.
+  limitations:
+    - No independent evaluator has graded these candidates yet.

@@ -16,6 +16,7 @@ const VerificationCommandSchema = z.strictObject({
   id: IdentifierSchema,
   argv: z.array(z.string().min(1).max(4_000)).min(1).max(128),
   cwd: SafeRelativePathSchema.optional(),
+  testPaths: z.array(SafeRelativePathSchema).min(1).max(256).optional(),
 });
 
 const LinkedResultSchema = z.strictObject({
@@ -136,4 +137,118 @@ export function createImplementationVerification(
 
 export function parseImplementationVerification(input: unknown): ImplementationVerification {
   return ImplementationVerificationSchema.parse(input);
+}
+
+const CounterfactualExecutionSchema = z.strictObject({
+  candidateId: IdentifierSchema,
+  commandId: IdentifierSchema,
+  argv: z.array(z.string().min(1).max(4_000)).min(1).max(128),
+  cwd: SafeRelativePathSchema.optional(),
+  testPaths: z.array(SafeRelativePathSchema).min(1).max(256),
+  startedAt: IsoTimestampSchema,
+  finishedAt: IsoTimestampSchema,
+  sandbox: z.enum(["darwin-sandbox-exec", "unsandboxed"]),
+  rawOutcome: z.enum(["pass", "fail", "timed-out"]),
+  distinguishes: z.boolean(),
+  exitCode: z.number().int().nullable(),
+  stdout: z.string().max(32_000),
+  stderr: z.string().max(32_000),
+});
+
+export const CounterfactualVerificationBodySchema = z.strictObject({
+  schemaVersion: z.literal(1),
+  runId: RunIdSchema,
+  implementationVerificationId: z.string().regex(/^verification_[a-f0-9]{64}$/),
+  createdAt: IsoTimestampSchema,
+  candidates: z.array(z.strictObject({
+    id: IdentifierSchema,
+    path: z.string().trim().min(1).max(4_096),
+    digest: Sha256DigestSchema,
+  })).min(1).max(64),
+  executions: z.array(CounterfactualExecutionSchema).max(2_048),
+  summary: z.strictObject({
+    distinguishing: z.number().int().nonnegative(),
+    nonDistinguishing: z.number().int().nonnegative(),
+    unevaluated: z.number().int().nonnegative(),
+  }),
+  limitations: z.array(z.string().trim().min(1).max(8_000)).max(128),
+}).superRefine((verification, context) => {
+  const candidateIds = verification.candidates.map(({ id }) => id);
+  if (new Set(candidateIds).size !== candidateIds.length) {
+    context.addIssue({ code: "custom", message: "counterfactual candidate IDs must be unique", path: ["candidates"] });
+  }
+  const knownCandidates = new Set(candidateIds);
+  for (const [index, execution] of verification.executions.entries()) {
+    if (!knownCandidates.has(execution.candidateId)) {
+      context.addIssue({
+        code: "custom",
+        message: `execution references unknown candidate ${execution.candidateId}`,
+        path: ["executions", index, "candidateId"],
+      });
+    }
+    if (execution.distinguishes !== (execution.rawOutcome === "fail")) {
+      context.addIssue({
+        code: "custom",
+        message: "distinguishes must be true exactly when the candidate command fails",
+        path: ["executions", index, "distinguishes"],
+      });
+    }
+  }
+  const expected = {
+    distinguishing: verification.executions.filter(({ distinguishes }) => distinguishes).length,
+    nonDistinguishing: verification.executions.filter(({ rawOutcome }) => rawOutcome === "pass").length,
+    unevaluated: verification.executions.filter(({ rawOutcome }) => rawOutcome === "timed-out").length,
+  };
+  if (
+    verification.summary.distinguishing !== expected.distinguishing
+    || verification.summary.nonDistinguishing !== expected.nonDistinguishing
+    || verification.summary.unevaluated !== expected.unevaluated
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "counterfactual summary does not match executions",
+      path: ["summary"],
+    });
+  }
+});
+
+const CounterfactualVerificationDataSchema = CounterfactualVerificationBodySchema.safeExtend({
+  counterfactualVerificationId: z.string().regex(/^counterfactual_verification_[a-f0-9]{64}$/),
+}).superRefine((verification, context) => {
+  const { counterfactualVerificationId, ...body } = verification;
+  const parsed = CounterfactualVerificationBodySchema.safeParse(body);
+  if (!parsed.success) return;
+  const expected = contentId("counterfactual_verification", parsed.data as unknown as JsonValue);
+  if (counterfactualVerificationId !== expected) {
+    context.addIssue({
+      code: "custom",
+      message: `counterfactualVerificationId does not match content; expected ${expected}`,
+      path: ["counterfactualVerificationId"],
+    });
+  }
+});
+
+export const CounterfactualVerificationSchema =
+  CounterfactualVerificationDataSchema.transform((value) => deepFreeze(value));
+
+export type CounterfactualVerificationBody =
+  z.infer<typeof CounterfactualVerificationBodySchema>;
+export type CounterfactualVerification =
+  DeepReadonly<z.infer<typeof CounterfactualVerificationDataSchema>>;
+
+export function createCounterfactualVerification(
+  input: CounterfactualVerificationBody,
+): CounterfactualVerification {
+  const body = CounterfactualVerificationBodySchema.parse(input);
+  return CounterfactualVerificationSchema.parse({
+    ...body,
+    counterfactualVerificationId: contentId(
+      "counterfactual_verification",
+      body as unknown as JsonValue,
+    ),
+  });
+}
+
+export function parseCounterfactualVerification(input: unknown): CounterfactualVerification {
+  return CounterfactualVerificationSchema.parse(input);
 }

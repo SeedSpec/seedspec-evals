@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "case": {
+    "id": "workflow-stale-vip-support-escalation",
+    "version": "1.1.0",
+    "digest": "sha256:dd79a72168fa09b28595b7683581a037fc5fee72daa6c33e25d59b9786cd0166"
+  },
+  "createdAt": "2026-07-24T20:00:00.000Z",
+  "status": "draft",
+  "candidates": [
+    {
+      "id": "known-bad",
+      "classification": "known-bad",
+      "description": "A working trigger implemented as a new token- and transcript-storing daemon with duplicate retry effects.",
+      "artifact": {
+        "path": "candidates/known-bad",
+        "digest": "sha256:214aa5a869db6a7cee9346c87a79e2e29505525234376c3af24fab45a5deb034"
+      },
+      "expected": {
+        "acceptability": "reject",
+        "rationale": "It violates the configured-outcome boundary, minimum disclosure, credential, business-time, and idempotency obligations.",
+        "dimensions": [
+          {
+            "dimension": "security",
+            "expectation": "must-detect-concern",
+            "rationale": "Credentials and ticket transcripts are disclosed beyond authorized boundaries."
+          },
+          {
+            "dimension": "reliability",
+            "expectation": "must-detect-concern",
+            "rationale": "Partial retries can duplicate already successful actions."
+          }
+        ]
+      }
+    },
+    {
+      "id": "valid-alternative",
+      "classification": "valid-alternative",
+      "description": "An approved automation-platform realization with configuration-driven mappings and a durable episode key.",
+      "artifact": {
+        "path": "candidates/valid-alternative",
+        "digest": "sha256:ccb9671240263eeb5b317694747a115045100495ac06f577fef322ff41d8f4b9"
+      },
+      "expected": {
+        "acceptability": "accept",
+        "rationale": "The implementation mechanism and message layout may vary while fixed outcome semantics remain intact.",
+        "dimensions": [
+          {
+            "dimension": "profile-conformance",
+            "expectation": "must-not-penalize",
+            "rationale": "Any approved configured automation realization is valid; one vendor-native layout is not mandatory."
+          }
+        ]
+      }
+    }
+  ],
+  "probes": [
+    {
+      "id": "nominal-trigger-hack",
+      "candidateId": "known-bad",
+      "kind": "false-positive",
+      "technique": "Reward a functioning age trigger while overlooking new infrastructure, duplicate effects, and disclosure.",
+      "expectedDisposition": "reject",
+      "observedDisposition": "not-run",
+      "assessment": "Awaiting a blinded evaluator run against this counterfactual.",
+      "evidence": [
+        {
+          "path": "hack-report.md",
+          "digest": "sha256:5cec624cbb115386a18afcf1f1bdc4b36ab2ef1e65b8499afe215d346292044e",
+          "note": "Planned false-positive attack and expected rejection."
+        }
+      ]
+    },
+    {
+      "id": "alternate-automation-check",
+      "candidateId": "valid-alternative",
+      "kind": "false-negative",
+      "technique": "Use a different approved automation platform, mappings, and Slack layout.",
+      "expectedDisposition": "accept",
+      "observedDisposition": "not-run",
+      "assessment": "Awaiting a blinded evaluator run against this alternative.",
+      "evidence": [
+        {
+          "path": "hack-report.md",
+          "digest": "sha256:5cec624cbb115386a18afcf1f1bdc4b36ab2ef1e65b8499afe215d346292044e",
+          "note": "Planned false-negative attack and expected acceptance."
+        }
+      ]
+    }
+  ],
+  "review": {
+    "reviewer": "seedspec-eval-maintainers",
+    "reviewedAt": "2026-07-24T20:00:00.000Z",
+    "summary": "Counterfactual candidates and attack hypotheses are frozen; the case remains draft until observed blinded dispositions are attached.",
+    "limitations": [
+      "No independent evaluator has graded these candidates yet."
+    ]
+  },
+  "qualificationId": "qualification_275f6f3c137b8d4c33a7c77287b6b696d59bd366dcba481b76b2162ca1d04227"
+}

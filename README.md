@@ -197,6 +197,41 @@ unscored, critical findings cap readiness, and dimension levels are never
 averaged. The frozen evaluator skills are content-addressed in the evidence
 envelope.
 
+When treatment identity could bias that technical reviewer, create and finalize
+an opaque technical-only view before preparing the normal profile:
+
+```sh
+node packages/cli/dist/index.js evaluate technical-blind-brief \
+  <isolated-run-directory> \
+  --runner codex \
+  --judge-model <independent-evaluator-model>
+
+node packages/cli/dist/index.js evaluate technical-blind-finalize \
+  <opaque-view>/blind-technical-review-draft.json \
+  --evidence <opaque-view>/blind-technical-evidence.json
+
+node packages/cli/dist/index.js evaluate technical-unblind \
+  <isolated-run-directory> \
+  --review <opaque-view>/blind-technical-review.json
+```
+
+The opaque view excludes the treatment, subject model, runner, traces, process
+metrics, cost, and true run identity. Once reattached, profile finalization
+requires the blinded technical vector and checks to remain unchanged.
+
+Subject-authored tests can also declare `testPaths`. The evaluator may overlay
+those tests onto a content-addressed known-bad candidate and require the same
+command to fail there:
+
+```sh
+node packages/cli/dist/index.js implementation counterfactual-verify \
+  <isolated-run-directory> \
+  --candidate <id>=<known-bad-artifact-tree> \
+  --confirm-code-execution
+```
+
+See [case qualification and counterfactual verification](docs/case-qualification.md).
+
 The profile handoff contains a compact, content-addressed evidence envelope and
 the case's predeclared decision and obligation axes. This gives every variant
 the same comparison denominator without exposing the full case or evaluator

@@ -499,6 +499,7 @@ describe("createExperimentPlan", () => {
     expect(manifest.runId).not.toBe(envelope.manifest.runId);
     expect(manifest.configuration?.["sourceRunId"]).toBe(envelope.manifest.runId);
     expect(manifest.runner.id).toBe("codex-desktop");
+    expect(manifest.model.routing?.gateway).toBeUndefined();
     expect(manifest.tools.map((entry) => entry.name)).toEqual([
       "desktop-agent-workspace",
       "seedspec-simulated-author",

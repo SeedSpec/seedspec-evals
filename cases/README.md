@@ -17,7 +17,16 @@ The initial corpus covers:
 3. a configured support-escalation outcome across existing systems; and
 4. extraction of a provider-neutral release-readiness SeedSpec from a working solution; and
 5. an unfamiliar Kestrel inventory-transfer workflow whose package-scoped skill
-   carries platform-specific state, idempotency, and event-ordering rules.
+   carries platform-specific state, idempotency, and event-ordering rules; and
+6. a later maintenance agent evolving an already customized application without
+   reverting approved local behavior or treating stale evidence as current.
 
 Simulated `author.ask` responses make important clarification paths reproducible.
 They intentionally answer questions rather than silently enriching the initial note.
+
+Cases may also contain a `qualification/` directory with known-bad and
+valid-alternative counterfactuals, a hack report, and a content-addressed
+qualification record. A draft qualification is not a certification: it becomes
+`qualified` only after observed false-positive and false-negative probes match
+their predeclared dispositions. See
+[case qualification](../docs/case-qualification.md).

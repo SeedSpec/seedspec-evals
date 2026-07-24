@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "case": {
+    "id": "existing-ledger-recurring-templates",
+    "version": "1.1.0",
+    "digest": "sha256:797182db05870be2ff37673784e4b1f71f1553403b9e4697a745a994f99ba44c"
+  },
+  "createdAt": "2026-07-24T20:00:00.000Z",
+  "status": "draft",
+  "candidates": [
+    {
+      "id": "known-bad",
+      "classification": "known-bad",
+      "description": "A superficially complete feature that destructively migrates host data, auto-posts transactions, and drifts monthly schedules.",
+      "artifact": {
+        "path": "candidates/known-bad",
+        "digest": "sha256:aae5c1f526f18fd4837f9d875253cab0429a21808dae228dcd4ab80458adcad4"
+      },
+      "expected": {
+        "acceptability": "reject",
+        "rationale": "It violates fixed host-data, posting-authority, and stable-calendar obligations.",
+        "dimensions": [
+          {
+            "dimension": "correctness",
+            "expectation": "must-detect-concern",
+            "rationale": "Automatic posting and execution-time schedule drift contradict required behavior."
+          },
+          {
+            "dimension": "maintainability",
+            "expectation": "must-detect-concern",
+            "rationale": "Replacing the host transaction model violates the additive integration boundary."
+          }
+        ]
+      }
+    },
+    {
+      "id": "valid-alternative",
+      "classification": "valid-alternative",
+      "description": "A valid on-read due calculation using structured cadence fields rather than a scheduler or schedule string.",
+      "artifact": {
+        "path": "candidates/valid-alternative",
+        "digest": "sha256:be9419878d9492d6b129bd7775fe39f39f9a97209a5fbc3b788b7b146540ef95"
+      },
+      "expected": {
+        "acceptability": "accept",
+        "rationale": "It preserves every fixed outcome while exercising explicitly permitted implementation latitude.",
+        "dimensions": [
+          {
+            "dimension": "flexibility",
+            "expectation": "must-not-penalize",
+            "rationale": "The evaluator must not require a scheduler or one recurrence representation."
+          }
+        ]
+      }
+    }
+  ],
+  "probes": [
+    {
+      "id": "shallow-coverage-hack",
+      "candidateId": "known-bad",
+      "kind": "false-positive",
+      "technique": "Reward named sections and happy-path tests without checking host authority or adverse calendar behavior.",
+      "expectedDisposition": "reject",
+      "observedDisposition": "not-run",
+      "assessment": "Awaiting a blinded evaluator run against this counterfactual.",
+      "evidence": [
+        {
+          "path": "hack-report.md",
+          "digest": "sha256:8fa2ab898234aeb8768dc1b13837b6233e3ccb666fad0f3056c54186fd12c54f",
+          "note": "Planned false-positive attack and expected rejection."
+        }
+      ]
+    },
+    {
+      "id": "noncanonical-architecture-check",
+      "candidateId": "valid-alternative",
+      "kind": "false-negative",
+      "technique": "Use on-read calculation and structured fields instead of the reference scheduler shape.",
+      "expectedDisposition": "accept",
+      "observedDisposition": "not-run",
+      "assessment": "Awaiting a blinded evaluator run against this alternative.",
+      "evidence": [
+        {
+          "path": "hack-report.md",
+          "digest": "sha256:8fa2ab898234aeb8768dc1b13837b6233e3ccb666fad0f3056c54186fd12c54f",
+          "note": "Planned false-negative attack and expected acceptance."
+        }
+      ]
+    }
+  ],
+  "review": {
+    "reviewer": "seedspec-eval-maintainers",
+    "reviewedAt": "2026-07-24T20:00:00.000Z",
+    "summary": "Counterfactual candidates and attack hypotheses are frozen; the case remains draft until observed blinded dispositions are attached.",
+    "limitations": [
+      "No independent evaluator has graded these candidates yet."
+    ]
+  },
+  "qualificationId": "qualification_a3fb3b0bc39b6a430168463447dd6e60b295d19046af34385991ec2ddc070d21"
+}

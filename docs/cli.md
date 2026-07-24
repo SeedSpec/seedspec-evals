@@ -17,6 +17,9 @@ The CLI must never imply that deterministic validation proves semantic quality. 
 ```text
 seedspec-eval cases list [--root <directory>]
 seedspec-eval cases validate <case-or-directory>
+seedspec-eval cases artifact-digest <file-or-directory>
+seedspec-eval cases qualification-finalize <draft> --root <directory> --case-file <case-file>
+seedspec-eval cases qualification <qualification>
 seedspec-eval experiment plan [selectors, variants, and model matrix] [--max-duration <duration>] [--out <file>]
 seedspec-eval experiment skill-plan [selectors and model matrix] [--max-duration <duration>] [--skill <file>] [--out <file>]
 seedspec-eval experiment implementation-skill-plan --authored-input <directory> [selectors and model matrix] [--max-duration <duration>] [--skill <file>] [--treatment <id...>] [--skill-treatment-id <id>] [--skill-adapter <adapter>] [--out <file>]
@@ -38,6 +41,7 @@ seedspec-eval trace validate <trace>
 seedspec-eval decision-ledger finalize <draft> [--out <file>]
 seedspec-eval decision-ledger validate <ledger>
 seedspec-eval implementation verify <run-directory> --confirm-code-execution [--allow-unsandboxed]
+seedspec-eval implementation counterfactual-verify <run-directory> --candidate <id=path> --confirm-code-execution [--allow-unsandboxed]
 seedspec-eval evaluate deterministic <run-directory> [--seedspec-cli <file>]
 seedspec-eval evaluate package-profile-brief <package-path> --runner codex|claude-code --judge-model <model>
 seedspec-eval evaluate profile-brief <run-directory> --runner codex|claude-code --judge-model <model> [--reasoning-effort high]
@@ -45,6 +49,9 @@ seedspec-eval evaluate profile-finalize <draft> [--out <file>] [--evidence <file
 seedspec-eval evaluate profile <profile>
 seedspec-eval evaluate profile-run <run-directory> --confirm-model-execution
 seedspec-eval evaluate profile-compare <profile...> [--out <file>]
+seedspec-eval evaluate technical-blind-brief <run-directory> --runner codex|claude-code --judge-model <model>
+seedspec-eval evaluate technical-blind-finalize <draft> --evidence <blind-evidence> [--out <file>]
+seedspec-eval evaluate technical-unblind <run-directory> --review <blind-review>
 seedspec-eval evaluate rubric-brief <run-directory> --runner codex|claude-code --judge-model <model>
 seedspec-eval evaluate scorecard <scorecard>
 seedspec-eval compare <scorecard...> [--baseline raw-source]
@@ -75,6 +82,22 @@ controlled execution adaptation instead of implying an unmodified upstream
 session. Authored packages retain the 384 KiB limit. Guidance bundles may be up
 to 2 MiB so a suite can carry several complete skills and their on-demand
 support files; mounting a file does not claim that the subject consulted it.
+
+`cases qualification-finalize` content-addresses preserved known-bad and
+valid-alternative candidates plus false-positive and false-negative probes. A
+case cannot claim `qualified` while either probe is unrun, unsupported, or
+misclassified. `implementation counterfactual-verify` transplants only each
+command's declared `testPaths` into disposable known-bad candidates and records
+whether the same command distinguishes them. Like ordinary implementation
+verification, it executes local code only behind `--confirm-code-execution`.
+
+Desktop manifests remove the source plan's AI Gateway route because Codex and
+Claude Code select their models directly. `technical-blind-brief` copies only
+authored intent, realization artifacts, independent verification, technical
+expectations, and frozen guidance into an opaque workspace.
+`technical-blind-finalize` binds the judge's fixed technical vector before
+`technical-unblind` reattaches it to the true run; the normal profile finalizer
+then rejects any drift in that blinded vector.
 
 `runner brief` derives a runner-specific immutable manifest and copy/paste handoff while retaining the Think run as its comparison source. It writes only to an isolated directory outside the evaluation repository and places simulated answers in control-only storage. `runner preflight` fails unless the task is operating from that clean directory, identities and broker state match, and no protected response is present in runner-visible files. `runner codex-run` and `runner claude-run` perform that preflight, execute the subject, and retain sanitized provider JSONL events, provider usage, exact outer interval, stderr, final message, and finalized trace binding in `subject-run.json`. Both desktop adapters always write an independent `capture-trace.json` whose event timestamps are runner-observed wall-clock times, whose elapsed offsets use a monotonic clock, and whose matched tool-result events include derived duration. Those values describe observation at the harness boundary, not provider-internal execution. Claude Code capture additionally records provider-reported cache creation, cache reads, exact cost, resolved model, and session identity while removing non-observable thinking blocks. Both adapters enforce the manifest duration limit. If a desktop subject exits or times out without a valid subject trace, its canonical capture trace is also written as `trace.json` with `failed` or `timed_out` status. It preserves the run for evaluation without turning a failed subject into a successful one. Think stores durable event timestamps directly; its per-tool lifecycle hooks add matching tool-call IDs and server-side tool duration, and trace export derives elapsed run time from the durable submission start. `author answer` accepts only the sanitized runner source envelope and returns one exact answer. `implementation verify` separately executes the realization's declared local verification commands after explicit operator confirmation, records actual outcomes, and checks claim-to-evidence links without judging test quality. Scenario and keyboard-task outcomes may be `pass`, `fail`, `qualified`, or `not-run`; legacy `partial` is accepted as a compatibility synonym for `qualified`, and only `pass` satisfies deterministic completion criteria. On macOS the verifier permits only loopback networking, denies remote networking and writes outside a temporary directory through the operating-system sandbox, scrubs the inherited environment, and permits a bounded runtime allowlist. This allows locally bound integration tests without allowing realization code to contact external systems. Other platforms fail closed unless the operator has already supplied external disposable isolation and explicitly passes `--allow-unsandboxed`. If a subject adds undeclared fields to an otherwise valid acceptance report, verification preserves the original artifact and digest, records every extra field under `reportConformance`, and uses a stripped compatibility view; semantic or structural schema errors still fail closed. `evaluate deterministic` inventories the completed workspace and emits an unweighted contract/integrity gate over run identity, successful subject completion, finalized trace evidence, required artifacts, and declared outcome checks. It never reports implementation quality. Run profile briefs produce a compact, content-addressed evidence envelope with predeclared comparison axes, an independent technical quality vector for implementation subjects, and frozen evaluator-guidance digests; evidence-bound `profile-finalize` rejects subject, evaluator, axis, or technical-rubric drift. `profile-run` is the Codex captured-evaluator path and requires explicit model-execution confirmation. `profile-compare` reports shared-axis and technical-vector observations without an aggregate score or winner. `evaluate rubric-brief` prepares an independent scored judging task but does not call a model. `compare` accepts like-for-like rubric scorecards; contract/integrity gates cannot be ranked by their legacy weighted totals. `run submit`, `matrix start`, `runner codex-run`, `runner claude-run`, and `evaluate profile-run` are the actions allowed to invoke a model and therefore require an explicit model-execution confirmation flag. `implementation verify` invokes local realization code, not a model, and therefore uses the distinct `--confirm-code-execution` gate.
 

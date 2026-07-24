@@ -27,13 +27,26 @@ import {
   materializeAuthoredInput,
 } from "./authored-input.js";
 import { CLI_DOCS } from "./docs.js";
+import {
+  artifactTreeDigest,
+  finalizeCaseQualificationFile,
+  validateCaseQualificationFile,
+} from "./case-qualification.js";
+import {
+  buildBlindTechnicalReviewBrief,
+  finalizeBlindTechnicalReviewFile,
+  unblindTechnicalReview,
+} from "./blind-technical-review.js";
 import { DEFAULT_MAX_DURATION_MS, parseDurationMs } from "./duration.js";
 import {
   buildRubricEvaluationBrief,
   evaluateRunDirectoryDeterministically,
   validateScorecardFile,
 } from "./evaluate.js";
-import { verifyImplementationRun } from "./implementation-verification.js";
+import {
+  verifyImplementationCounterfactuals,
+  verifyImplementationRun,
+} from "./implementation-verification.js";
 import {
   buildPackageProfileBrief,
   buildRunProfileBrief,
@@ -118,6 +131,56 @@ cases.command("validate")
     const loaded = caseFile === undefined ? await loadCaseLibrary(root) : [await loadCaseFile(root, caseFile)];
     output({ ok: true, count: loaded.length, cases: loaded.map((entry) => entry.case.id) },
       `Validated ${String(loaded.length)} case${loaded.length === 1 ? "" : "s"}. No model was called.`);
+  });
+
+cases.command("artifact-digest")
+  .argument("<path>", "counterfactual artifact file or directory")
+  .action(async (path: string) => {
+    const digest = await artifactTreeDigest(resolve(path));
+    output({ ok: true, path: resolve(path), digest }, `${digest}  ${resolve(path)}`);
+  });
+
+cases.command("qualification-finalize")
+  .argument("<draft>", "case qualification body in YAML or JSON without qualificationId")
+  .option("--root <directory>", "case library root", "cases")
+  .option("--case-file <file>", "case file relative to --root; defaults to case.yaml above the qualification directory")
+  .option("--out <file>", "final content-addressed qualification JSON")
+  .action(async (draft: string, options: { root: string; caseFile?: string; out?: string }) => {
+    const result = await finalizeCaseQualificationFile({
+      draft,
+      caseRoot: options.root,
+      ...(options.caseFile === undefined ? {} : { caseFile: options.caseFile }),
+      ...(options.out === undefined ? {} : { out: options.out }),
+    });
+    output(
+      {
+        ok: true,
+        qualificationId: result.qualification.qualificationId,
+        case: result.qualification.case,
+        status: result.qualification.status,
+        path: result.path,
+      },
+      `Finalized ${result.qualification.status} case qualification ${result.qualification.qualificationId} at ${result.path}.`,
+    );
+  });
+
+cases.command("qualification")
+  .argument("<qualification>", "final content-addressed case qualification JSON")
+  .action(async (file: string) => {
+    const qualification = await validateCaseQualificationFile(file);
+    output({
+      ok: true,
+      qualificationId: qualification.qualificationId,
+      case: qualification.case,
+      status: qualification.status,
+      candidates: qualification.candidates.length,
+      probes: qualification.probes.length,
+    }, [
+      `Qualification ${qualification.qualificationId}: ${qualification.status}`,
+      `Case: ${qualification.case.id}@${qualification.case.version}`,
+      `Counterfactuals: ${String(qualification.candidates.length)}`,
+      `Hack and calibration probes: ${String(qualification.probes.length)}`,
+    ].join("\n"));
   });
 
 const experiment = program.command("experiment").description("Create immutable evaluation run manifests.");
@@ -657,6 +720,43 @@ implementation.command("verify")
     );
   });
 
+implementation.command("counterfactual-verify")
+  .description("Overlay subject-authored tests onto content-addressed known-bad candidates and require them to fail.")
+  .argument("<run-directory>", "verified implementation run directory")
+  .requiredOption("--candidate <candidate...>", "one or more id=path known-bad artifact trees")
+  .option("--confirm-code-execution", "authorize execution of overlaid tests in disposable candidate copies")
+  .option("--allow-unsandboxed", "allow execution only when an external disposable sandbox is already in place")
+  .action(async (runDirectory: string, options: {
+    candidate: string[];
+    confirmCodeExecution?: boolean;
+    allowUnsandboxed?: boolean;
+  }) => {
+    if (options.confirmCodeExecution !== true) {
+      throw new Error(
+        "Counterfactual code was not executed. Review the candidates and declared test paths, "
+        + "then re-run with --confirm-code-execution.",
+      );
+    }
+    const result = await verifyImplementationCounterfactuals({
+      runDirectory,
+      candidates: options.candidate.map(parseCounterfactualCandidate),
+      createdAt: new Date().toISOString(),
+      allowUnsandboxed: options.allowUnsandboxed === true,
+    });
+    output({
+      ok: true,
+      counterfactualVerificationId: result.verification.counterfactualVerificationId,
+      summary: result.verification.summary,
+      path: result.path,
+    }, [
+      `Counterfactual verification ${result.verification.counterfactualVerificationId}:`,
+      `- ${String(result.verification.summary.distinguishing)} overlaid command${result.verification.summary.distinguishing === 1 ? "" : "s"} failed on known-bad candidates as required`,
+      `- ${String(result.verification.summary.nonDistinguishing)} passed and therefore did not distinguish the final implementation`,
+      `- ${String(result.verification.summary.unevaluated)} timed out`,
+      `Evidence: ${result.path}`,
+    ].join("\n"));
+  });
+
 const evaluate = program.command("evaluate").description("Profile or score completed evidence without changing evaluated output.");
 
 evaluate.command("deterministic")
@@ -785,6 +885,62 @@ evaluate.command("profile-brief")
       : `Prepared a descriptive run-profiling handoff at ${result.path}. No model was called.`);
   });
 
+evaluate.command("technical-blind-brief")
+  .description("Create an opaque technical-review workspace that withholds treatment and process identity.")
+  .argument("<run-directory>", "verified implementation run directory")
+  .requiredOption("--runner <runner>", "codex or claude-code", parseDesktopRunner)
+  .requiredOption("--judge-model <model>", "exact evaluator model identifier")
+  .option("--reasoning-effort <effort>", "requested evaluator reasoning effort", "high")
+  .option("--root <directory>", "case library root", "cases")
+  .option("--out-root <directory>", "parent directory for opaque review workspaces")
+  .action(async (runDirectory: string, options: {
+    runner: DesktopRunner;
+    judgeModel: string;
+    reasoningEffort: string;
+    root: string;
+    outRoot?: string;
+  }) => {
+    const result = await buildBlindTechnicalReviewBrief({
+      runDirectory,
+      runner: options.runner,
+      judgeModel: options.judgeModel,
+      reasoningEffort: options.reasoningEffort,
+      caseRoot: options.root,
+      evaluationRepositoryRoot: EVALUATION_REPOSITORY_ROOT,
+      evaluationCliEntry: CLI_ENTRY_PATH,
+      ...(options.outRoot === undefined ? {} : { outRoot: options.outRoot }),
+    });
+    output({ ok: true, ...result },
+      `Prepared opaque technical review ${result.blindSubjectId} at ${result.path}.\nTreatment, subject model, runner, process trace, cost, and true run identity are not present in the review workspace.\nNo model was called.`);
+  });
+
+evaluate.command("technical-blind-finalize")
+  .argument("<draft>", "blind technical review body JSON without blindReviewId")
+  .requiredOption("--evidence <file>", "content-addressed blind technical evidence")
+  .option("--out <file>", "final content-addressed blind review")
+  .action(async (draft: string, options: { evidence: string; out?: string }) => {
+    const result = await finalizeBlindTechnicalReviewFile({
+      draft,
+      evidence: options.evidence,
+      ...(options.out === undefined ? {} : { out: options.out }),
+    });
+    output({ ok: true, blindReviewId: result.review.blindReviewId, path: result.path },
+      `Finalized treatment-blinded technical review ${result.review.blindReviewId} at ${result.path}.`);
+  });
+
+evaluate.command("technical-unblind")
+  .argument("<run-directory>", "original implementation run directory")
+  .requiredOption("--review <file>", "final content-addressed blind technical review")
+  .action(async (runDirectory: string, options: { review: string }) => {
+    const result = await unblindTechnicalReview({
+      runDirectory,
+      review: options.review,
+      createdAt: new Date().toISOString(),
+    });
+    output({ ok: true, attachmentId: result.attachmentId, path: result.path },
+      `Reattached blind technical review as ${result.attachmentId} at ${result.path}.\nSubsequent profile finalization must preserve its quality vector and checks exactly.`);
+  });
+
 evaluate.command("profile-finalize")
   .argument("<draft>", "evaluation profile body JSON without profileId")
   .option("--out <file>", "final content-addressed profile output")
@@ -891,6 +1047,18 @@ function parsePositiveInteger(value: string): number {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 1) throw new InvalidArgumentError("must be a positive integer");
   return parsed;
+}
+
+function parseCounterfactualCandidate(value: string): { id: string; path: string } {
+  const separator = value.indexOf("=");
+  if (separator <= 0 || separator === value.length - 1) {
+    throw new InvalidArgumentError("counterfactual candidates must use id=path");
+  }
+  const id = value.slice(0, separator);
+  if (!/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(id)) {
+    throw new InvalidArgumentError(`invalid counterfactual candidate ID: ${id}`);
+  }
+  return { id, path: resolve(value.slice(separator + 1)) };
 }
 
 function parseImplementationSkillTreatments(

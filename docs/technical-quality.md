@@ -88,21 +88,51 @@ vocabulary.
 
 ## Blind comparison protocol
 
-When treatment identity could bias a technical judge:
+When treatment identity could bias a technical judge, use the implemented
+two-phase blind technical-review flow:
 
 1. preserve the complete run for audit;
-2. create an evaluator view with opaque run labels;
+2. create an evaluator view with an opaque subject identity;
 3. withhold treatment names and process-only artifacts such as
    `SUITE_EXECUTION.md`;
 4. retain source intent, implementation files, independently executed
    verification, and evidence needed to reproduce findings;
 5. finalize the technical vector before reattaching treatment identity; and
-6. compare vectors and findings only after unblinding.
+6. content-address the technical review before reattaching it to the run; and
+7. compare vectors and findings only after unblinding.
 
-The current combined profile envelope retains treatment identity for decision
-and process analysis. Fully blinded technical judging therefore requires a
-separate evaluator view; until that view is implemented, profiles must disclose
-the limitation.
+Prepare the opaque view only after executable verification:
+
+```sh
+seedspec-eval evaluate technical-blind-brief <run-directory> \
+  --runner codex \
+  --judge-model <model> \
+  --reasoning-effort high
+```
+
+The generated workspace contains copied authored intent, realization files,
+independently captured command outcomes, fixed technical expectations, and
+frozen evaluator guidance. It excludes the run manifest, treatment, subject
+model, runner, trace, process report, tokens, timing, and cost. The reviewer is
+also instructed not to inspect parent or sibling directories. By default the
+workspace is created outside the evaluation repository; an explicit
+`--out-root` inside the repository is rejected.
+
+Finalize inside that opaque workspace, then reattach the content-addressed
+review:
+
+```sh
+seedspec-eval evaluate technical-blind-finalize \
+  <opaque-view>/blind-technical-review-draft.json \
+  --evidence <opaque-view>/blind-technical-evidence.json
+
+seedspec-eval evaluate technical-unblind <run-directory> \
+  --review <opaque-view>/blind-technical-review.json
+```
+
+The normal descriptive profile can then inspect process and decision provenance,
+but its evidence-bound finalizer requires the blinded technical quality vector
+and blinded checks to remain byte-for-byte semantically identical.
 
 ## Sensitivity tests
 
@@ -120,3 +150,7 @@ Only the relevant dimensions should decline, unrelated dimensions should remain
 stable, and uncertainty should increase when evidence is removed. This
 metamorphic test checks evaluator sensitivity without fitting the rubric to a
 particular gate suite.
+
+Case-level known-bad and valid-alternative artifacts, hack reports, and
+counterfactual execution records are defined in
+[Case qualification and counterfactual verification](case-qualification.md).

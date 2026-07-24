@@ -21,6 +21,7 @@ import {
   createProfileComparison,
   parseEvaluationProfile,
   parseDecisionLedger,
+  parseAttachedBlindTechnicalReview,
   summarizeEvaluationProfile,
   TECHNICAL_QUALITY_RUBRIC_VERSION,
   calculateContractGateSummary,
@@ -341,6 +342,14 @@ export async function buildRunProfileBrief(options: {
   if (subjectRun !== undefined && subjectRun.runId !== manifest.runId) {
     throw new Error("Captured subject-run evidence does not share the immutable run identity.");
   }
+  const blindTechnicalReview = await fileExists(resolve(runDirectory, "blind-technical-review.json"))
+    ? parseAttachedBlindTechnicalReview(
+        JSON.parse(await readFile(resolve(runDirectory, "blind-technical-review.json"), "utf8")) as unknown,
+      )
+    : undefined;
+  if (blindTechnicalReview !== undefined && blindTechnicalReview.runId !== manifest.runId) {
+    throw new Error("Attached blind technical review does not share the immutable run identity.");
+  }
   const sourceEnvelope = JSON.parse(await readFile(resolve(runDirectory, "source-envelope.json"), "utf8")) as {
     untrustedMaterial?: unknown;
     availableAuthorQuestionIds?: unknown;
@@ -445,6 +454,7 @@ export async function buildRunProfileBrief(options: {
     },
     reportPath: "report.md",
     ...(await fileExists(resolve(runDirectory, "decision-ledger.json")) ? { decisionLedgerPath: "decision-ledger.json" } : {}),
+    ...(blindTechnicalReview === undefined ? {} : { blindTechnicalReview }),
     instructions: [
       "Use this envelope instead of opening the full evaluation case, evaluator implementation, TypeScript schemas, or unrelated repository files.",
       "Inspect only the listed authored artifacts, runner report, optional decision ledger, and trace events needed to support a finding.",
@@ -460,6 +470,10 @@ export async function buildRunProfileBrief(options: {
       "When subjectRun.turnCount is present, use it as the reported total turn count. Do not infer a different count from subject-authored trace events.",
       "Adaptation challenge definitions are evaluation prompts, not captured outcomes. Do not execute a challenge during profile evaluation; emit not-run unless the envelope supplies a separate captured adaptation run.",
       "Treat contractGate only as run-integrity and outcome-contract evidence. Its check counts do not establish implementation quality and must not influence ordinal technical levels without underlying implementation evidence.",
+      ...(blindTechnicalReview === undefined ? [] : [
+        "The independent technical quality vector was finalized in a treatment-blinded review before this profile task. Copy blindTechnicalReview.review.quality exactly into technical.quality; do not rescore it after treatment identity is visible.",
+        "Include every blindTechnicalReview.review.check unchanged in technical.checks. You may add separately identified checks for non-technical profile analysis, but do not alter or remove the blinded checks.",
+      ]),
     ],
   });
   const evidenceEnvelope = createProfileEvidenceEnvelope(evidenceBody);
@@ -719,6 +733,33 @@ function assertProfileMatchesEvidence(body: EvaluationProfileBody, evidence: Pro
       throw new Error(
         `Technical quality must use rubric version ${TECHNICAL_QUALITY_RUBRIC_VERSION}.`,
       );
+    }
+    if (evidence.blindTechnicalReview !== undefined) {
+      assertBlindTechnicalReviewPreserved(body, evidence);
+    }
+  }
+}
+
+function assertBlindTechnicalReviewPreserved(
+  body: EvaluationProfileBody,
+  evidence: ProfileEvidenceEnvelope,
+): void {
+  const attached = evidence.blindTechnicalReview;
+  if (attached === undefined || body.technical === undefined) return;
+  if (
+    stableJson(body.technical.quality as unknown as JsonValue)
+    !== stableJson(attached.review.quality as unknown as JsonValue)
+  ) {
+    throw new Error("Evaluation profile must preserve the treatment-blinded technical quality vector exactly.");
+  }
+  const checks = new Map(body.technical.checks.map((check) => [check.id, check]));
+  for (const blindCheck of attached.review.checks) {
+    const observed = checks.get(blindCheck.id);
+    if (
+      observed === undefined
+      || stableJson(observed as unknown as JsonValue) !== stableJson(blindCheck as unknown as JsonValue)
+    ) {
+      throw new Error(`Evaluation profile must preserve blinded technical check ${blindCheck.id} exactly.`);
     }
   }
 }

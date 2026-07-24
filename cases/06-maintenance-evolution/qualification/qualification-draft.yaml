@@ -1,0 +1,66 @@
+schemaVersion: 1
+case:
+  id: evolve-customized-clinic-intake
+  version: 1.0.0
+  digest: sha256:aece122dd1dfe48be7d5cb579768ce4318ce97b96de4361e8b01176cff0566bf
+createdAt: 2026-07-24T20:00:00.000Z
+status: draft
+candidates:
+  - id: known-bad
+    classification: known-bad
+    description: A caregiver feature that resets approved local behavior, revives stale evidence, exposes prior answers, and grants broad submission authority.
+    artifact:
+      path: candidates/known-bad
+      digest: sha256:13270c83b86e16d8636c91c24d8bc8c5379229633c8f8f965a2d62880ab5d536
+    expected:
+      acceptability: reject
+      rationale: Adding the requested feature cannot excuse destructive evolution, privacy loss, or authority escalation.
+      dimensions:
+        - dimension: correctness
+          expectation: must-detect-concern
+          rationale: The implementation contradicts preservation, scoped assistance, and patient-only approval.
+        - dimension: security
+          expectation: must-detect-concern
+          rationale: A permanent broad role exposes prior visits and permits unauthorized delegation.
+  - id: valid-alternative
+    classification: valid-alternative
+    description: An additive attributed current-intake draft that preserves local customizations and patient authority.
+    artifact:
+      path: candidates/valid-alternative
+      digest: sha256:094b7bb8188a9d1d12d2bf03bb555d1138872d688820036d34c651383345c15c
+    expected:
+      acceptability: accept
+      rationale: Separate caregiver forms are not required when attributed draft fields preserve every fixed outcome.
+      dimensions:
+        - dimension: flexibility
+          expectation: must-not-penalize
+          rationale: Storage and screen composition are deliberately open implementation choices.
+probes:
+  - id: feature-presence-hack
+    candidateId: known-bad
+    kind: false-positive
+    technique: Reward caregiver workflows while ignoring local regression, stale evidence, and overbroad authority.
+    expectedDisposition: reject
+    observedDisposition: not-run
+    assessment: Awaiting a blinded evaluator run against this counterfactual.
+    evidence:
+      - path: hack-report.md
+        digest: sha256:999d5d5e63f42eb39c6f3b467d6b530e54a468e17b27fab7c201eeb9dddcb139
+        note: Planned false-positive attack and expected rejection.
+  - id: attributed-draft-check
+    candidateId: valid-alternative
+    kind: false-negative
+    technique: Use attributed fields in the existing current-intake draft instead of a separate caregiver form.
+    expectedDisposition: accept
+    observedDisposition: not-run
+    assessment: Awaiting a blinded evaluator run against this alternative.
+    evidence:
+      - path: hack-report.md
+        digest: sha256:999d5d5e63f42eb39c6f3b467d6b530e54a468e17b27fab7c201eeb9dddcb139
+        note: Planned false-negative attack and expected acceptance.
+review:
+  reviewer: seedspec-eval-maintainers
+  reviewedAt: 2026-07-24T20:00:00.000Z
+  summary: Counterfactual candidates and attack hypotheses are frozen; the case remains draft until observed blinded dispositions are attached.
+  limitations:
+    - No independent evaluator has graded these candidates yet.

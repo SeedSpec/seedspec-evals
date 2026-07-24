@@ -18,6 +18,7 @@ import {
   ComparisonAxesSchema,
   TechnicalExpectationSchema,
 } from "./cases.js";
+import { AttachedBlindTechnicalReviewSchema } from "./blind-reviews.js";
 import { EvaluationProfileSubjectSchema } from "./profiles.js";
 import { ContractGateSummarySchema } from "./scores.js";
 
@@ -102,6 +103,7 @@ export const ProfileEvidenceEnvelopeBodySchema = z.strictObject({
   }).optional(),
   reportPath: SafeRelativePathSchema,
   decisionLedgerPath: SafeRelativePathSchema.optional(),
+  blindTechnicalReview: AttachedBlindTechnicalReviewSchema.optional(),
   instructions: z.array(z.string().trim().min(1).max(4_000)).min(1).max(64),
 }).superRefine((envelope, context) => {
   if (envelope.contractGate === undefined && envelope.deterministic === undefined) {
@@ -129,7 +131,9 @@ export type ProfileEvidenceEnvelopeBody = z.infer<typeof ProfileEvidenceEnvelope
 export type ProfileEvidenceEnvelopeBodyInput = z.input<typeof ProfileEvidenceEnvelopeBodySchema>;
 export type ProfileEvidenceEnvelope = DeepReadonly<z.infer<typeof ProfileEvidenceEnvelopeDataSchema>>;
 
-export function createProfileEvidenceEnvelope(input: ProfileEvidenceEnvelopeBodyInput): ProfileEvidenceEnvelope {
+export function createProfileEvidenceEnvelope(
+  input: ProfileEvidenceEnvelopeBodyInput | ProfileEvidenceEnvelopeBody,
+): ProfileEvidenceEnvelope {
   const body = ProfileEvidenceEnvelopeBodySchema.parse(input);
   return ProfileEvidenceEnvelopeSchema.parse({
     ...body,

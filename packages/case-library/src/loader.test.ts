@@ -118,11 +118,12 @@ describe("case discovery and loading", () => {
       "03-cross-system-workflow/case.yaml",
       "04-extract-existing-solution/case.yaml",
       "05-specialized-kestrel-transfer/case.yaml",
+      "06-maintenance-evolution/case.yaml",
     ]);
     expect(second.map(({ case: evaluationCase }) => evaluationCase.id)).toEqual(
       first.map(({ case: evaluationCase }) => evaluationCase.id),
     );
-    expect(first).toHaveLength(5);
+    expect(first).toHaveLength(6);
     expect(
       first.map(({ case: evaluationCase }) => evaluationCase.authorship.mode),
     ).toEqual([
@@ -131,6 +132,7 @@ describe("case discovery and loading", () => {
       "cross-system-workflow",
       "extract-existing-solution",
       "cross-system-workflow",
+      "existing-product-feature",
     ]);
     for (const { case: evaluationCase } of first) {
       expect(

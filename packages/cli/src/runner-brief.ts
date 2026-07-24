@@ -29,6 +29,12 @@ export function buildDesktopManifest(envelope: ExecutionEnvelope, runner: Deskto
   void _runId;
   void _runner;
   const body = JSON.parse(JSON.stringify(immutableBody)) as RunManifestInput;
+  body.model = {
+    ...body.model,
+    routing: body.model.routing?.region === undefined
+      ? undefined
+      : { region: body.model.routing.region },
+  };
   const treatment = skillTreatment(envelope.manifest);
   const delivery = guidanceDelivery(envelope.manifest);
   const guidedAudit = treatment === undefined
@@ -85,14 +91,7 @@ export function buildDesktopBrief(
     instruction === "Use only the tools exposed for this turn and keep all artifacts inside the run workspace."
       ? "Use only the tools exposed for this turn. Put evaluated deliverables under workspace/ and put the evidence sidecars report.md and trace-draft.json at this isolated project's root."
       : instruction);
-  const traceModel = !usesSeedSpec(config.variant)
-    ? {
-        ...manifest.model,
-        routing: manifest.model.routing?.region === undefined
-          ? undefined
-          : { region: manifest.model.routing.region },
-      }
-    : manifest.model;
+  const traceModel = manifest.model;
   const tracePath = "trace-draft.json";
   const reportPath = "report.md";
   const workspacePath = "workspace";
