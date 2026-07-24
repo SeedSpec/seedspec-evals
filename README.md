@@ -133,6 +133,23 @@ By default, the command creates a new isolated directory under `~/Code/agent-eva
 
 Repeat once for each variant. For Claude Code, replace `codex` with `claude-code`. The runner-safe envelope contains the reviewed case and available clarification IDs but no simulated answers. A control record outside the runner project exposes one answer at a time through `runner-control.mjs answer`. The brief also carries variant-specific instructions and tools, the requested model, required outputs, and the portable observable-trace contract. Select the same underlying model and snapshot. If it is unavailable, create a new run identity for the actual model rather than calling the run matched.
 
+Both CLI environments have captured, non-interactive subject runners:
+
+```sh
+node packages/cli/dist/index.js runner codex-run <isolated-codex-run-directory> \
+  --confirm-model-execution
+
+node packages/cli/dist/index.js runner claude-run <isolated-claude-run-directory> \
+  --confirm-model-execution
+```
+
+The Claude adapter requires an `anthropic/...` model in the run manifest,
+disables settings, MCP servers, session persistence, web tools, and reasoning
+capture, and retains sanitized JSONL events plus provider-reported token,
+cache, cost, model, session, timing, and final-response evidence. It enforces
+the immutable run-duration limit and records a timeout as failed evidence
+rather than allowing an over-budget result to appear successful.
+
 After a desktop run finishes, verify its executable claims, evaluate its
 contract/integrity gate, and prepare a descriptive evaluation profile:
 
@@ -241,7 +258,7 @@ node packages/cli/dist/index.js matrix start runs/<plan>.json \
   --confirm-model-execution
 ```
 
-Think stores observable execution events durably with the run. Codex and Claude Code write the same trace shape from the generated brief. Traces include messages, tool activity, timing, usage when available, artifacts, errors, redactions, and capture limitations; hidden reasoning is never collected. See [the parity-runner and trace instructions](docs/runners.md) for the full copy/paste workflow.
+Think stores observable execution events durably with the run. Codex and Claude Code write the same trace shape from the generated brief, and their captured runners retain provider JSONL evidence outside the evaluated workspace. Traces include messages, tool activity, timing, usage when available, artifacts, errors, redactions, and capture limitations; hidden reasoning is never collected. See [the parity-runner and trace instructions](docs/runners.md) for the full workflow.
 
 The bundled evaluator skills cover descriptive package profiling, read-only
 technical review, authorship value, implementation fidelity and congruency,

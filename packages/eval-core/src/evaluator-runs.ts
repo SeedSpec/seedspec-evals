@@ -14,18 +14,28 @@ export const EvaluatorUsageSchema = z.strictObject({
   capture: z.enum(["provider-reported", "unavailable"]),
   inputTokens: z.number().int().nonnegative().optional(),
   cachedInputTokens: z.number().int().nonnegative().optional(),
+  cacheCreationInputTokens: z.number().int().nonnegative().optional(),
   outputTokens: z.number().int().nonnegative().optional(),
   reasoningOutputTokens: z.number().int().nonnegative().optional(),
   totalTokens: z.number().int().nonnegative().optional(),
+  costUsd: z.number().nonnegative().finite().optional(),
 }).superRefine((usage, context) => {
   if (usage.capture === "provider-reported"
     && [usage.inputTokens, usage.cachedInputTokens, usage.outputTokens].some((value) => value === undefined)) {
     context.addIssue({ code: "custom", message: "provider-reported usage requires input, cached input, and output counts" });
   }
   if (usage.capture === "unavailable"
-    && [usage.inputTokens, usage.cachedInputTokens, usage.outputTokens, usage.reasoningOutputTokens, usage.totalTokens]
+    && [
+      usage.inputTokens,
+      usage.cachedInputTokens,
+      usage.cacheCreationInputTokens,
+      usage.outputTokens,
+      usage.reasoningOutputTokens,
+      usage.totalTokens,
+      usage.costUsd,
+    ]
       .some((value) => value !== undefined)) {
-    context.addIssue({ code: "custom", message: "unavailable usage cannot contain token counts" });
+    context.addIssue({ code: "custom", message: "unavailable usage cannot contain provider usage values" });
   }
 });
 

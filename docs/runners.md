@@ -57,6 +57,26 @@ node packages/cli/dist/index.js runner brief runs/first-parity-plan.json \
 
 Paste the output into a clean Claude Code session. Configure the same underlying model and snapshot. If it is unavailable, generate a new run identity for the actual model; do not treat similar product labels as evidence of model parity.
 
+For a non-interactive Claude Code run with durable outer capture, use:
+
+```sh
+node packages/cli/dist/index.js runner claude-run \
+  <isolated-run-directory> \
+  --confirm-model-execution
+```
+
+The run manifest must use an explicit `anthropic/...` model slug. The adapter
+passes the provider-local model ID to Claude Code, disables user/project
+settings, MCP servers, session persistence, web tools, and slash commands, and
+allows only the local file and shell tools needed by the controlled runner.
+It writes the same `subject-events.jsonl`, `subject-stderr.log`,
+`subject-final.md`, and content-addressed `subject-run.json` evidence as the
+Codex adapter. Provider-reported cache creation, cache reads, tokens, exact
+cost, resolved model, and session ID are retained. Thinking blocks are removed
+before the event stream is written and the redaction is declared as a capture
+limitation. The adapter terminates the subject at the immutable manifest
+duration limit and records that run as failed.
+
 ## 4. Cloudflare Think
 
 After deploying the Worker and setting `SEEDSPEC_EVAL_API_TOKEN`, run the reviewed plan through the Workflow coordinator:
@@ -83,7 +103,7 @@ node packages/cli/dist/index.js run trace <run-id> \
   --endpoint <worker-url>
 ```
 
-Codex and Claude Code write a trace body from the template embedded in their generated brief. Finalize and content-address it with:
+Codex and Claude Code write a trace body from the template embedded in their generated brief. Their captured runners require that finalized trace before reporting success. For a manual run, finalize and content-address it with:
 
 ```sh
 node runner-control.mjs finalize-trace

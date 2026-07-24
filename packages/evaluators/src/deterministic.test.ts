@@ -126,6 +126,7 @@ describe("evaluateDeterministically", () => {
     });
 
     expect(scorecard.checks.find((check) => check.id === "hidden-expectations-isolated")?.outcome).toBe("pass");
+    expect(scorecard.checks.find((check) => check.id === "run-completed-with-trace")?.outcome).toBe("fail");
     expect(scorecard.checks.find((check) => check.id === "deliverable-manifest")?.outcome).toBe("fail");
     expect(scorecard.checks.find((check) => check.id === "criterion-valid")?.outcome).toBe("not-applicable");
     expect(scorecard.checks.find((check) => check.id === "authoring-state-excluded")?.outcome).toBe("fail");
@@ -133,12 +134,13 @@ describe("evaluateDeterministically", () => {
     expect(scorecard.interpretation).toContain("not an implementation-quality score");
     expect(scorecard.gate).toMatchObject({
       status: "fail",
-      failed: 2,
+      failed: 3,
       unevaluated: 2,
     });
     expect(scorecard.gate?.categories.find(({ category }) => category === "run-integrity")).toMatchObject({
-      status: "pass",
+      status: "fail",
       passed: 2,
+      failed: 1,
     });
   });
 });

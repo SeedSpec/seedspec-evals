@@ -10,6 +10,7 @@ import {
   RunManifestSchema,
   ScorecardSchema,
   createArtifact,
+  parseSubjectRun,
   sha256Hex,
   type Artifact,
   type ArtifactManifest,
@@ -47,6 +48,11 @@ export async function evaluateRunDirectoryDeterministically(options: {
   const workspace = resolve(runDirectory, "workspace");
   const artifacts = await inventoryRunEvidence(runDirectory, workspace, manifest);
   const artifactManifest = ArtifactManifestSchema.parse({ schemaVersion: 1, runId: manifest.runId, artifacts });
+  const subjectRunPath = resolve(runDirectory, "subject-run.json");
+  const subjectRunStat = await lstat(subjectRunPath).catch(() => null);
+  const subjectRun = subjectRunStat?.isFile() === true
+    ? parseSubjectRun(JSON.parse(await readFile(subjectRunPath, "utf8")) as unknown)
+    : undefined;
   const adapters = manifest.target.stage === "implementation"
     ? await implementationVerificationAdapters(runDirectory, artifacts)
     : ["raw-source", "markdown-authored"].includes(manifest.variant)
@@ -59,6 +65,13 @@ export async function evaluateRunDirectoryDeterministically(options: {
     stage: manifest.target.stage,
     createdAt: options.createdAt,
     adapters,
+    ...(subjectRun === undefined ? {} : {
+      subjectRun: {
+        runId: subjectRun.runId,
+        status: subjectRun.status,
+        ...(subjectRun.trace === undefined ? {} : { traceId: subjectRun.trace.traceId }),
+      },
+    }),
   });
   const artifactManifestPath = resolve(runDirectory, "artifact-manifest.json");
   const scorecardPath = resolve(runDirectory, "deterministic-scorecard.json");
@@ -155,6 +168,7 @@ async function inventoryRunEvidence(runDirectory: string, workspace: string, man
     "source-envelope.json": "source",
     "report.md": "log",
     "trace.json": "tool-trace",
+    "subject-run.json": "tool-trace",
     "decision-ledger.json": "tool-trace",
     "implementation-verification.json": "tool-trace",
   } as const;

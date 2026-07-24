@@ -53,6 +53,7 @@ import {
 } from "./implementation-skill-plan.js";
 import { runCodexProfileEvaluator } from "./profile-runner.js";
 import { runCodexSubject } from "./subject-runner.js";
+import { runClaudeSubject } from "./claude-subject-runner.js";
 import {
   cancelRemoteMatrix,
   cancelRemoteSubmission,
@@ -509,6 +510,35 @@ runner.command("codex-run")
       evaluationRepositoryRoot: EVALUATION_REPOSITORY_ROOT,
       codexExecutable: options.codex,
       reasoningEffort: options.reasoningEffort,
+    });
+    if (result.run.status !== "succeeded") {
+      throw new Error(`Captured subject run ${result.run.subjectRunId} failed. Evidence: ${result.path}`);
+    }
+    output({
+      ok: true,
+      subjectRunId: result.run.subjectRunId,
+      runId: result.run.runId,
+      traceId: result.run.trace?.traceId,
+      path: result.path,
+    }, `Captured subject run ${result.run.subjectRunId}.\nTrace: ${result.run.trace?.traceId ?? "unavailable"}\nSubject evidence: ${result.path}`);
+  });
+
+runner.command("claude-run")
+  .description("Run and capture one isolated Claude Code subject from a prepared runner kit.")
+  .argument("<run-directory>", "isolated Claude Code runner directory")
+  .option("--claude <file>", "Claude Code CLI executable", "claude")
+  .option("--confirm-model-execution", "explicitly authorize the subject model call")
+  .action(async (runDirectory: string, options: {
+    claude: string;
+    confirmModelExecution?: boolean;
+  }) => {
+    if (options.confirmModelExecution !== true) {
+      throw new Error("Subject model execution was not started. Review the runner handoff, then re-run with --confirm-model-execution.");
+    }
+    const result = await runClaudeSubject({
+      runDirectory,
+      evaluationRepositoryRoot: EVALUATION_REPOSITORY_ROOT,
+      claudeExecutable: options.claude,
     });
     if (result.run.status !== "succeeded") {
       throw new Error(`Captured subject run ${result.run.subjectRunId} failed. Evidence: ${result.path}`);

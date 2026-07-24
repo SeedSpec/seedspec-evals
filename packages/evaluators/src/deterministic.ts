@@ -18,6 +18,11 @@ export interface DeterministicCheckContext {
   readonly evaluationCase: EvaluationCase;
   readonly artifacts: ArtifactManifest;
   readonly stage: EvaluationStage;
+  readonly subjectRun?: {
+    readonly runId: string;
+    readonly status: "succeeded" | "failed";
+    readonly traceId?: string;
+  };
 }
 
 export interface DeterministicAdapterResult {
@@ -42,6 +47,7 @@ export function evaluateDeterministically(input: DeterministicEvaluationInput): 
   const adapterMap = new Map(input.adapters?.map((adapter) => [adapter.id, adapter]) ?? []);
 
   checks.push(caseMatchesManifest(input));
+  checks.push(runCompletedWithTrace(input));
   checks.push(hiddenExpectationsAreIsolated(input));
   checks.push(...authoringStateIsExcluded(input));
   checks.push(...requiredDeliverablesExist(input));
@@ -69,6 +75,33 @@ export function evaluateDeterministically(input: DeterministicEvaluationInput): 
     gate: calculateContractGateSummary(checks),
     checks,
   }) as DeterministicScorecard;
+}
+
+function runCompletedWithTrace(input: DeterministicCheckContext): DeterministicCheckResult {
+  const trace = input.artifacts.artifacts.find(({ path }) => path === "evidence/trace.json");
+  const report = input.artifacts.artifacts.find(({ path }) => path === "evidence/report.md");
+  const subjectMatches = input.subjectRun === undefined || input.subjectRun.runId === input.manifest.runId;
+  const subjectSucceeded = input.subjectRun === undefined || input.subjectRun.status === "succeeded";
+  const subjectHasTrace = input.subjectRun === undefined || input.subjectRun.traceId !== undefined;
+  const passed = trace !== undefined && report !== undefined && subjectMatches && subjectSucceeded && subjectHasTrace;
+  const failures = [
+    ...(trace === undefined ? ["finalized trace is missing"] : []),
+    ...(report === undefined ? ["runner evidence report is missing"] : []),
+    ...(!subjectMatches ? ["captured subject run has a different run identity"] : []),
+    ...(!subjectSucceeded ? ["captured subject run failed"] : []),
+    ...(!subjectHasTrace ? ["captured subject run has no finalized trace binding"] : []),
+  ];
+  return {
+    id: "run-completed-with-trace",
+    category: "run-integrity",
+    description: "The evaluated run completed successfully and retained its evidence report and finalized observable trace.",
+    outcome: passed ? "pass" : "fail",
+    weight: 2,
+    message: passed ? "The run completed with its report and identity-bound trace evidence." : failures.join("; "),
+    evidence: [report, trace]
+      .filter((artifact) => artifact !== undefined)
+      .map(({ artifactId, path }) => ({ artifactId, path })),
+  };
 }
 
 function authoringStateIsExcluded(input: DeterministicCheckContext): DeterministicCheckResult[] {

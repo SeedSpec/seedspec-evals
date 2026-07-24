@@ -37,6 +37,7 @@ export const CLI_DOCS: Readonly<Record<string, string>> = {
     "runner brief — create an isolated Codex or Claude Code parity runner kit outside this repository",
     "runner preflight — verify isolation, identity, clean output, broker availability, and response non-disclosure",
     "runner codex-run — execute and durably capture a Codex subject only with explicit model-call confirmation",
+    "runner claude-run — execute and durably capture a Claude Code subject only with explicit model-call confirmation",
     "author answer — expose one pre-declared simulated author answer through a runner-safe envelope",
     "trace finalize|validate — content-address and verify desktop-runner traces",
     "decision-ledger finalize|validate — content-address observable implementation decision claims without collecting hidden reasoning",

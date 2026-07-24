@@ -23,7 +23,7 @@ export const SubjectRunBodySchema = z.strictObject({
   runId: RunIdSchema,
   sourceRunId: RunIdSchema.optional(),
   runner: z.strictObject({
-    id: z.literal("codex-cli"),
+    id: z.enum(["codex-cli", "claude-code-cli"]),
     version: z.string().trim().min(1).max(256),
   }),
   model: z.string().trim().min(1).max(256),
