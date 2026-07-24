@@ -40,6 +40,23 @@ async function authoredInputFixture(): Promise<string> {
   return directory;
 }
 
+async function authoringSkillFixture(): Promise<string> {
+  const directory = await mkdtemp(resolve(tmpdir(), "seedspec-plan-authoring-skill-"));
+  temporaryDirectories.push(directory);
+  const skillPath = resolve(directory, "SKILL.md");
+  await writeFile(skillPath, [
+    "---",
+    "name: shape-solution-intent",
+    "description: Shape rough source material into explicit agent-ready intent.",
+    "---",
+    "# Shape solution intent",
+    "",
+    "Clarify outcomes, boundaries, consequential decisions, and distinguishing evidence.",
+    "",
+  ].join("\n"), "utf8");
+  return skillPath;
+}
+
 describe("createExperimentPlan", () => {
   it("creates a same-package implementation skill matrix without leaking the separate skill to controls", async () => {
     const cases = await loadCaseLibrary(resolve("cases"));
@@ -274,6 +291,7 @@ describe("createExperimentPlan", () => {
     const cases = await loadCaseLibrary(resolve("cases"));
     const selected = cases.filter(({ case: evaluationCase }) =>
       evaluationCase.id === "sparse-neighborhood-tool-lending");
+    const skillPath = await authoringSkillFixture();
     const plan = await createSkillExperimentPlan({
       cases: selected,
       models: ["openai/gpt-5.6-sol"],
@@ -282,7 +300,7 @@ describe("createExperimentPlan", () => {
       protocolVersion: "0.1.0-alpha.5",
       createdAt: "2026-07-22T12:00:00.000Z",
       maxSteps: 8,
-      skillPath: resolve("../seedspec/skills/shape-solution-intent/SKILL.md"),
+      skillPath,
     });
 
     expect(plan.envelopes).toHaveLength(SKILL_TREATMENTS.length);
