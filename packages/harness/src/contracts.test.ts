@@ -19,10 +19,12 @@ function validConfig(runId = FALLBACK_RUN_ID) {
     runId,
     caseId: "sparse-app",
     stage: "authorship" as const,
+    variant: "seedspec-guided" as const,
     model: "@cf/meta/llama-4-scout-17b-16e-instruct",
     gatewayId: "seedspec-evals",
     trustedInstructions: ["Produce the requested SeedSpec artifacts."],
     untrustedMaterial: "A user asks for a small inventory application.",
+    deliverables: [{ id: "manifest", description: "A package manifest.", required: true, path: "seedspec.yaml" }],
   };
 }
 
@@ -37,6 +39,7 @@ function validBoundRequest() {
       digest: `sha256:${"a".repeat(64)}`,
     },
     target: { stage: configWithoutRunId.stage },
+    variant: configWithoutRunId.variant,
     repetition: 0,
     createdAt: "2026-07-21T12:00:00.000Z",
     protocol: { name: "seedspec", version: "0.1.0" },
@@ -61,6 +64,7 @@ function validBoundRequest() {
       gatewayId: configWithoutRunId.gatewayId,
       maxSteps: DEFAULT_MAX_STEPS,
       untrustedMaterialDigest: `sha256:${sha256Hex(configWithoutRunId.untrustedMaterial)}`,
+      deliverablesDigest: digestJson(configWithoutRunId.deliverables),
       simulatedAuthorResponsesDigest: digestJson(simulatedAuthorResponses),
     },
   });
@@ -108,6 +112,10 @@ describe("run boundary contracts", () => {
     expect(SubmitRunRequestSchema.safeParse({
       ...request,
       config: { ...request.config, untrustedMaterial: "Different source material." },
+    }).success).toBe(false);
+    expect(SubmitRunRequestSchema.safeParse({
+      ...request,
+      config: { ...request.config, deliverables: [{ ...request.config.deliverables[0], path: "instructions.md" }] },
     }).success).toBe(false);
     expect(SubmitRunRequestSchema.safeParse({
       ...request,

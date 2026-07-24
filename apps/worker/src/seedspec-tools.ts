@@ -1,18 +1,22 @@
 import type { WorkspaceLike } from "@cloudflare/think";
+import type { EvaluationStage, EvaluationVariant } from "@seedspec/eval-core";
 import seedSpecManifestSchema from "@seedspec/protocol/schemas/v0.1/seedspec.schema.json" with { type: "json" };
 import { Ajv2020, type ErrorObject } from "ajv/dist/2020.js";
 import { tool, type ToolSet } from "ai";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 
+import { FROZEN_PROTOCOL_SNAPSHOT } from "./protocol-snapshot.generated.js";
+
 const PROTOCOL_VERSION = "0.1";
-const PROTOCOL_PACKAGE_VERSION = "0.1.0-alpha.2";
+const PROTOCOL_PACKAGE_VERSION = FROZEN_PROTOCOL_SNAPSHOT.version;
 const TOOL_FORMAT_VERSION = "0.1.0-alpha.1";
 const KINDS = ["solution", "application", "feature", "workflow", "automation", "configuration", "integration"] as const;
 const AREAS = [
   "concern-separation",
   "kind-aware-discovery",
   "material-ambiguity",
+  "decision-provenance",
   "internal-consistency",
   "progressive-hardening",
   "agent-ready-handoff",
@@ -25,7 +29,7 @@ type ValidationResult = {
   check: string;
   toolFormatVersion: string;
   protocolVersion: string;
-  canonicalManifestSchema: { package: string; version: string; schemaId: string };
+  canonicalManifestSchema: { package: string; version: string; revision: string; schemaId: string };
   packageValidationAdapter: string;
   errors: Diagnostic[];
   warnings: Diagnostic[];
@@ -46,7 +50,12 @@ const KIND_LENSES: Record<string, readonly string[]> = {
   integration: ["participating systems and outcome", "concept and field mappings", "authority, direction, ordering, and reconciliation", "credential boundaries", "partial failure and verification"],
 };
 
-export function createSeedSpecTools(workspace: WorkspaceLike, stage: "authorship" | "implementation"): ToolSet {
+export function createSeedSpecTools(
+  workspace: WorkspaceLike,
+  stage: EvaluationStage,
+  variant: EvaluationVariant,
+): ToolSet {
+  if (["raw-source", "markdown-authored"].includes(variant)) return {};
   const shared = {
     seedspec_package_check: tool({
       description: "Validate a SeedSpec 0.1 package in the Think workspace using the canonical @seedspec/protocol manifest schema plus package references, semantics, configuration, resources, and digest checks.",
@@ -59,7 +68,7 @@ export function createSeedSpecTools(workspace: WorkspaceLike, stage: "authorship
       execute: async ({ root }) => digestPackage(workspace, root),
     }),
   };
-  if (stage === "implementation") return shared;
+  if (stage === "implementation" || variant === "seedspec-minimal") return shared;
   return {
     ...shared,
     seedspec_kind_lint: tool({
@@ -68,7 +77,7 @@ export function createSeedSpecTools(workspace: WorkspaceLike, stage: "authorship
       execute: async ({ root }) => kindLint(workspace, root),
     }),
     seedspec_audit_guidance: tool({
-      description: "Return current, versioned SeedSpec authoring instructions for one of the six audit areas.",
+      description: "Return current, versioned SeedSpec authoring instructions for one of the seven audit areas.",
       inputSchema: z.strictObject({
         area: z.enum(AREAS),
         kind: z.union([z.enum(KINDS), z.string().min(1).max(160)]),
@@ -77,6 +86,17 @@ export function createSeedSpecTools(workspace: WorkspaceLike, stage: "authorship
       execute: ({ area, kind, target }) => auditGuidance(area, kind, target),
     }),
   };
+}
+
+export function seedSpecToolNamesForVariant(
+  stage: EvaluationStage,
+  variant: EvaluationVariant,
+): string[] {
+  if (["raw-source", "markdown-authored"].includes(variant)) return [];
+  const shared = ["seedspec_package_check", "seedspec_package_digest"];
+  return stage === "implementation" || variant === "seedspec-minimal"
+    ? shared
+    : [...shared, "seedspec_kind_lint", "seedspec_audit_guidance"];
 }
 
 export async function checkPackage(workspace: WorkspaceLike, root: string): Promise<unknown> {
@@ -177,12 +197,13 @@ async function kindLint(workspace: WorkspaceLike, root: string): Promise<unknown
 
 function auditGuidance(area: (typeof AREAS)[number], kind: string, target: string): unknown {
   const objectives: Record<(typeof AREAS)[number], readonly string[]> = {
-    "concern-separation": ["Separate portable core intent, meaningful configuration, additions, implementation profiles, artifacts, implementation resources, and observable acceptance.", "Flag technology in core intent and acceptance that prescribes architecture; ask when correct placement depends on author intent."],
+    "concern-separation": ["Separate primary author intent, meaningful configuration, additions, implementation profiles, artifacts, implementation resources, future applied end-user intent, and scoped evidence.", "Give each material concern one canonical owner. Treat agent instructions as routing rather than a shadow specification, and report both duplicated authority and unnecessary fragmentation."],
     "kind-aware-discovery": (KIND_LENSES[kind] ?? KIND_LENSES["solution"]!).map((item) => `Assess ${item} as established, unclear, materially missing, or not material, citing package evidence.`),
     "material-ambiguity": ["Find wording with multiple plausible interpretations that materially change realization.", "Record competing interpretations, consequence, reversibility, and whether deferral is safe. Ask at most three related questions at once."],
-    "internal-consistency": ["Run deterministic checks first, then cite both sides of semantic contradictions.", "Check permissions, state behavior, configuration effects, acceptance coverage, profile authority, terminology, and capability contracts."],
+    "decision-provenance": ["Inventory consequential decisions and classify critical, material, or minor materiality with evidence.", "Separate who proposed, selects, constrains, and implements each decision. Classify expected latitude as fixed, preferred, delegated, open, or unresolved; greater author control is not inherently better.", "Treat reference decisions as normative, preferred, or illustrative only when evidence establishes that influence. Preserve mixed and unknown attribution."],
+    "internal-consistency": ["Run deterministic checks first, then cite both sides of semantic contradictions.", "Check objectives, obligations, forbidden states, configuration effects, profile authority, terminology, capability contracts, and the evidence claimed for each success scope."],
     "progressive-hardening": [`Review only to the requested ${target} depth.`, "Report material gaps, intentional omissions, and blockers separately. Do not manufacture scope or enterprise requirements."],
-    "agent-ready-handoff": ["Read the package as an implementing agent without the authoring conversation.", "Identify facts it would guess, authority that could be misread, buried material, and acceptance that cannot be observed."],
+    "agent-ready-handoff": ["Read the package as an implementing agent without the authoring conversation.", "Identify facts it would guess, authority that could be misread, buried material, unjustified prescription, and success claims that cannot be observed."],
   };
   return {
     instructionFormat: "0.1",
@@ -211,6 +232,7 @@ function result(ok: boolean, errors: Diagnostic[], warnings: Diagnostic[]): Vali
     canonicalManifestSchema: {
       package: "@seedspec/protocol",
       version: PROTOCOL_PACKAGE_VERSION,
+      revision: FROZEN_PROTOCOL_SNAPSHOT.sourceDigest,
       schemaId: seedSpecManifestSchema.$id,
     },
     packageValidationAdapter: "think-workspace",

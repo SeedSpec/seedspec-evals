@@ -60,6 +60,20 @@ export const Sha256DigestSchema = z
 export const RunIdSchema = z.string().regex(/^run_[a-f0-9]{64}$/);
 export const ArtifactIdSchema = z.string().regex(/^artifact_[a-f0-9]{64}$/);
 
+export const TechnicalDimensionSchema = z.enum([
+  "correctness",
+  "meaningfulness",
+  "maintainability",
+  "flexibility",
+  "security",
+  "reliability",
+  "performance",
+  "accessibility",
+  "test-quality",
+  "evidence-quality",
+  "profile-conformance",
+]);
+
 export const SafeRelativePathSchema = z
   .string()
   .min(1)

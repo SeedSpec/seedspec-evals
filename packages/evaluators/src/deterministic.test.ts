@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   ArtifactManifestSchema,
   EvaluationCaseSchema,
+  createArtifact,
   createRunManifest,
   sha256Hex,
 } from "@seedspec/eval-core";
@@ -20,7 +21,6 @@ describe("evaluateDeterministically", () => {
       title: "Example",
       authorship: {
         mode: "sparse-application",
-        objective: "Author the package.",
         sourceMaterials: [{
           id: "note",
           label: "Note",
@@ -30,7 +30,28 @@ describe("evaluateDeterministically", () => {
           trust: "untrusted",
         }],
         constraints: [],
-        deliverables: [{ id: "manifest", description: "Manifest", required: true, path: "seedspec.yaml" }],
+        variants: {
+          "raw-source": {
+            objective: "Write instructions.",
+            deliverables: [{ id: "instructions", description: "Instructions", required: true, path: "instructions.md" }],
+          },
+          "markdown-authored": {
+            objective: "Write Markdown instructions.",
+            deliverables: [{ id: "instructions", description: "Instructions", required: true, path: "instructions.md" }],
+          },
+          "seedspec-minimal": {
+            objective: "Author the package.",
+            deliverables: [{ id: "manifest", description: "Manifest", required: true, path: "seedspec.yaml" }],
+          },
+          "seedspec-guided": {
+            objective: "Author the package.",
+            deliverables: [{ id: "manifest", description: "Manifest", required: true, path: "seedspec.yaml" }],
+          },
+          "seedspec-restructured": {
+            objective: "Author the package.",
+            deliverables: [{ id: "manifest", description: "Manifest", required: true, path: "seedspec.yaml" }],
+          },
+        },
       },
       successCriteria: [{
         id: "valid",
@@ -48,14 +69,19 @@ describe("evaluateDeterministically", () => {
       }],
       permittedVariability: [],
       simulatedToolResponses: [],
+      comparisonAxes: {
+        decisions: [{ id: "scope", stages: ["authorship"], title: "Scope", description: "Choose the package scope.", materiality: "material" }],
+        obligations: [{ id: "valid-output", stages: ["authorship"], kind: "success-criterion", description: "Produce a valid output.", importance: "material" }],
+      },
     });
     const manifest = createRunManifest({
       schemaVersion: 1,
       case: { id: evaluationCase.id, version: evaluationCase.version, digest },
       target: { stage: "authorship" },
+      variant: "seedspec-guided",
       repetition: 0,
       createdAt: "2026-07-21T12:00:00.000Z",
-      protocol: { name: "seedspec", version: "0.1.0-alpha.4" },
+      protocol: { name: "seedspec", version: "0.1.0-alpha.5" },
       runner: { id: "unit-test", kind: "local", version: "1.0.0" },
       model: { provider: "test", modelId: "none", parameters: {} },
       harness: { name: "unit-test", version: "1.0.0" },
@@ -67,7 +93,28 @@ describe("evaluateDeterministically", () => {
     const artifacts = ArtifactManifestSchema.parse({
       schemaVersion: 1,
       runId: manifest.runId,
-      artifacts: [],
+      artifacts: [createArtifact({
+        schemaVersion: 1,
+        runId: manifest.runId,
+        stage: "authorship",
+        variant: manifest.variant,
+        kind: "authored-package",
+        path: "open-questions.yaml",
+        mediaType: "application/yaml",
+        byteLength: 12,
+        digest,
+        createdAt: "2026-07-21T12:00:30.000Z",
+        provenance: {
+          case: manifest.case,
+          variant: manifest.variant,
+          protocol: manifest.protocol,
+          runner: manifest.runner,
+          model: manifest.model,
+          harness: manifest.harness,
+          tools: [],
+          evaluators: [],
+        },
+      })],
     });
 
     const scorecard = evaluateDeterministically({
@@ -79,7 +126,21 @@ describe("evaluateDeterministically", () => {
     });
 
     expect(scorecard.checks.find((check) => check.id === "hidden-expectations-isolated")?.outcome).toBe("pass");
+    expect(scorecard.checks.find((check) => check.id === "run-completed-with-trace")?.outcome).toBe("fail");
     expect(scorecard.checks.find((check) => check.id === "deliverable-manifest")?.outcome).toBe("fail");
     expect(scorecard.checks.find((check) => check.id === "criterion-valid")?.outcome).toBe("not-applicable");
+    expect(scorecard.checks.find((check) => check.id === "authoring-state-excluded")?.outcome).toBe("fail");
+    expect(scorecard.assessmentScope).toBe("run-contract-and-integrity");
+    expect(scorecard.interpretation).toContain("not an implementation-quality score");
+    expect(scorecard.gate).toMatchObject({
+      status: "fail",
+      failed: 3,
+      unevaluated: 2,
+    });
+    expect(scorecard.gate?.categories.find(({ category }) => category === "run-integrity")).toMatchObject({
+      status: "fail",
+      passed: 2,
+      failed: 1,
+    });
   });
 });

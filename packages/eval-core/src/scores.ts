@@ -9,7 +9,7 @@ import {
   type DeepReadonly,
 } from "./common.js";
 import { ArtifactEvidenceSchema } from "./artifacts.js";
-import { EvaluationStageSchema } from "./cases.js";
+import { EvaluationStageSchema, EvaluationVariantSchema, variantBelongsToStage } from "./cases.js";
 import {
   CaseReferenceSchema,
   EvaluatorMetadataSchema,
@@ -24,11 +24,33 @@ export const ScoreSummarySchema = z.strictObject({
 
 export const DeterministicCheckResultSchema = z.strictObject({
   id: IdentifierSchema,
+  category: z.enum(["run-integrity", "artifact-contract", "outcome-contract"]).optional(),
   description: z.string().trim().min(1).max(4_000),
   outcome: z.enum(["pass", "fail", "not-applicable"]),
+  // Retained for schema-v1 scorecard compatibility. Contract gates are interpreted
+  // from check outcomes and categories, never as an implementation-quality score.
   weight: z.number().finite().positive().max(1_000_000),
   message: z.string().trim().min(1).max(8_000).optional(),
   evidence: z.array(ArtifactEvidenceSchema).max(128),
+}).transform((check) => ({
+  ...check,
+  category: check.category ?? inferContractCheckCategory(check.id),
+}));
+
+export const ContractGateCategorySummarySchema = z.strictObject({
+  category: z.enum(["run-integrity", "artifact-contract", "outcome-contract"]),
+  status: z.enum(["pass", "fail", "incomplete"]),
+  passed: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  unevaluated: z.number().int().nonnegative(),
+});
+
+export const ContractGateSummarySchema = z.strictObject({
+  status: z.enum(["pass", "fail", "incomplete"]),
+  passed: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  unevaluated: z.number().int().nonnegative(),
+  categories: z.array(ContractGateCategorySummarySchema).length(3),
 });
 
 export const RubricCriterionResultSchema = z
@@ -53,6 +75,7 @@ const ScorecardCommon = {
   runId: RunIdSchema,
   case: CaseReferenceSchema,
   stage: EvaluationStageSchema,
+  variant: EvaluationVariantSchema,
   createdAt: IsoTimestampSchema,
   evaluator: EvaluatorMetadataSchema,
   summary: ScoreSummarySchema,
@@ -61,6 +84,13 @@ const ScorecardCommon = {
 const DeterministicScorecardSchema = z.strictObject({
   ...ScorecardCommon,
   kind: z.literal("deterministic"),
+  assessmentScope: z.literal("run-contract-and-integrity").default("run-contract-and-integrity"),
+  interpretation: z.literal(
+    "This gate reports run integrity, required artifacts, and declared outcome checks. It is not an implementation-quality score.",
+  ).default(
+    "This gate reports run integrity, required artifacts, and declared outcome checks. It is not an implementation-quality score.",
+  ),
+  gate: ContractGateSummarySchema.optional(),
   checks: z.array(DeterministicCheckResultSchema).min(1).max(10_000),
 });
 
@@ -75,6 +105,9 @@ const RubricScorecardSchema = z.strictObject({
 const ScorecardDataSchema = z
   .discriminatedUnion("kind", [DeterministicScorecardSchema, RubricScorecardSchema])
   .superRefine((scorecard, context) => {
+    if (!variantBelongsToStage(scorecard.variant, scorecard.stage)) {
+      context.addIssue({ code: "custom", message: "variant does not belong to stage", path: ["variant"] });
+    }
     if (scorecard.evaluator.kind !== scorecard.kind) {
       context.addIssue({
         code: "custom",
@@ -96,6 +129,16 @@ const ScorecardDataSchema = z
         path: ["summary"],
       });
     }
+    if (scorecard.kind === "deterministic" && scorecard.gate !== undefined) {
+      const expectedGate = calculateContractGateSummary(scorecard.checks);
+      if (JSON.stringify(scorecard.gate) !== JSON.stringify(expectedGate)) {
+        context.addIssue({
+          code: "custom",
+          message: `gate does not match check outcomes; expected ${JSON.stringify(expectedGate)}`,
+          path: ["gate"],
+        });
+      }
+    }
   });
 
 export const ScorecardSchema = ScorecardDataSchema.transform((value) => deepFreeze(value));
@@ -108,6 +151,53 @@ export type Scorecard = DeepReadonly<z.infer<typeof ScorecardDataSchema>>;
 export type EvaluationScore = Scorecard;
 export type DeterministicScorecard = Extract<Scorecard, { readonly kind: "deterministic" }>;
 export type RubricScorecard = Extract<Scorecard, { readonly kind: "rubric" }>;
+export type ContractGateSummary = z.infer<typeof ContractGateSummarySchema>;
+
+const CONTRACT_GATE_CATEGORIES = [
+  "run-integrity",
+  "artifact-contract",
+  "outcome-contract",
+] as const;
+
+export function inferContractCheckCategory(
+  checkId: string,
+): "run-integrity" | "artifact-contract" | "outcome-contract" {
+  if (["case-manifest-consistency", "hidden-expectations-isolated"].includes(checkId)) {
+    return "run-integrity";
+  }
+  if (checkId === "authoring-state-excluded" || checkId.startsWith("deliverable-")) {
+    return "artifact-contract";
+  }
+  return "outcome-contract";
+}
+
+export function calculateContractGateSummary(
+  checks: readonly Readonly<Pick<DeterministicCheckResult, "category" | "outcome">>[],
+): ContractGateSummary {
+  const categories = CONTRACT_GATE_CATEGORIES.map((category) => {
+    const members = checks.filter((check) => check.category === category);
+    const passed = members.filter(({ outcome }) => outcome === "pass").length;
+    const failed = members.filter(({ outcome }) => outcome === "fail").length;
+    const unevaluated = members.filter(({ outcome }) => outcome === "not-applicable").length;
+    return {
+      category,
+      status: gateStatus(failed, unevaluated),
+      passed,
+      failed,
+      unevaluated,
+    };
+  });
+  const passed = checks.filter(({ outcome }) => outcome === "pass").length;
+  const failed = checks.filter(({ outcome }) => outcome === "fail").length;
+  const unevaluated = checks.filter(({ outcome }) => outcome === "not-applicable").length;
+  return {
+    status: gateStatus(failed, unevaluated),
+    passed,
+    failed,
+    unevaluated,
+    categories,
+  };
+}
 
 export function calculateDeterministicSummary(
   checks: readonly DeterministicCheckResult[],
@@ -137,4 +227,10 @@ function summariesEqual(left: ScoreSummary, right: ScoreSummary): boolean {
 
 function numbersEqual(left: number, right: number): boolean {
   return Math.abs(left - right) <= Number.EPSILON * Math.max(1, Math.abs(left), Math.abs(right)) * 8;
+}
+
+function gateStatus(failed: number, unevaluated: number): "pass" | "fail" | "incomplete" {
+  if (failed > 0) return "fail";
+  if (unevaluated > 0) return "incomplete";
+  return "pass";
 }

@@ -1,6 +1,6 @@
 {
   "name": "@seedspec/eval-cli",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.3",
   "private": true,
   "type": "module",
   "bin": { "seedspec-eval": "./dist/index.js" },
@@ -9,10 +9,10 @@
   "files": ["dist", "!dist/.tsbuildinfo", "!dist/**/*.test.*"],
   "scripts": { "build": "tsc -b" },
   "dependencies": {
-    "@seedspec/eval-case-library": "0.1.0-alpha.1",
-    "@seedspec/eval-core": "0.1.0-alpha.1",
-    "@seedspec/eval-harness": "0.1.0-alpha.1",
-    "@seedspec/evaluators": "0.1.0-alpha.1",
+    "@seedspec/eval-case-library": "0.1.0-alpha.3",
+    "@seedspec/eval-core": "0.1.0-alpha.3",
+    "@seedspec/eval-harness": "0.1.0-alpha.3",
+    "@seedspec/evaluators": "0.1.0-alpha.3",
     "commander": "15.0.0",
     "zod": "4.4.3"
   }

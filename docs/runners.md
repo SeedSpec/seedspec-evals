@@ -1,6 +1,6 @@
 # Running parity experiments in Think, Codex, and Claude Code
 
-The same committed case, trusted instructions, protocol version, and requested model should be used for every parity run. Each environment receives its own immutable run manifest because runner identity is part of reproducibility. The generated desktop manifest records the Think run as `sourceRunId` so results remain comparable without pretending they were the same execution.
+The same committed case, evaluation variant, trusted instructions, frozen protocol revision where applicable, and requested model should be used for every parity run. Each environment receives its own immutable run manifest because runner identity is part of reproducibility. The generated desktop manifest records the Think run as `sourceRunId` so results remain comparable without pretending they were the same execution.
 
 ## 1. Build and plan without calling a model
 
@@ -12,6 +12,8 @@ node packages/cli/dist/index.js experiment plan \
   --case sparse-neighborhood-tool-lending \
   --model <gateway-provider/model> \
   --out runs/first-parity-plan.json
+
+node packages/cli/dist/index.js experiment inspect runs/first-parity-plan.json
 ```
 
 Review the plan before authorizing inference. Planning, brief generation, and trace validation do not call a model.
@@ -20,23 +22,60 @@ Review the plan before authorizing inference. Planning, brief generation, and tr
 
 ```sh
 node packages/cli/dist/index.js runner brief runs/first-parity-plan.json \
-  --runner codex \
-  --stdout
+  --run <one-run-id-from-experiment-inspect> \
+  --runner codex
 ```
 
-Copy the complete output into a new Codex task with a clean workspace. Select the requested underlying model and snapshot. If it is unavailable, create a new run identity for the actual model instead of calling the run matched. The brief tells the agent where to write its evidence report and observable trace draft. It also gives the agent a deterministic `author answer` command so clarifications use the same pre-declared responses as Think without exposing every answer up front. If Codex cannot expose a requested trace field, it must declare the limitation instead of filling it speculatively.
+Repeat for the raw-source, Markdown-authored, minimal-SeedSpec, guided-SeedSpec, and restructured-SeedSpec run IDs. Each command creates an isolated runner directory outside this repository; an explicit `--out` inside `seedspec-evals` is rejected. Open each generated directory as its own Codex project, paste `handoff.md` into a clean task, and run `node runner-control.mjs preflight` before doing any evaluation work. The preflight requires the task working directory to equal the runner directory, rejects pre-existing output, verifies run identity and the author broker, and detects protected answers in runner-visible files without printing them.
 
-An agent given this repository's README can follow the same steps: ask it to build the project, create or inspect the reviewed plan, run `runner brief --runner codex --stdout`, and execute the emitted brief in a clean task.
+The runner-safe `source-envelope.json` contains source material, trusted instructions, and available clarification IDs, but not the answer map. The answer map lives in control-only storage outside the runner project. `node runner-control.mjs answer --question <id>` returns only the requested pre-declared answer. Select the requested underlying model and snapshot. If it is unavailable, create a new run identity for the actual model instead of calling the run matched. If Codex cannot expose a requested trace field, it must declare the limitation instead of filling it speculatively.
+
+The agent that plans an experiment may build this repository and generate the kit. The evaluated agent must receive only the isolated runner project; do not open it on `seedspec-evals`, because committed cases and control-plane plans contain evaluator-only material.
+
+For a non-interactive Codex run with durable outer capture, use the evaluation
+repository CLI after generating the kit:
+
+```sh
+node packages/cli/dist/index.js runner codex-run \
+  <isolated-run-directory> \
+  --reasoning-effort high \
+  --confirm-model-execution
+```
+
+This writes `subject-events.jsonl`, `subject-stderr.log`, `subject-final.md`, and
+content-addressed `subject-run.json` beside the subject's own finalized trace.
+Profile evidence prefers this provider-reported usage and outer run interval
+without treating it as hidden reasoning or decision provenance.
 
 ## 3. Claude Code
 
 ```sh
 node packages/cli/dist/index.js runner brief runs/first-parity-plan.json \
-  --runner claude-code \
-  --stdout
+  --run <one-run-id-from-experiment-inspect> \
+  --runner claude-code
 ```
 
 Paste the output into a clean Claude Code session. Configure the same underlying model and snapshot. If it is unavailable, generate a new run identity for the actual model; do not treat similar product labels as evidence of model parity.
+
+For a non-interactive Claude Code run with durable outer capture, use:
+
+```sh
+node packages/cli/dist/index.js runner claude-run \
+  <isolated-run-directory> \
+  --confirm-model-execution
+```
+
+The run manifest must use an explicit `anthropic/...` model slug. The adapter
+passes the provider-local model ID to Claude Code, disables user/project
+settings, MCP servers, session persistence, web tools, and slash commands, and
+allows only the local file and shell tools needed by the controlled runner.
+It writes the same `subject-events.jsonl`, `subject-stderr.log`,
+`subject-final.md`, and content-addressed `subject-run.json` evidence as the
+Codex adapter. Provider-reported cache creation, cache reads, tokens, exact
+cost, resolved model, and session ID are retained. Thinking blocks are removed
+before the event stream is written and the redaction is declared as a capture
+limitation. The adapter terminates the subject at the immutable manifest
+duration limit and records that run as failed.
 
 ## 4. Cloudflare Think
 
@@ -64,13 +103,20 @@ node packages/cli/dist/index.js run trace <run-id> \
   --endpoint <worker-url>
 ```
 
-Codex and Claude Code write a trace body from the template embedded in their generated brief. Finalize and content-address it with:
+Codex and Claude Code write a trace body from the template embedded in their generated brief. Their captured runners require that finalized trace before reporting success. For a manual run, finalize and content-address it with:
 
 ```sh
-node packages/cli/dist/index.js trace finalize runs/<run-id>/trace-draft.json
-node packages/cli/dist/index.js trace validate runs/<run-id>/trace.json
+node runner-control.mjs finalize-trace
+# From the evaluation repository after the run:
+node packages/cli/dist/index.js trace validate <isolated-run-directory>/trace.json
 ```
 
-`runs/` is ignored by Git. Preserve a complete experiment directory in controlled storage when the evidence matters; a Git checkout alone is not a trace archive. Traces may contain prompts, outputs, tool inputs, and tool results, so review them for credentials, personal data, and customer material before sharing. Record redaction counts and reasons in the trace rather than silently editing evidence.
+Control-plane plans under `runs/` are ignored by Git. Desktop evidence lives in separately isolated runner directories. Preserve a complete experiment directory in controlled storage when the evidence matters; a Git checkout alone is not a trace archive. Traces may contain prompts, outputs, tool inputs, and tool results, so review them for credentials, personal data, and customer material before sharing. Record redaction counts and reasons in the trace rather than silently editing evidence.
+
+Desktop isolation prevents ordinary repository searches from exposing fixtures; it is not a hard security boundary against an intentionally malicious local agent with unrestricted filesystem access. Think provides the stronger boundary because the model receives narrow tools and cannot inspect its Durable Object configuration.
+
+## 6. Score and compare authorship variants
+
+Run `evaluate deterministic` for each completed run directory. Then use `evaluate profile-brief` to create a compact evidence envelope and descriptive decision, evidence, structure, process, and technical profile. Prefer `evaluate profile-run --confirm-model-execution` when using Codex so its JSONL event stream and evaluator token/cache usage are retained. Compare finalized profiles with `evaluate profile-compare`; it uses the case's shared axes and does not infer a winner. Use `evaluate rubric-brief` only when a predeclared scored comparison is required. Validate returned scorecards with `evaluate scorecard` and compare like-for-like rubric scorecards with `compare --baseline raw-source`.
 
 The trace contract deliberately excludes hidden chain-of-thought. Comparable evidence consists of observable inputs and outputs, tool activity, artifacts, timing, usage where exposed, errors, and declared capture limitations.

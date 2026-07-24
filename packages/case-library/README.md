@@ -17,5 +17,6 @@ with eval-core's `EvaluationCaseSchema`. The default file limit is 128 KiB and t
 hard configurable ceiling is 8 MiB.
 
 `loadCaseLibrary` rejects duplicate case IDs and preserves discovery order. Returned
-objects include hidden evaluator data; create runner-facing data with eval-core's
-`createRunnableCaseView` rather than passing a loaded case directly to an agent.
+objects include hidden evaluator data; create variant-specific runner-facing data
+with eval-core's `createRunnableCaseView` rather than passing a loaded case directly
+to an agent.

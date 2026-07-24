@@ -9,6 +9,7 @@ import {
   type DeepReadonly,
   type JsonValue,
 } from "./common.js";
+import { EvaluationVariantSchema } from "./cases.js";
 import { ModelMetadataSchema, RunnerMetadataSchema } from "./versions.js";
 
 export const TraceIdSchema = z.string().regex(/^trace_[a-f0-9]{64}$/);
@@ -37,6 +38,7 @@ export const TraceBodySchema = z
     schemaVersion: z.literal(1),
     runId: RunIdSchema,
     sourceRunId: RunIdSchema.optional(),
+    variant: EvaluationVariantSchema,
     runner: RunnerMetadataSchema,
     model: ModelMetadataSchema,
     startedAt: IsoTimestampSchema,

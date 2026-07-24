@@ -1,4 +1,5 @@
 import {
+  DecisionActorSchema,
   createTrace,
   type JsonObject,
   type TraceEvent,
@@ -33,7 +34,7 @@ import { createWorkersAI } from "workers-ai-provider";
 import { z } from "zod";
 
 import { errorClass, structuredLog } from "./logging.js";
-import { createSeedSpecTools, digestPackage } from "./seedspec-tools.js";
+import { createSeedSpecTools, digestPackage, seedSpecToolNamesForVariant } from "./seedspec-tools.js";
 
 const WORKSPACE_TOOLS = ["read", "write", "edit", "list", "find", "grep"];
 
@@ -89,7 +90,29 @@ export class SeedSpecEvalAgent extends Think<Env> {
   override getTools(): ToolSet {
     const config = this.requireRunConfig();
     return {
-      ...createSeedSpecTools(this.workspace, config.stage),
+      ...createSeedSpecTools(this.workspace, config.stage, config.variant),
+      ...(config.stage === "implementation" ? {
+        record_decision: tool({
+          description: "Record one consequential implementation decision as observable evidence. Do not record hidden reasoning or trivial local coding choices.",
+          inputSchema: z.strictObject({
+            id: z.string().regex(/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/),
+            domain: z.string().regex(/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/),
+            title: z.string().min(1).max(512),
+            choice: z.string().min(1).max(4_000),
+            materiality: z.enum(["critical", "material", "minor"]),
+            expectedLatitude: z.enum(["fixed", "preferred", "delegated", "open", "unresolved", "unknown"]),
+            sources: z.array(z.strictObject({
+              actor: DecisionActorSchema.exclude(["evaluation-case", "evaluator"]),
+              basis: z.string().min(1).max(4_000),
+              path: z.string().min(1).max(1_024).optional(),
+            })).max(32),
+            alternativesConsidered: z.array(z.string().min(1).max(2_000)).max(32),
+            disclosure: z.enum(["explicit", "implicit", "unknown"]),
+            rationale: z.string().min(1).max(8_000),
+          }),
+          execute: ({ id }) => ({ recorded: true as const, id }),
+        }),
+      } : {}),
       ask_author: tool({
         description:
           "Ask one pre-declared clarification question. Use the exact questionId; unavailable questions return no answer.",
@@ -112,6 +135,7 @@ export class SeedSpecEvalAgent extends Think<Env> {
     const config = this.requireRunConfig();
     this.appendTraceEvent("status", "runner", "turn-started", {
       stage: config.stage,
+      variant: config.variant,
       model: config.model,
       maxSteps: config.maxSteps,
     });
@@ -119,6 +143,7 @@ export class SeedSpecEvalAgent extends Think<Env> {
       runId: config.runId,
       caseId: config.caseId,
       stage: config.stage,
+      variant: config.variant,
       model: config.model,
       gatewayId: config.gatewayId,
       maxSteps: config.maxSteps,
@@ -126,10 +151,9 @@ export class SeedSpecEvalAgent extends Think<Env> {
     return {
       activeTools: [
         ...WORKSPACE_TOOLS,
-        "ask_author",
-        "seedspec_package_check",
-        "seedspec_package_digest",
-        ...(config.stage === "authorship" ? ["seedspec_kind_lint", "seedspec_audit_guidance"] : []),
+        ...(config.variant === "raw-source" ? [] : ["ask_author"]),
+        ...(config.stage === "implementation" ? ["record_decision"] : []),
+        ...seedSpecToolNamesForVariant(config.stage, config.variant),
       ],
       maxSteps: config.maxSteps,
       sendReasoning: false,
@@ -275,6 +299,17 @@ export class SeedSpecEvalAgent extends Think<Env> {
     const initialized = this.initializeConfig(parsed.data.config);
     if (!initialized.ok) return { ok: false, value: null, error: initialized.error };
 
+    try {
+      await this.ensureAuthoredInputMounted(parsed.data.config);
+      await this.ensureGuidanceInputMounted(parsed.data.config);
+    } catch (error) {
+      structuredLog("error", "eval.input.mount_failed", {
+        runId: parsed.data.config.runId,
+        errorClass: errorClass(error),
+      });
+      return { ok: false, value: null, error: { code: "run_input_invalid", message: "A content-addressed run input could not be verified and mounted." } };
+    }
+
     const message: UIMessage = {
       id: crypto.randomUUID(),
       role: "user",
@@ -365,6 +400,7 @@ export class SeedSpecEvalAgent extends Think<Env> {
       traceJson: JSON.stringify(createTrace({
         schemaVersion: 1,
         runId: config.runId,
+        variant: config.variant,
         runner: { id: "cloudflare-think", kind: "agent", version: HARNESS_VERSION, environment: { runtime: "cloudflare-workers", runtimeVersion: "2026-07-21" } },
         model: { provider: providerForModel(config.model), modelId: config.model, parameters: {}, routing: { gateway: config.gatewayId } },
         startedAt,
@@ -397,6 +433,7 @@ export class SeedSpecEvalAgent extends Think<Env> {
         runId: config.runId,
         caseId: config.caseId,
         stage: config.stage,
+        variant: config.variant,
         model: config.model,
         gatewayId: config.gatewayId,
         maxSteps: config.maxSteps,
@@ -424,6 +461,54 @@ export class SeedSpecEvalAgent extends Think<Env> {
     return config;
   }
 
+  private async ensureAuthoredInputMounted(config: RunAgentConfig): Promise<void> {
+    if (config.authoredInput === undefined) return;
+    for (const file of config.authoredInput.files) {
+      const bytes = decodeBase64(file.contentBase64);
+      if (bytes.byteLength !== file.byteLength || `sha256:${await sha256Bytes(bytes)}` !== file.digest) {
+        throw new Error(`Authored input failed digest verification: ${file.path}`);
+      }
+      const path = `input/authored/${file.path}`;
+      const existing = await this.workspace.readFileBytes(path);
+      if (existing !== null) {
+        if (`sha256:${await sha256Bytes(existing)}` !== file.digest) throw new Error(`Mounted authored input changed: ${file.path}`);
+        continue;
+      }
+      const content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      await this.workspace.writeFile(path, content);
+    }
+    this.appendTraceEvent("artifact", "runner", "authored-input-mounted", {
+      artifactId: config.authoredInput.artifactId,
+      digest: config.authoredInput.digest,
+      fileCount: config.authoredInput.files.length,
+      path: "input/authored",
+    });
+  }
+
+  private async ensureGuidanceInputMounted(config: RunAgentConfig): Promise<void> {
+    if (config.guidanceInput === undefined) return;
+    for (const file of config.guidanceInput.files) {
+      const bytes = decodeBase64(file.contentBase64);
+      if (bytes.byteLength !== file.byteLength || `sha256:${await sha256Bytes(bytes)}` !== file.digest) {
+        throw new Error(`Guidance input failed digest verification: ${file.path}`);
+      }
+      const path = `guidance/${file.path}`;
+      const existing = await this.workspace.readFileBytes(path);
+      if (existing !== null) {
+        if (`sha256:${await sha256Bytes(existing)}` !== file.digest) throw new Error(`Mounted guidance input changed: ${file.path}`);
+        continue;
+      }
+      const content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      await this.workspace.writeFile(path, content);
+    }
+    this.appendTraceEvent("artifact", "runner", "guidance-input-mounted", {
+      artifactId: config.guidanceInput.artifactId,
+      digest: config.guidanceInput.digest,
+      fileCount: config.guidanceInput.files.length,
+      path: "guidance",
+    });
+  }
+
   private appendTraceEvent(kind: TraceEvent["kind"], actor: TraceEvent["actor"], name: string, data: JsonObject): void {
     this.ensureTraceTable();
     void this.sql`INSERT INTO seedspec_eval_trace_events (event_at, kind, actor, name, data_json)
@@ -445,6 +530,18 @@ export class SeedSpecEvalAgent extends Think<Env> {
       data_json TEXT NOT NULL
     )`;
   }
+}
+
+function decodeBase64(value: string): Uint8Array {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+async function sha256Bytes(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", Uint8Array.from(bytes).buffer);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function providerForModel(model: string): string {

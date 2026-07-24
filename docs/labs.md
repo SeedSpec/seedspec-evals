@@ -8,15 +8,50 @@ The protocol is doing useful work only when its advantages survive different cas
 
 ## Lab 1: authorship value
 
-Run each scenario through at least three arms:
+Run each scenario through five evaluation variants:
 
-1. **Source-only control** — give the agent the raw author material and ask for implementation-ready instructions.
-2. **SeedSpec scaffold** — use `seedspec init` and ordinary validation, without the guided audit.
-3. **SeedSpec authoring** — run the full six-area audit with an author simulator or a person supplying recorded decisions.
+1. **Raw-source control** — give the agent only original author material, no simulated-author answers, and ask once for implementation-ready instructions.
+2. **General Markdown authorship** — add strong general specification guidance but no SeedSpec concepts or tools.
+3. **Minimal SeedSpec** — use `seedspec init` and deterministic validation without semantic authoring guidance.
+4. **Guided SeedSpec authorship** — run the full seven-area audit with an author simulator or a person supplying recorded decisions.
+5. **Restructured SeedSpec** — add a dedicated semantic restructuring pass that assigns canonical concern ownership, removes duplicated authority, preserves meaning, and records decision provenance.
 
-Measure protocol validity, source fidelity, unresolved material ambiguity, unsupported invention, concern separation, kind-specific coverage, acceptance quality, handoff quality, author interactions, elapsed time, token use, and evaluator confidence.
+Normalized constraints, success criteria, permitted variability, simulated
+answers, and hidden expectations remain outside runner material. Measure
+protocol validity, source fidelity, unresolved material ambiguity, unsupported
+invention, concern separation, decision provenance, obligation-to-evidence
+coverage, kind-specific coverage, handoff quality, author interactions, elapsed
+time, token and cache use, and evaluator confidence.
 
-The main comparison is not document length. It is whether the final package gives an independent agent a better starting state while preserving legitimate implementation freedom.
+The main comparison is not document length or a single winning score. It is the
+gradient of evidence describing whether each treatment gives an independent
+agent a better starting state while preserving legitimate implementation
+freedom.
+
+Every case predeclares shared decision and obligation axes before model
+judgment. Independent evaluators must cover those axes exactly once, while
+retaining additional subject-specific findings separately. This produces a
+stable denominator without flattening intentional differences in agent
+latitude or forcing a winner.
+
+## Descriptive evaluation profiles
+
+Each completed run can produce a content-addressed profile containing:
+
+- consequential decisions, materiality, expected latitude, proposed and
+  selecting parties, constraints, disclosure, alignment, confidence, and
+  evidence;
+- obligations mapped to planned and observed distinguishing evidence;
+- duplicated, misplaced, conflicting, overloaded, fragmented, or clearly
+  owned package concerns;
+- turns, clarification and correction cycles, tokens, cache use, tool calls,
+  and duration at their actual capture level; and
+- read-only technical checks and explicitly authorized adaptation challenges.
+
+Profiles are descriptive. A package that delegates architecture may be as
+intentional as one that ships normative reference code. The relevant signal is
+whether observed decisioning matches expected latitude, not whether the author
+made the most decisions.
 
 ## Lab 2: harness parity
 
@@ -50,6 +85,12 @@ Cases may later be promoted into public examples, but evaluation usefulness take
 
 For each authored package, start implementation agents from clean workspaces. Vary model, runner, and—where the package permits it—implementation profile or end-user preference.
 
+Implementation plans accept an authored workspace directory, content-address
+every file, and carry the verified bytes in the execution envelope. Runners
+mount that immutable bundle at `input/authored`; an artifact identifier alone
+is never treated as delivery of the specification. The implementing agent
+writes only to its separate output workspace.
+
 Evaluate each outcome independently against the package before comparing outcomes to one another. Then classify variation across these layers:
 
 1. observable outcome;
@@ -60,7 +101,7 @@ Evaluate each outcome independently against the package before comparing outcome
 6. implementation profile adherence;
 7. reversible architecture and technology choices.
 
-High congruency in layers 1–5 is normally desirable. Variation in layer 7 is expected and may be evidence that SeedSpec preserved implementation freedom. Profile variation is acceptable only when it remains subordinate to core intent and explicit user direction.
+High congruency in layers 1–5 is normally desirable. Variation in layer 7 is expected and may be evidence that SeedSpec preserved implementation freedom. Profile variation is acceptable only when it remains subordinate to resolved intent and explicit user direction.
 
 Authors can use these reports to tighten ambiguity, clarify success, or deliberately preserve freedom. The lab must not optimize every package toward deterministic code shape.
 
@@ -81,7 +122,7 @@ Every run records:
 
 - case ID and version;
 - immutable run ID and parent experiment ID;
-- stage and arm;
+- stage and evaluation variant;
 - SeedSpec protocol, CLI, and authoring instruction versions;
 - runner, harness, model, gateway, and evaluator versions;
 - prompts or instruction artifacts by digest;

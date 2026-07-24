@@ -11,7 +11,7 @@ import {
   type DeepReadonly,
   type JsonValue,
 } from "./common.js";
-import { EvaluationStageSchema } from "./cases.js";
+import { EvaluationStageSchema, EvaluationVariantSchema, variantBelongsToStage } from "./cases.js";
 import {
   CaseReferenceSchema,
   EvaluatorMetadataSchema,
@@ -25,7 +25,7 @@ export const RunTargetSchema = z.discriminatedUnion("stage", [
   z.strictObject({ stage: z.literal("authorship") }),
   z.strictObject({
     stage: z.literal("implementation"),
-    authoredPackageArtifactId: ArtifactIdSchema,
+    authoredInputArtifactId: ArtifactIdSchema,
   }),
 ]);
 
@@ -41,6 +41,7 @@ export const RunManifestBodySchema = z
     schemaVersion: z.literal(1),
     case: CaseReferenceSchema,
     target: RunTargetSchema,
+    variant: EvaluationVariantSchema,
     repetition: z.number().int().nonnegative().max(1_000_000),
     createdAt: IsoTimestampSchema,
     protocol: ProtocolVersionMetadataSchema,
@@ -55,6 +56,13 @@ export const RunManifestBodySchema = z
     configuration: JsonObjectSchema.optional(),
   })
   .superRefine((body, context) => {
+    if (!variantBelongsToStage(body.variant, body.target.stage)) {
+      context.addIssue({
+        code: "custom",
+        message: `variant ${body.variant} does not belong to ${body.target.stage}`,
+        path: ["variant"],
+      });
+    }
     const toolKeys = body.tools.map((tool) => `${tool.name}@${tool.version}`);
     if (new Set(toolKeys).size !== toolKeys.length) {
       context.addIssue({ code: "custom", message: "tools must be unique by name and version", path: ["tools"] });

@@ -1,6 +1,6 @@
 {
   "name": "seedspec-evals",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.3",
   "private": true,
   "license": "Apache-2.0",
   "repository": {
@@ -17,6 +17,7 @@
     "packages/*"
   ],
   "scripts": {
+    "protocol:sync": "node scripts/sync-protocol.mjs",
     "build": "tsc -b",
     "clean": "tsc -b --clean",
     "typecheck": "tsc -b --pretty false",

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Specify Kestrel Transfers"
+  short_description: "Preserve Kestrel transfer and event invariants"
+  default_prompt: "Use $specify-kestrel-transfers to shape an agent-ready specification for a Kestrel warehouse transfer workflow."

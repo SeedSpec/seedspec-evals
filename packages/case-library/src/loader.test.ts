@@ -23,7 +23,6 @@ function validCase(id: string): object {
     title: `Test case ${id}`,
     authorship: {
       mode: "sparse-application",
-      objective: "Author a small evaluation package.",
       sourceMaterials: [
         {
           id: "prompt",
@@ -35,15 +34,28 @@ function validCase(id: string): object {
         },
       ],
       constraints: [],
-      deliverables: [
-        {
-          id: "package",
-          description: "A package",
-          required: true,
-          path: "seedspec.yaml",
-          mediaType: "application/yaml",
+      variants: {
+        "raw-source": {
+          objective: "Write implementation-ready instructions.",
+          deliverables: [{ id: "instructions", description: "Instructions", required: true, path: "instructions.md" }],
         },
-      ],
+        "markdown-authored": {
+          objective: "Write a Markdown specification.",
+          deliverables: [{ id: "instructions", description: "Instructions", required: true, path: "instructions.md" }],
+        },
+        "seedspec-minimal": {
+          objective: "Author a small evaluation package.",
+          deliverables: [{ id: "package", description: "A package", required: true, path: "seedspec.yaml", mediaType: "application/yaml" }],
+        },
+        "seedspec-guided": {
+          objective: "Author a guided evaluation package.",
+          deliverables: [{ id: "package", description: "A package", required: true, path: "seedspec.yaml", mediaType: "application/yaml" }],
+        },
+        "seedspec-restructured": {
+          objective: "Author a small evaluation package.",
+          deliverables: [{ id: "package", description: "A package", required: true, path: "seedspec.yaml", mediaType: "application/yaml" }],
+        },
+      },
     },
     successCriteria: [
       {
@@ -60,6 +72,10 @@ function validCase(id: string): object {
     hiddenExpectations: [],
     permittedVariability: [],
     simulatedToolResponses: [],
+    comparisonAxes: {
+      decisions: [{ id: "scope", stages: ["authorship"], title: "Scope", description: "Choose the package scope.", materiality: "material" }],
+      obligations: [{ id: "valid-output", stages: ["authorship"], kind: "success-criterion", description: "Produce a valid output.", importance: "material" }],
+    },
   };
 }
 
@@ -101,11 +117,12 @@ describe("case discovery and loading", () => {
       "02-existing-product-feature/case.yaml",
       "03-cross-system-workflow/case.yaml",
       "04-extract-existing-solution/case.yaml",
+      "05-specialized-kestrel-transfer/case.yaml",
     ]);
     expect(second.map(({ case: evaluationCase }) => evaluationCase.id)).toEqual(
       first.map(({ case: evaluationCase }) => evaluationCase.id),
     );
-    expect(first).toHaveLength(4);
+    expect(first).toHaveLength(5);
     expect(
       first.map(({ case: evaluationCase }) => evaluationCase.authorship.mode),
     ).toEqual([
@@ -113,6 +130,7 @@ describe("case discovery and loading", () => {
       "existing-product-feature",
       "cross-system-workflow",
       "extract-existing-solution",
+      "cross-system-workflow",
     ]);
     for (const { case: evaluationCase } of first) {
       expect(
@@ -125,6 +143,8 @@ describe("case discovery and loading", () => {
       expect(evaluationCase.hiddenExpectations.length).toBeGreaterThan(0);
       expect(evaluationCase.permittedVariability.length).toBeGreaterThan(0);
       expect(evaluationCase.simulatedToolResponses.length).toBeGreaterThan(0);
+      expect(evaluationCase.technicalExpectations.length).toBeGreaterThan(0);
+      expect(evaluationCase.adaptationChallenges.length).toBeGreaterThan(0);
     }
     expect(first.every(({ case: evaluationCase }) => Object.isFrozen(evaluationCase))).toBe(
       true,

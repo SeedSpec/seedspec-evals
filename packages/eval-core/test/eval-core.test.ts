@@ -7,6 +7,7 @@ import {
   CongruencyReportSchema,
   DeterministicCheckResultSchema,
   EvaluationCaseSchema,
+  ImplementationAcceptanceReportSchema,
   JsonValueSchema,
   RunManifestSchema,
   RunStateSchema,
@@ -58,6 +59,7 @@ function manifestBody() {
     schemaVersion: 1 as const,
     case: caseReference,
     target: { stage: "authorship" as const },
+    variant: "seedspec-guided" as const,
     repetition: 0,
     createdAt: NOW,
     protocol,
@@ -89,7 +91,6 @@ function caseInput() {
     title: "Sparse application",
     authorship: {
       mode: "sparse-application" as const,
-      objective: "Turn sparse intent into a reviewable package.",
       sourceMaterials: [
         {
           id: "brief",
@@ -103,15 +104,58 @@ function caseInput() {
       constraints: [
         { id: "no-network", kind: "prohibition" as const, description: "Do not use the network." },
       ],
-      deliverables: [
-        {
-          id: "package",
-          description: "A SeedSpec package",
-          required: true,
-          path: "package/spec.md",
-          mediaType: "text/markdown",
+      variants: {
+        "raw-source": {
+          objective: "Turn sparse intent into implementation-ready instructions.",
+          deliverables: [{
+            id: "instructions",
+            description: "Implementation-ready instructions",
+            required: true,
+            path: "instructions.md",
+            mediaType: "text/markdown",
+          }],
         },
-      ],
+        "markdown-authored": {
+          objective: "Turn sparse intent into a Markdown specification.",
+          deliverables: [{
+            id: "instructions",
+            description: "Implementation-ready instructions",
+            required: true,
+            path: "instructions.md",
+            mediaType: "text/markdown",
+          }],
+        },
+        "seedspec-minimal": {
+          objective: "Turn sparse intent into a reviewable package.",
+          deliverables: [{
+            id: "package",
+            description: "A SeedSpec package",
+            required: true,
+            path: "package/spec.md",
+            mediaType: "text/markdown",
+          }],
+        },
+        "seedspec-guided": {
+          objective: "Turn sparse intent into a reviewable package.",
+          deliverables: [{
+            id: "package",
+            description: "A SeedSpec package",
+            required: true,
+            path: "package/spec.md",
+            mediaType: "text/markdown",
+          }],
+        },
+        "seedspec-restructured": {
+          objective: "Turn sparse intent into a semantically restructured package.",
+          deliverables: [{
+            id: "package",
+            description: "A SeedSpec package",
+            required: true,
+            path: "package/spec.md",
+            mediaType: "text/markdown",
+          }],
+        },
+      },
     },
     implementation: {
       objective: "Implement the authored package.",
@@ -155,6 +199,10 @@ function caseInput() {
     simulatedToolResponses: [
       { id: "clock", toolName: "read-clock", request: { timezone: "UTC" }, response: { hour: 12 } },
     ],
+    comparisonAxes: {
+      decisions: [{ id: "scope", stages: ["authorship", "implementation"], title: "Scope", description: "Choose the reusable scope.", materiality: "material" }],
+      obligations: [{ id: "usable", stages: ["authorship", "implementation"], kind: "success-criterion", description: "Produce a usable result.", importance: "material" }],
+    },
   };
 }
 
@@ -168,22 +216,24 @@ describe("canonical primitives", () => {
 describe("evaluation cases", () => {
   it("validates both stages, freezes the case, and keeps hidden expectations out of runner views", () => {
     const parsed = EvaluationCaseSchema.parse(caseInput());
-    const view = createRunnableCaseView(parsed, "authorship");
+    const view = createRunnableCaseView(parsed, "authorship", "seedspec-guided");
 
     expect(Object.isFrozen(parsed)).toBe(true);
     expect(Object.isFrozen(parsed.authorship.sourceMaterials)).toBe(true);
     expect(view).not.toHaveProperty("hiddenExpectations");
     expect(view).not.toHaveProperty("simulatedToolResponses");
+    expect(view).not.toHaveProperty("successCriteria");
+    expect(view).not.toHaveProperty("permittedVariability");
+    expect(view.constraints).toEqual([]);
     expect(JSON.stringify(view)).not.toContain("read-clock");
     expect(JSON.stringify(view)).not.toContain('"hour":12');
     expect(createSimulationFixtureView(parsed).simulatedToolResponses[0]?.response).toEqual({ hour: 12 });
     expect(view.sourceMaterials[0]?.trust).toBe("untrusted");
-    expect(view.successCriteria.map(({ id }) => id)).toEqual(["valid-package"]);
   });
 
   it("rejects traversal paths, duplicate IDs, and dangling implementation expectations", () => {
     const unsafe = caseInput();
-    unsafe.authorship.deliverables[0]!.path = "../secrets.txt";
+    unsafe.authorship.variants["seedspec-guided"].deliverables[0]!.path = "../secrets.txt";
     expect(EvaluationCaseSchema.safeParse(unsafe).success).toBe(false);
 
     const noImplementation: Record<string, unknown> = { ...caseInput() };
@@ -197,15 +247,15 @@ describe("evaluation cases", () => {
 
   it("rejects exact and case-folded deliverable path collisions", () => {
     const exact = caseInput();
-    exact.authorship.deliverables.push({
-      ...exact.authorship.deliverables[0]!,
+    exact.authorship.variants["seedspec-guided"].deliverables.push({
+      ...exact.authorship.variants["seedspec-guided"].deliverables[0]!,
       id: "duplicate-path",
     });
     expect(EvaluationCaseSchema.safeParse(exact).success).toBe(false);
 
     const caseFolded = caseInput();
-    caseFolded.authorship.deliverables.push({
-      ...caseFolded.authorship.deliverables[0]!,
+    caseFolded.authorship.variants["seedspec-guided"].deliverables.push({
+      ...caseFolded.authorship.variants["seedspec-guided"].deliverables[0]!,
       id: "case-folded-path",
       path: "PACKAGE/SPEC.MD",
     });
@@ -255,6 +305,7 @@ describe("artifacts and run states", () => {
       schemaVersion: 1 as const,
       runId: run.runId,
       stage: "authorship" as const,
+      variant: "seedspec-guided" as const,
       kind: "authored-package" as const,
       path: "outputs/package.zip",
       mediaType: "application/zip",
@@ -263,6 +314,7 @@ describe("artifacts and run states", () => {
       createdAt: LATER,
       provenance: {
         case: caseReference,
+        variant: "seedspec-guided" as const,
         protocol,
         runner,
         model,
@@ -322,6 +374,7 @@ describe("scores", () => {
       runId: createRunManifest(manifestBody()).runId,
       case: caseReference,
       stage: "authorship" as const,
+      variant: "seedspec-guided" as const,
       createdAt: LATER,
       evaluator: { id: "protocol-checks", kind: "deterministic" as const, version: "1.0.0" },
       kind: "deterministic" as const,
@@ -350,6 +403,7 @@ describe("scores", () => {
       runId: createRunManifest(manifestBody()).runId,
       case: caseReference,
       stage: "implementation" as const,
+      variant: "seedspec-implementation" as const,
       createdAt: LATER,
       evaluator: { id: "implementation-review", kind: "rubric" as const, version: "1.0.0" },
       kind: "rubric" as const,
@@ -439,6 +493,7 @@ describe("observable traces", () => {
     const trace = createTrace({
       schemaVersion: 1,
       runId,
+      variant: "seedspec-guided",
       runner,
       model,
       startedAt: NOW,
@@ -468,5 +523,38 @@ describe("observable traces", () => {
     expect(TraceSchema.parse(trace).traceId).toMatch(/^trace_[a-f0-9]{64}$/);
     expect(TraceSchema.safeParse({ ...trace, reasoning: "private thoughts" }).success).toBe(false);
     expect(TraceSchema.safeParse({ ...trace, events: [{ ...trace.events[0], sequence: 1 }] }).success).toBe(false);
+  });
+});
+
+describe("implementation evidence", () => {
+  it("preserves honest qualified and not-run outcomes without treating them as passes", () => {
+    const base = {
+      schemaVersion: 1 as const,
+      verificationCommands: [{ id: "test", argv: ["node", "--test"] }],
+      scenarios: [{
+        id: "partially-observed",
+        outcome: "qualified" as const,
+        commandIds: ["test"],
+        evidence: ["test/partial.test.js"],
+      }],
+      accessibility: {
+        viewportWidth: 360,
+        keyboardTasks: [{
+          id: "browser-unavailable",
+          outcome: "not-run" as const,
+          commandIds: ["test"],
+          evidence: ["test/browser-harness.test.js"],
+        }],
+      },
+      limitations: ["The browser observation was unavailable."],
+    };
+
+    const parsed = ImplementationAcceptanceReportSchema.parse(base);
+    expect(parsed.scenarios[0]?.outcome).toBe("qualified");
+    expect(parsed.accessibility?.keyboardTasks[0]?.outcome).toBe("not-run");
+    expect(ImplementationAcceptanceReportSchema.parse({
+      ...base,
+      scenarios: [{ ...base.scenarios[0], outcome: "partial" }],
+    }).scenarios[0]?.outcome).toBe("partial");
   });
 });

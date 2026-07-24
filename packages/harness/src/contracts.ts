@@ -1,5 +1,8 @@
 import {
   EvaluationStageSchema,
+  EvaluationVariantSchema,
+  DeliverableSchema,
+  AuthoredInputBundleSchema,
   IdentifierSchema,
   JsonObjectSchema,
   RunManifestSchema,
@@ -15,7 +18,7 @@ export { JsonObjectSchema, RunIdSchema } from "@seedspec/eval-core";
 export type { JsonObject, JsonPrimitive, JsonValue } from "@seedspec/eval-core";
 
 export const HARNESS_NAME = "seedspec-eval-harness";
-export const HARNESS_VERSION = "0.1.0-alpha.1";
+export const HARNESS_VERSION = "0.1.0-alpha.3";
 export const RUNNER_ID = "cloudflare-think";
 export const DEFAULT_MAX_STEPS = 6;
 export const MAX_MAX_STEPS = 12;
@@ -23,6 +26,7 @@ export const MAX_MAX_STEPS = 12;
 const MAX_TRUSTED_INSTRUCTION_BYTES = 32 * 1024;
 const MAX_UNTRUSTED_MATERIAL_BYTES = 256 * 1024;
 const MAX_SIMULATED_AUTHOR_RESPONSE_BYTES = 128 * 1024;
+const MAX_GUIDANCE_INPUT_BYTES = 2 * 1024 * 1024;
 const MAX_METADATA_BYTES = 16 * 1024;
 export const MAX_MATRIX_PLAN_BYTES = 900 * 1024;
 
@@ -70,11 +74,15 @@ export const RunAgentConfigSchema = z
     runId: RunIdSchema,
     caseId: CaseIdSchema,
     stage: RunStageSchema,
+    variant: EvaluationVariantSchema,
     model: ModelIdSchema,
     gatewayId: GatewayIdSchema,
     maxSteps: z.number().int().min(1).max(MAX_MAX_STEPS).default(DEFAULT_MAX_STEPS),
     trustedInstructions: z.array(z.string().trim().min(1).max(8_000)).min(1).max(32),
     untrustedMaterial: z.string().min(1),
+    deliverables: z.array(DeliverableSchema).min(1).max(128),
+    authoredInput: AuthoredInputBundleSchema.optional(),
+    guidanceInput: AuthoredInputBundleSchema.optional(),
     simulatedAuthorResponses: z
       .record(IdentifierSchema, z.string().min(1).max(8_000))
       .refine((responses) => Object.keys(responses).length <= 128, {
@@ -99,6 +107,23 @@ export const RunAgentConfigSchema = z
         code: "custom",
         message: "untrusted material exceeds the size limit",
         path: ["untrustedMaterial"],
+      });
+    }
+    if (config.stage === "implementation" && config.authoredInput === undefined) {
+      context.addIssue({ code: "custom", message: "implementation runs require an authored input bundle", path: ["authoredInput"] });
+    }
+    if (config.stage === "authorship" && config.authoredInput !== undefined) {
+      context.addIssue({ code: "custom", message: "authorship runs cannot include an authored input bundle", path: ["authoredInput"] });
+    }
+    const guidanceBytes = config.guidanceInput?.files.reduce(
+      (total, file) => total + file.byteLength,
+      0,
+    ) ?? 0;
+    if (guidanceBytes > MAX_GUIDANCE_INPUT_BYTES) {
+      context.addIssue({
+        code: "custom",
+        message: "guidance input exceeds the evaluation limit",
+        path: ["guidanceInput"],
       });
     }
     const simulatedResponseBytes = Object.values(config.simulatedAuthorResponses).reduce(
@@ -239,6 +264,11 @@ function addManifestBindingIssues(
       path: ["config", "stage"],
     },
     {
+      matches: manifest.variant === config.variant,
+      message: "manifest variant does not match the execution configuration",
+      path: ["config", "variant"],
+    },
+    {
       matches: manifest.model.modelId === config.model,
       message: "manifest model does not match the execution configuration",
       path: ["config", "model"],
@@ -272,6 +302,32 @@ function addManifestBindingIssues(
         `sha256:${sha256Hex(config.untrustedMaterial)}`,
       message: "untrusted material does not match the manifest digest",
       path: ["config", "untrustedMaterial"],
+    },
+    {
+      matches: manifest.configuration?.["deliverablesDigest"] === digestJson(
+        JSON.parse(JSON.stringify(config.deliverables)) as JsonValue,
+      ),
+      message: "declared deliverables do not match the manifest digest",
+      path: ["config", "deliverables"],
+    },
+    {
+      matches: manifest.target.stage === "authorship"
+        ? config.authoredInput === undefined
+        : config.authoredInput !== undefined
+          && manifest.target.authoredInputArtifactId === config.authoredInput.artifactId
+          && manifest.configuration?.["authoredInputArtifactId"] === config.authoredInput.artifactId
+          && manifest.configuration?.["authoredInputDigest"] === config.authoredInput.digest,
+      message: "authored input does not match the implementation target and manifest binding",
+      path: ["config", "authoredInput"],
+    },
+    {
+      matches: config.guidanceInput === undefined
+        ? manifest.configuration?.["guidanceInputArtifactId"] === undefined
+          && manifest.configuration?.["guidanceInputDigest"] === undefined
+        : manifest.configuration?.["guidanceInputArtifactId"] === config.guidanceInput.artifactId
+          && manifest.configuration?.["guidanceInputDigest"] === config.guidanceInput.digest,
+      message: "guidance input does not match the manifest binding",
+      path: ["config", "guidanceInput"],
     },
     {
       matches:

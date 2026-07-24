@@ -1,6 +1,6 @@
 {
   "name": "@seedspec/eval-core",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.3",
   "private": true,
   "type": "module",
   "exports": { ".": "./dist/index.js" },

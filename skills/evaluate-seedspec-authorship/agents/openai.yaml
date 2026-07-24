@@ -1,4 +1,4 @@
 interface:
   display_name: "Evaluate SeedSpec Authorship"
-  short_description: "Assess whether authoring produced a stronger package"
-  default_prompt: "Use $evaluate-seedspec-authorship to assess this SeedSpec authoring run."
+  short_description: "Compare specification authoring outcomes fairly"
+  default_prompt: "Use $evaluate-seedspec-authorship to score this controlled specification-authoring run."

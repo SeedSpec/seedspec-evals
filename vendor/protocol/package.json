@@ -1,0 +1,40 @@
+{
+  "name": "@seedspec/protocol",
+  "version": "0.1.0-alpha.5",
+  "description": "Schemas and metadata for portable, agent-ready SeedSpec packages",
+  "keywords": [
+    "seedspec",
+    "protocol",
+    "json-schema",
+    "agents",
+    "specifications",
+    "portable"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./schemas/*": "./schemas/*"
+  },
+  "files": [
+    "schemas",
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SeedSpec/seedspec.git",
+    "directory": "packages/protocol"
+  },
+  "homepage": "https://seedspec.dev",
+  "bugs": {
+    "url": "https://github.com/SeedSpec/seedspec/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "SeedSpec contributors",
+  "license": "Apache-2.0"
+}
