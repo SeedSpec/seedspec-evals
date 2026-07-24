@@ -262,7 +262,7 @@ async function implementationVerificationAdapters(
   const commandOutcomes = new Map(verification.commands.map((command) => [command.id, command.outcome]));
   const evidenceOutcomes = new Map(verification.evidence.map((observation) => [observation.path, observation.exists]));
   const linkedPasses = (result: {
-    readonly outcome: "pass" | "fail";
+    readonly outcome: "pass" | "fail" | "qualified" | "partial" | "not-run";
     readonly commandIds: readonly string[];
     readonly evidence: readonly string[];
   }): boolean =>

@@ -212,7 +212,7 @@ export function buildDesktopBrief(
       }, null, 2),
       "```",
       "",
-      "Use this contract for `workspace/realization/acceptance-report.json`. Every scenario and keyboard task must link to at least one declared local verification command and at least one evidence file relative to `workspace/realization/`. The lab executes these commands only after separate operator approval and independently reviews whether the tests are meaningful:",
+      "Use this contract for `workspace/realization/acceptance-report.json`. Every scenario and keyboard task must link to at least one declared local verification command and at least one evidence file relative to `workspace/realization/`. Outcome must be `pass`, `fail`, `qualified`, or `not-run`: use `qualified` when useful evidence exists but cannot establish the full claim, and `not-run` when the needed observation did not execute. The verifier accepts legacy `partial` as a compatibility synonym for `qualified`. Only `pass` can satisfy deterministic completion criteria. The lab executes declared commands only after separate operator approval and independently reviews whether the tests are meaningful:",
       "",
       "```json",
       JSON.stringify({

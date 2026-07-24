@@ -16,6 +16,8 @@ repetition, partial failure, restart, and stale information.
 - retry, replay, duplicate delivery, cancellation, timeout, and reordering;
 - crash or downstream failure between steps;
 - restart, malformed stored state, migration, and recovery behavior;
+- record-shape, reference, and cross-record lifecycle invariants at both the
+  commit and load boundaries;
 - clocks, time zones, identifiers, and ordering assumptions.
 
 Select failure cases from the actual design. Do not add distributed-systems
@@ -27,6 +29,14 @@ Each material invariant has one authoritative control, and realistic tests or
 exercises attempt to violate it through the relevant collision, retry, or
 failure path. Failed operations leave state and external effects in a known,
 recoverable condition. Recovery behavior matches the promised operating model.
+Persisted state is not trusted merely because it parses or contains expected
+top-level collections: the load boundary reuses or matches the authoritative
+semantic invariant checks applied before commit. At least one plausible
+well-formed-but-inconsistent snapshot is exercised when persisted corruption
+could violate a material invariant.
+Stored events and records that attribute a protected action also preserve its
+authority provenance: changing the actor, resource, or transition in an
+otherwise valid snapshot must not manufacture a historically authorized act.
 
 ### Stop or qualify when
 
@@ -36,6 +46,10 @@ recoverable condition. Recovery behavior matches the promised operating model.
 - persistence failure leaves memory and stored state silently divergent;
 - partial failure can report success while required work is missing;
 - corrupted or stale state is accepted in a way that violates an invariant.
+- stored records, references, or lifecycle combinations can bypass checks that
+  ordinary writes must satisfy.
+- persisted action attribution can claim an actor or authority that the
+  corresponding transition would have rejected.
 
 ### Record
 
@@ -56,6 +70,9 @@ when real inputs, environments, or dependencies differ from the happy path.
 - empty, invalid, denied, loading, unavailable, stale, and repeated-action
   behavior where material;
 - input bounds, output encoding, and safe error disclosure;
+- semantic validity of material structured values, not merely a matching shape
+  or permissive parser result; consider normalization, coercion, overflow,
+  impossible combinations, and configured-versus-host-default interpretation;
 - narrow displays, keyboard operation, focus, labels, and recovery for
   user-facing interfaces;
 - API status and error contracts for machine-facing interfaces;

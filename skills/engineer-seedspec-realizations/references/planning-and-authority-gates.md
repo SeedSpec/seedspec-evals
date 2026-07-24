@@ -56,6 +56,9 @@ with the correct actor, scope, and authority.
 
 - actor/action/resource combinations and who may perform each material action;
 - source and lifecycle of identity, membership, roles, and credentials;
+- issue, scope, expiry, rotation, revocation, logout, and replay behavior for
+  each session, token, invitation, or other bearer capability that crosses a
+  material boundary;
 - where authorization is enforced and whether all entry paths converge there;
 - secrets, personal or regulated data, logs, exports, and retention;
 - untrusted inputs from people, agents, packages, webhooks, files, models, and
@@ -73,6 +76,9 @@ Every material action is authorized at a trusted boundary using trustworthy
 identity and server- or platform-owned state. Input is validated before it can
 cross that boundary, secrets are not exposed to an untrusted surface, and
 irreversible effects have an authority-appropriate confirmation or safeguard.
+Credential and session lifecycles are explicit and proportionate: a captured,
+removed, expired, replayed, or logged-out capability cannot silently retain
+authority beyond the promised operating model.
 
 ### Stop or qualify when
 

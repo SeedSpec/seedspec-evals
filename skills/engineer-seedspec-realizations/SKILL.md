@@ -85,6 +85,11 @@ used by people, agents, operators, or external systems. Exercise the primary
 path through its real boundary and account for the material empty, invalid,
 denied, unavailable, stale, and repeated-action states.
 
+At authoritative boundaries, distinguish semantic validity from syntax or
+parser acceptance for material structured values. Exercise a well-shaped but
+invalid value whenever normalization, coercion, overflow, or ambiguous local
+interpretation could silently change its meaning.
+
 Do not substitute decorative UI, placeholder handlers, hard-coded success, or
 static inspection for an operable path.
 
@@ -99,6 +104,11 @@ authoritative boundary, including material denied and failure paths.
 Calibrate every claim to the evidence produced. A command exit code, source
 inspection, mocked path, handler test, live system exercise, and end-to-end
 observation establish different things.
+
+An evidence harness must distinguish unavailable capability or setup from a
+behavioral assertion failure. Never downgrade an assertion failure, unexpected
+exception, or wrong observed result into `qualified`, `not-run`, or a passing
+environment limitation.
 
 ### 6. Challenge the realized change
 

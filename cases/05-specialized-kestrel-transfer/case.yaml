@@ -1,6 +1,6 @@
 schemaVersion: 1
 id: kestrel-warehouse-transfer
-version: 1.0.0
+version: 1.1.0
 title: Specialized cross-system workflow — Kestrel warehouse transfers
 description: >-
   Tests whether package-scoped domain guidance improves a SeedSpec for an
@@ -262,98 +262,98 @@ adaptationChallenges:
 comparisonAxes:
   decisions:
     - id: platform-authority
-      stages: [authorship]
+      stages: [authorship, implementation]
       title: Authoritative transfer state
       description: Whether Kestrel or the local workflow owns reservation, custody, receipt, and reconciliation truth.
       materiality: critical
     - id: transfer-lifecycle
-      stages: [authorship]
+      stages: [authorship, implementation]
       title: Canonical transfer lifecycle
       description: How request, reservation, dispatch, partial receipt, receipt, exception, and cancellation states relate.
       materiality: critical
     - id: retry-semantics
-      stages: [authorship]
+      stages: [authorship, implementation]
       title: Command retry semantics
       description: How idempotency keys behave for matching, conflicting, timed-out, and retried commands.
       materiality: critical
     - id: event-ordering
-      stages: [authorship]
+      stages: [authorship, implementation]
       title: Event ordering and replay
       description: Whether event ID and per-transfer sequence prevent duplicate, out-of-order, conflicting, or rollback effects.
       materiality: critical
     - id: cancellation-boundary
-      stages: [authorship]
+      stages: [authorship, implementation]
       title: Cancellation and post-dispatch exceptions
       description: When cancellation is permitted and how dispatched discrepancies are handled without rewriting history.
       materiality: critical
     - id: role-authority
-      stages: [authorship]
+      stages: [authorship, implementation]
       title: Human workflow authority
       description: Who requests, accepts, dispatches, receives, and resolves transfer exceptions.
       materiality: material
     - id: inventory-scope
-      stages: [authorship]
+      stages: [authorship, implementation]
       title: Inventory classes and receipt granularity
       description: Whether serialized and bulk inventory and partial receipts are in scope.
       materiality: material
     - id: implementation-stack
-      stages: [authorship]
+      stages: [authorship, implementation]
       title: Implementation technology
       description: Whether framework, hosting, storage, and interface architecture are fixed or delegated.
       materiality: minor
   obligations:
     - id: authoritative-state
-      stages: [authorship]
+      stages: [authorship, implementation]
       kind: boundary
       description: Kestrel remains authoritative and local projections do not directly overwrite Kestrel inventory.
       importance: critical
     - id: atomic-reservation
-      stages: [authorship]
+      stages: [authorship, implementation]
       kind: invariant
       description: Accepted reservations are atomic, never make available inventory negative, and cannot reserve one serial twice.
       importance: critical
     - id: complete-lifecycle
-      stages: [authorship]
+      stages: [authorship, implementation]
       kind: behavior
       description: The canonical lifecycle includes request, reserve, dispatch, partial receipt, full receipt, exception, and valid cancellation.
       importance: critical
     - id: command-idempotency
-      stages: [authorship]
+      stages: [authorship, implementation]
       kind: invariant
       description: Matching idempotency-key retries reuse the original result while conflicting payload reuse changes no state.
       importance: critical
     - id: event-deduplication
-      stages: [authorship]
+      stages: [authorship, implementation]
       kind: invariant
       description: Replayed at-least-once events create no duplicate projection, notification, custody, or receipt effect.
       importance: critical
     - id: event-sequence-gaps
-      stages: [authorship]
+      stages: [authorship, implementation]
       kind: invariant
       description: Only the next transfer sequence applies; future events wait for gaps and conflicting applied sequences are quarantined without rollback.
       importance: critical
     - id: cancellation-and-exception
-      stages: [authorship]
+      stages: [authorship, implementation]
       kind: forbidden-state
       description: Cancellation occurs only before dispatch; post-dispatch problems cannot delete or backdate history and require an authorized compensating action.
       importance: critical
     - id: inventory-class-validation
-      stages: [authorship]
+      stages: [authorship, implementation]
       kind: constraint
       description: Serialized lines enumerate unique serials while bulk lines use positive whole quantities and lot identity; partial receipt preserves missing units.
       importance: material
     - id: transfer-time-semantics
-      stages: [authorship]
+      stages: [authorship, implementation]
       kind: behavior
       description: Events are stored in UTC, site IANA time zones control display and operational day, and timestamps never determine ordering.
       importance: material
     - id: reconciliation-safety
-      stages: [authorship]
+      stages: [authorship, implementation]
       kind: constraint
       description: Projection drift becomes visible and reviewable without authorizing an automatic inventory mutation.
       importance: material
     - id: phone-keyboard
-      stages: [authorship]
+      stages: [authorship, implementation]
       kind: constraint
       description: Request, dispatch, receipt, and exception review are usable at a narrow phone viewport and by keyboard.
       importance: material

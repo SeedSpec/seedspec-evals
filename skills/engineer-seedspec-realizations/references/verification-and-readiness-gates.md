@@ -16,6 +16,8 @@ materially wrong alternatives.
 - whether mocks remove the exact boundary being claimed;
 - whether commands were executed against the delivered artifact;
 - whether self-authored reports overstate the underlying observation.
+- whether a verification adapter distinguishes capability absence and setup
+  failure from assertion failure, unexpected exception, or wrong behavior.
 
 Prefer tests that fail when a control is removed, an authority is swapped, a
 transition is reordered, a retry is repeated, or a dependency fails. Use the
@@ -35,6 +37,8 @@ remains inferred or unobserved.
 - source inspection is presented as runtime proof;
 - a mocked dependency bypasses the trust or failure boundary under review;
 - a generated report is the only evidence for its own claim;
+- an assertion failure or unexpected exception is caught and relabeled as an
+  environment limitation, qualification, or skipped check;
 - important verification did not run or its result cannot be attributed to the
   delivered artifact.
 
@@ -60,6 +64,9 @@ challenging the realized change rather than confirming the plan.
 - trust-boundary bypasses and unsafe data exposure;
 - brittle coupling, duplicated policy, dead paths, hidden global state, and
   abstractions with no current leverage;
+- one representative future policy or integration change named by the package
+  or made likely by the realized design: trace where it would propagate and
+  whether a material rule has more than one canonical owner;
 - dependencies, migrations, performance cliffs, and operational assumptions;
 - likely future policy or integration changes identified by the package.
 
@@ -70,7 +77,9 @@ that do not protect an obligation or materially improve safe change.
 ### Pass condition
 
 No supported material finding remains open. Corrective changes have relevant
-verification, and the realized scope still matches the governing inputs.
+verification, and the realized scope still matches the governing inputs. A
+representative likely change has a bounded propagation path, or the remaining
+coupling is explicitly justified as simpler and safer for the declared scope.
 
 ### Stop or qualify when
 

@@ -7,6 +7,7 @@ import {
   CongruencyReportSchema,
   DeterministicCheckResultSchema,
   EvaluationCaseSchema,
+  ImplementationAcceptanceReportSchema,
   JsonValueSchema,
   RunManifestSchema,
   RunStateSchema,
@@ -522,5 +523,38 @@ describe("observable traces", () => {
     expect(TraceSchema.parse(trace).traceId).toMatch(/^trace_[a-f0-9]{64}$/);
     expect(TraceSchema.safeParse({ ...trace, reasoning: "private thoughts" }).success).toBe(false);
     expect(TraceSchema.safeParse({ ...trace, events: [{ ...trace.events[0], sequence: 1 }] }).success).toBe(false);
+  });
+});
+
+describe("implementation evidence", () => {
+  it("preserves honest qualified and not-run outcomes without treating them as passes", () => {
+    const base = {
+      schemaVersion: 1 as const,
+      verificationCommands: [{ id: "test", argv: ["node", "--test"] }],
+      scenarios: [{
+        id: "partially-observed",
+        outcome: "qualified" as const,
+        commandIds: ["test"],
+        evidence: ["test/partial.test.js"],
+      }],
+      accessibility: {
+        viewportWidth: 360,
+        keyboardTasks: [{
+          id: "browser-unavailable",
+          outcome: "not-run" as const,
+          commandIds: ["test"],
+          evidence: ["test/browser-harness.test.js"],
+        }],
+      },
+      limitations: ["The browser observation was unavailable."],
+    };
+
+    const parsed = ImplementationAcceptanceReportSchema.parse(base);
+    expect(parsed.scenarios[0]?.outcome).toBe("qualified");
+    expect(parsed.accessibility?.keyboardTasks[0]?.outcome).toBe("not-run");
+    expect(ImplementationAcceptanceReportSchema.parse({
+      ...base,
+      scenarios: [{ ...base.scenarios[0], outcome: "partial" }],
+    }).scenarios[0]?.outcome).toBe("partial");
   });
 });

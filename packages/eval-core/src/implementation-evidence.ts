@@ -20,7 +20,7 @@ const VerificationCommandSchema = z.strictObject({
 
 const LinkedResultSchema = z.strictObject({
   id: z.string().trim().min(1).max(256),
-  outcome: z.enum(["pass", "fail"]),
+  outcome: z.enum(["pass", "fail", "qualified", "partial", "not-run"]),
   commandIds: z.array(IdentifierSchema).min(1).max(32),
   evidence: z.array(SafeRelativePathSchema).min(1).max(128),
   assessment: z.string().trim().min(1).max(8_000).optional(),
