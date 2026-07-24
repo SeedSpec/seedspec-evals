@@ -133,8 +133,8 @@ By default, the command creates a new isolated directory under `~/Code/agent-eva
 
 Repeat once for each variant. For Claude Code, replace `codex` with `claude-code`. The runner-safe envelope contains the reviewed case and available clarification IDs but no simulated answers. A control record outside the runner project exposes one answer at a time through `runner-control.mjs answer`. The brief also carries variant-specific instructions and tools, the requested model, required outputs, and the portable observable-trace contract. Select the same underlying model and snapshot. If it is unavailable, create a new run identity for the actual model rather than calling the run matched.
 
-After a desktop run finishes, inventory its deterministic evidence and prepare
-a descriptive evaluation profile:
+After a desktop run finishes, verify its executable claims, evaluate its
+contract/integrity gate, and prepare a descriptive evaluation profile:
 
 ```sh
 node packages/cli/dist/index.js implementation verify \
@@ -155,18 +155,27 @@ Implementation verification is a separate, explicitly authorized step. It
 executes only the realization's declared local verification commands, captures
 their actual outcomes, and checks that acceptance and accessibility claims link
 to existing evidence. A passing command does not prove that its tests are
-meaningful. The independent, read-only technical reviewer evaluates
-correctness, placeholder behavior, test quality, maintainability, flexibility,
-and declared adaptation challenges from a frozen evaluator skill that is
-content-addressed in the evidence envelope.
+meaningful. The deterministic command likewise reports only run integrity,
+required artifacts, and declared outcome checks. Its
+pass/fail/unevaluated counts are not an implementation-quality score.
+
+The independent, read-only technical reviewer evaluates a fixed general vector
+covering correctness, meaningfulness, maintainability, flexibility, security,
+reliability, performance, accessibility, test quality, evidence quality, and
+implementation-profile conformance. Each applicable dimension uses an
+evidence-backed ordinal anchor from 0 through 4; unknown dimensions remain
+unscored, critical findings cap readiness, and dimension levels are never
+averaged. The frozen evaluator skills are content-addressed in the evidence
+envelope.
 
 The profile handoff contains a compact, content-addressed evidence envelope and
 the case's predeclared decision and obligation axes. This gives every variant
 the same comparison denominator without exposing the full case or evaluator
 implementation. The profile records decision provenance and materiality,
 obligation-to-evidence coverage, semantic file ownership, process capture,
-technical findings, and uncertainty. It does not emit a normalized score or
-declare a winner. An author can profile a package without running a full lab:
+technical findings, the independent technical vector, and uncertainty. It does
+not emit a normalized overall score or declare a winner. An author can profile
+a package without running a full lab:
 
 ```sh
 node packages/cli/dist/index.js evaluate package-profile-brief \
@@ -196,8 +205,8 @@ node packages/cli/dist/index.js evaluate profile-compare \
 ```
 
 The comparison preserves missing and unknown observations, intentional agent
-latitude, subject-specific findings, and process capture. It does not select a
-winner.
+latitude, subject-specific findings, technical dimension levels, and process
+capture. It does not average the vector or select a winner.
 
 Use the older scored rubric only when the experiment predeclares a scored
 comparison:

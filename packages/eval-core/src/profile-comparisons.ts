@@ -6,6 +6,7 @@ import {
   RunIdSchema,
   SemVerSchema,
   Sha256DigestSchema,
+  TechnicalDimensionSchema,
   contentId,
   deepFreeze,
   type DeepReadonly,
@@ -75,6 +76,30 @@ const ObligationObservationSchema = z.discriminatedUnion("status", [
   }),
 ]);
 
+const TechnicalQualityObservationSchema = z.discriminatedUnion("status", [
+  z.strictObject({
+    status: z.literal("assessed"),
+    profileId: z.string().regex(/^profile_[a-f0-9]{64}$/),
+    runId: RunIdSchema,
+    variant: EvaluationVariantSchema,
+    treatment: IdentifierSchema.optional(),
+    level: z.number().int().min(0).max(4),
+    confidence: z.number().min(0).max(1),
+    openCriticalFindings: z.number().int().nonnegative(),
+    openMaterialFindings: z.number().int().nonnegative(),
+  }),
+  z.strictObject({
+    status: z.enum(["unknown", "not-applicable", "missing"]),
+    profileId: z.string().regex(/^profile_[a-f0-9]{64}$/),
+    runId: RunIdSchema,
+    variant: EvaluationVariantSchema,
+    treatment: IdentifierSchema.optional(),
+    confidence: z.number().min(0).max(1).optional(),
+    openCriticalFindings: z.number().int().nonnegative().optional(),
+    openMaterialFindings: z.number().int().nonnegative().optional(),
+  }),
+]);
+
 const ProfileComparisonBodySchema = z.strictObject({
   schemaVersion: z.literal(1),
   createdAt: IsoTimestampSchema,
@@ -95,6 +120,10 @@ const ProfileComparisonBodySchema = z.strictObject({
     importance: z.enum(["critical", "material", "minor"]),
     observations: z.array(ObligationObservationSchema).min(2).max(1_000),
   })).max(512),
+  technicalQualityAxes: z.array(z.strictObject({
+    dimension: TechnicalDimensionSchema,
+    observations: z.array(TechnicalQualityObservationSchema).min(2).max(1_000),
+  })).max(64).optional(),
   unmatched: z.array(z.strictObject({
     profileId: z.string().regex(/^profile_[a-f0-9]{64}$/),
     runId: RunIdSchema,
@@ -203,6 +232,42 @@ export function createProfileComparison(input: {
             };
       }),
     })),
+    technicalQualityAxes: first.subject.stage !== "implementation"
+      ? []
+      : [...new Set(profiles.flatMap((profile) =>
+          profile.technical?.quality?.dimensions.map(({ dimension }) => dimension) ?? []))]
+          .toSorted()
+          .map((dimension) => ({
+            dimension,
+            observations: profiles.map((profile) => {
+              const reference = profileReference(profile);
+              const quality = profile.technical?.quality;
+              const assessment = quality?.dimensions.find((entry) => entry.dimension === dimension);
+              if (quality === undefined || assessment === undefined) {
+                return { status: "missing" as const, ...reference };
+              }
+              const findings = quality.findings.filter((finding) =>
+                finding.dimension === dimension && finding.status === "open");
+              const findingCounts = {
+                openCriticalFindings: findings.filter(({ severity }) => severity === "critical").length,
+                openMaterialFindings: findings.filter(({ severity }) => severity === "material").length,
+              };
+              return assessment.status === "assessed"
+                ? {
+                    status: "assessed" as const,
+                    ...reference,
+                    level: assessment.level!,
+                    confidence: assessment.confidence,
+                    ...findingCounts,
+                  }
+                : {
+                    status: assessment.status,
+                    ...reference,
+                    confidence: assessment.confidence,
+                    ...findingCounts,
+                  };
+            }),
+          })),
     unmatched: profiles.map((profile) => ({
       ...profileReference(profile),
       decisionIds: profile.decisions.filter(({ caseAxisId }) => caseAxisId === undefined).map(({ id }) => id),
@@ -216,6 +281,7 @@ export function createProfileComparison(input: {
       "This comparison is descriptive and uses predeclared case axes as a shared denominator.",
       "Missing, unknown, delegated, and open observations are preserved; no aggregate score or winning variant is inferred.",
       "Subject-specific records without a case axis are listed separately and are not treated as directly comparable.",
+      "Technical quality is an independent ordinal vector. Levels are not averaged into a normalized score.",
     ],
   });
   return ProfileComparisonSchema.parse({

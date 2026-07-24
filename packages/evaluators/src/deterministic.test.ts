@@ -129,5 +129,16 @@ describe("evaluateDeterministically", () => {
     expect(scorecard.checks.find((check) => check.id === "deliverable-manifest")?.outcome).toBe("fail");
     expect(scorecard.checks.find((check) => check.id === "criterion-valid")?.outcome).toBe("not-applicable");
     expect(scorecard.checks.find((check) => check.id === "authoring-state-excluded")?.outcome).toBe("fail");
+    expect(scorecard.assessmentScope).toBe("run-contract-and-integrity");
+    expect(scorecard.interpretation).toContain("not an implementation-quality score");
+    expect(scorecard.gate).toMatchObject({
+      status: "fail",
+      failed: 2,
+      unevaluated: 2,
+    });
+    expect(scorecard.gate?.categories.find(({ category }) => category === "run-integrity")).toMatchObject({
+      status: "pass",
+      passed: 2,
+    });
   });
 });

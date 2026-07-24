@@ -18,6 +18,21 @@ import {
 import { EvaluationStageSchema, EvaluationVariantSchema, variantBelongsToStage } from "./cases.js";
 import { ModelMetadataSchema } from "./versions.js";
 
+export const TECHNICAL_QUALITY_RUBRIC_VERSION = "0.1.0" as const;
+export const TECHNICAL_QUALITY_DIMENSIONS = [
+  "correctness",
+  "meaningfulness",
+  "maintainability",
+  "flexibility",
+  "security",
+  "reliability",
+  "performance",
+  "accessibility",
+  "test-quality",
+  "evidence-quality",
+  "profile-conformance",
+] as const;
+
 export const EvaluationEvidenceLocatorSchema = z.strictObject({
   artifactId: ArtifactIdSchema.optional(),
   path: SafeRelativePathSchema.optional(),
@@ -211,6 +226,138 @@ export const TechnicalCheckSchema = z.strictObject({
   evidence: z.array(EvaluationEvidenceLocatorSchema).max(128),
 });
 
+export const TechnicalQualityLevelSchema = z.number().int().min(0).max(4);
+
+export const TechnicalQualityFindingSchema = z.strictObject({
+  id: IdentifierSchema,
+  dimension: TechnicalDimensionSchema,
+  severity: z.enum(["critical", "material", "minor", "information"]),
+  status: z.enum(["open", "mitigated", "unknown"]),
+  description: z.string().trim().min(1).max(8_000),
+  assessment: z.string().trim().min(1).max(8_000),
+  evidence: z.array(EvaluationEvidenceLocatorSchema).min(1).max(128),
+});
+
+export const TechnicalDimensionAssessmentSchema = z.strictObject({
+  dimension: TechnicalDimensionSchema,
+  status: z.enum(["assessed", "unknown", "not-applicable"]),
+  level: TechnicalQualityLevelSchema.optional(),
+  confidence: z.number().min(0).max(1),
+  assessment: z.string().trim().min(1).max(8_000),
+  evidence: z.array(EvaluationEvidenceLocatorSchema).max(128),
+  findingIds: z.array(IdentifierSchema).max(256),
+}).superRefine((dimension, context) => {
+  if (dimension.status === "assessed") {
+    if (dimension.level === undefined) {
+      context.addIssue({ code: "custom", message: "assessed dimensions require an ordinal level", path: ["level"] });
+    }
+    if (dimension.evidence.length === 0) {
+      context.addIssue({ code: "custom", message: "assessed dimensions require cited evidence", path: ["evidence"] });
+    }
+  } else if (dimension.level !== undefined) {
+    context.addIssue({
+      code: "custom",
+      message: "unknown and not-applicable dimensions cannot receive an ordinal level",
+      path: ["level"],
+    });
+  }
+});
+
+export const TechnicalReadinessSchema = z.enum([
+  "blocked",
+  "high-risk",
+  "serviceable",
+  "robust",
+  "exceptional",
+  "indeterminate",
+]);
+
+export const TechnicalQualityAssessmentSchema = z.strictObject({
+  rubricVersion: SemVerSchema,
+  dimensions: z.array(TechnicalDimensionAssessmentSchema).min(1).max(64),
+  findings: z.array(TechnicalQualityFindingSchema).max(1_000),
+  readiness: TechnicalReadinessSchema,
+  summary: z.string().trim().min(1).max(16_000),
+  limitations: z.array(z.string().trim().min(1).max(8_000)).max(256),
+}).superRefine((quality, context) => {
+  addUniqueIdIssues(quality.findings, context, ["findings"]);
+  const dimensions = quality.dimensions.map(({ dimension }) => dimension);
+  if (new Set(dimensions).size !== dimensions.length) {
+    context.addIssue({ code: "custom", message: "technical quality dimensions must be unique", path: ["dimensions"] });
+  }
+  const missingDimensions = TECHNICAL_QUALITY_DIMENSIONS.filter((dimension) => !dimensions.includes(dimension));
+  if (missingDimensions.length > 0) {
+    context.addIssue({
+      code: "custom",
+      message: `technical quality must include the complete independent dimension set; missing ${missingDimensions.join(", ")}`,
+      path: ["dimensions"],
+    });
+  }
+  const referencedFindingIds = new Set<string>();
+  for (const [index, dimension] of quality.dimensions.entries()) {
+    for (const findingId of dimension.findingIds) {
+      referencedFindingIds.add(findingId);
+      const finding = quality.findings.find(({ id }) => id === findingId);
+      if (finding === undefined) {
+        context.addIssue({
+          code: "custom",
+          message: `dimension references unknown finding ${findingId}`,
+          path: ["dimensions", index, "findingIds"],
+        });
+      } else if (finding.dimension !== dimension.dimension) {
+        context.addIssue({
+          code: "custom",
+          message: `finding ${findingId} belongs to ${finding.dimension}, not ${dimension.dimension}`,
+          path: ["dimensions", index, "findingIds"],
+        });
+      }
+    }
+  }
+  for (const [index, finding] of quality.findings.entries()) {
+    if (!referencedFindingIds.has(finding.id)) {
+      context.addIssue({
+        code: "custom",
+        message: `finding ${finding.id} must be referenced by its dimension`,
+        path: ["findings", index, "id"],
+      });
+    }
+    const dimension = quality.dimensions.find((entry) => entry.dimension === finding.dimension);
+    if (dimension === undefined) continue;
+    if (finding.status === "open" && finding.severity === "critical"
+      && (dimension.status !== "assessed" || dimension.level !== 0)) {
+      context.addIssue({
+        code: "custom",
+        message: `open critical finding ${finding.id} requires its dimension to be assessed at level 0`,
+        path: ["findings", index],
+      });
+    }
+    if (finding.status === "open" && finding.severity === "material"
+      && (dimension.status !== "assessed" || dimension.level === undefined || dimension.level > 2)) {
+      context.addIssue({
+        code: "custom",
+        message: `open material finding ${finding.id} caps its dimension at level 2`,
+        path: ["findings", index],
+      });
+    }
+    if (finding.status === "unknown" && ["critical", "material"].includes(finding.severity)
+      && dimension.status !== "unknown") {
+      context.addIssue({
+        code: "custom",
+        message: `unknown ${finding.severity} finding ${finding.id} requires an unknown dimension assessment`,
+        path: ["findings", index],
+      });
+    }
+  }
+  const expectedReadiness = deriveTechnicalReadiness(quality.dimensions, quality.findings);
+  if (quality.readiness !== expectedReadiness) {
+    context.addIssue({
+      code: "custom",
+      message: `readiness does not match evidence; expected ${expectedReadiness}`,
+      path: ["readiness"],
+    });
+  }
+});
+
 export const AdaptationChallengeSchema = z.strictObject({
   id: IdentifierSchema,
   description: z.string().trim().min(1).max(8_000),
@@ -226,6 +373,7 @@ export const AdaptationChallengeSchema = z.strictObject({
 
 export const TechnicalEvaluationSchema = z.strictObject({
   checks: z.array(TechnicalCheckSchema).max(10_000),
+  quality: TechnicalQualityAssessmentSchema.optional(),
   adaptationChallenges: z.array(AdaptationChallengeSchema).max(1_000),
   summary: z.string().trim().min(1).max(16_000),
 });
@@ -364,6 +512,11 @@ export type ObligationEvidenceRecord = z.infer<typeof ObligationEvidenceRecordSc
 export type StructureFinding = z.infer<typeof StructureFindingSchema>;
 export type ProcessMetrics = z.infer<typeof ProcessMetricsSchema>;
 export type TechnicalCheck = z.infer<typeof TechnicalCheckSchema>;
+export type TechnicalQualityLevel = z.infer<typeof TechnicalQualityLevelSchema>;
+export type TechnicalQualityFinding = z.infer<typeof TechnicalQualityFindingSchema>;
+export type TechnicalDimensionAssessment = z.infer<typeof TechnicalDimensionAssessmentSchema>;
+export type TechnicalReadiness = z.infer<typeof TechnicalReadinessSchema>;
+export type TechnicalQualityAssessment = z.infer<typeof TechnicalQualityAssessmentSchema>;
 export type AdaptationChallenge = z.infer<typeof AdaptationChallengeSchema>;
 export type TechnicalEvaluation = z.infer<typeof TechnicalEvaluationSchema>;
 export type EvaluationProfileBody = z.infer<typeof EvaluationProfileBodySchema>;
@@ -402,6 +555,13 @@ export interface EvaluationProfileSummary {
     readonly concern: number;
     readonly unknown: number;
     readonly adaptationChallenges: number;
+    readonly quality?: {
+      readonly readiness: TechnicalReadiness;
+      readonly assessed: number;
+      readonly unknown: number;
+      readonly notApplicable: number;
+      readonly openCriticalFindings: number;
+    };
   };
 }
 
@@ -445,6 +605,16 @@ export function summarizeEvaluationProfile(profile: EvaluationProfile): Evaluati
     concern: profile.technical.checks.filter(({ outcome }) => outcome === "concern").length,
     unknown: profile.technical.checks.filter(({ outcome }) => outcome === "unknown").length,
     adaptationChallenges: profile.technical.adaptationChallenges.length,
+    ...(profile.technical.quality === undefined ? {} : {
+      quality: {
+        readiness: profile.technical.quality.readiness,
+        assessed: profile.technical.quality.dimensions.filter(({ status }) => status === "assessed").length,
+        unknown: profile.technical.quality.dimensions.filter(({ status }) => status === "unknown").length,
+        notApplicable: profile.technical.quality.dimensions.filter(({ status }) => status === "not-applicable").length,
+        openCriticalFindings: profile.technical.quality.findings.filter((finding) =>
+          finding.severity === "critical" && finding.status === "open").length,
+      },
+    }),
   };
   return {
     decisions: {
@@ -472,4 +642,24 @@ export function summarizeEvaluationProfile(profile: EvaluationProfile): Evaluati
     },
     ...(technical === undefined ? {} : { technical }),
   };
+}
+
+export function deriveTechnicalReadiness(
+  dimensions: readonly TechnicalDimensionAssessment[],
+  findings: readonly TechnicalQualityFinding[],
+): TechnicalReadiness {
+  if (findings.some((finding) => finding.severity === "critical" && finding.status === "open")) {
+    return "blocked";
+  }
+  const assessed = dimensions.filter((dimension) => dimension.status === "assessed");
+  const levels = assessed.flatMap(({ level }) => level === undefined ? [] : [level]);
+  if (levels.length !== assessed.length) return "indeterminate";
+  if (levels.some((level) => level === 0)) return "blocked";
+  if (dimensions.some((dimension) => dimension.status === "unknown") || assessed.length === 0) {
+    return "indeterminate";
+  }
+  if (levels.some((level) => level === 1)) return "high-risk";
+  if (levels.some((level) => level === 2)) return "serviceable";
+  if (levels.some((level) => level === 3)) return "robust";
+  return "exceptional";
 }

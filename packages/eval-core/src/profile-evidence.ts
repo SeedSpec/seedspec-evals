@@ -19,6 +19,7 @@ import {
   TechnicalExpectationSchema,
 } from "./cases.js";
 import { EvaluationProfileSubjectSchema } from "./profiles.js";
+import { ContractGateSummarySchema } from "./scores.js";
 
 export const ProfileEvidenceArtifactSchema = z.strictObject({
   artifactId: ArtifactIdSchema,
@@ -74,14 +75,32 @@ export const ProfileEvidenceEnvelopeBodySchema = z.strictObject({
     threadId: z.string().trim().min(1).max(256).optional(),
     limitations: z.array(z.string().trim().min(1).max(8_000)).max(256),
   }).optional(),
+  contractGate: z.strictObject({
+    path: SafeRelativePathSchema,
+    summary: ContractGateSummarySchema,
+    checks: z.array(JsonValueSchema).max(1_000),
+    interpretation: z.literal(
+      "This gate reports run integrity, required artifacts, and declared outcome checks. It is not an implementation-quality score.",
+    ),
+  }).optional(),
+  // Accepted for compatibility with evidence envelopes produced before the
+  // contract/integrity gate stopped exposing its legacy weighted total.
   deterministic: z.strictObject({
     path: SafeRelativePathSchema,
     summary: JsonObjectSchema,
     checks: z.array(JsonValueSchema).max(1_000),
-  }),
+  }).optional(),
   reportPath: SafeRelativePathSchema,
   decisionLedgerPath: SafeRelativePathSchema.optional(),
   instructions: z.array(z.string().trim().min(1).max(4_000)).min(1).max(64),
+}).superRefine((envelope, context) => {
+  if (envelope.contractGate === undefined && envelope.deterministic === undefined) {
+    context.addIssue({
+      code: "custom",
+      message: "profile evidence requires contract-gate or legacy deterministic evidence",
+      path: ["contractGate"],
+    });
+  }
 });
 
 const ProfileEvidenceEnvelopeDataSchema = ProfileEvidenceEnvelopeBodySchema.safeExtend({

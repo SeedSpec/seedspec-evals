@@ -1,0 +1,4 @@
+interface:
+  display_name: "Engineer SeedSpec Realizations"
+  short_description: "Pass risk-based gates while realizing SeedSpecs"
+  default_prompt: "Use $engineer-seedspec-realizations to implement this SeedSpec through risk-based engineering gates and fresh verification."

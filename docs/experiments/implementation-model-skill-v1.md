@@ -151,9 +151,10 @@ The current evidence supports:
 
 ## Lab findings
 
-### Deterministic score saturation
+### Legacy deterministic score saturation
 
-All twelve implementations scored 9 of 10 even though the independent
+All twelve implementations received a legacy weighted contract result of 9 of
+10 even though the independent
 evaluator found critical identity deviations in all six Terra runs. The
 deterministic suite currently detects the common browser-evidence gap but does
 not adversarially test whether an outsider can impersonate a current resident.
@@ -166,8 +167,11 @@ The case should gain an executable identity-boundary probe that distinguishes:
 - a removed resident reusing a prior session;
 - a borrower attempting to impersonate the lender.
 
-The scorecard should not be read as a broad implementation-quality score until
-those distinguishing checks exist.
+This result is now labeled a contract/integrity gate and is never presented as
+an implementation-quality score. Additional distinguishing checks can improve
+the outcome contract, but security, reliability, maintainability, flexibility,
+test depth, and evidence quality belong to the independent technical vector
+rather than a larger deterministic total.
 
 ### Model identity in profile comparisons
 

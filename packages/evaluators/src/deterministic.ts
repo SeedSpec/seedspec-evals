@@ -1,5 +1,6 @@
 import {
   ScorecardSchema,
+  calculateContractGateSummary,
   calculateDeterministicSummary,
   createRunnableCaseView,
   appliesToVariant,
@@ -62,7 +63,10 @@ export function evaluateDeterministically(input: DeterministicEvaluationInput): 
       version: "0.1.0-alpha.2",
     },
     kind: "deterministic",
+    assessmentScope: "run-contract-and-integrity",
+    interpretation: "This gate reports run integrity, required artifacts, and declared outcome checks. It is not an implementation-quality score.",
     summary,
+    gate: calculateContractGateSummary(checks),
     checks,
   }) as DeterministicScorecard;
 }
@@ -83,6 +87,7 @@ function authoringStateIsExcluded(input: DeterministicCheckContext): Determinist
     .filter((path) => path.startsWith(".seedspec-authoring/") || stateNames.has(path));
   return [{
     id: "authoring-state-excluded",
+    category: "artifact-contract",
     description: "Temporary authoring state and unresolved-work queues stay outside the distributable package.",
     outcome: leaked.length === 0 ? "pass" : "fail",
     weight: 1,
@@ -110,6 +115,7 @@ function declaredHiddenChecks(
       if (adapter === undefined) {
         return {
           id: `hidden-${expectation.id}`,
+          category: "outcome-contract" as const,
           description: expectation.description,
           outcome: "not-applicable" as const,
           weight: expectation.severity === "critical" ? 3 : expectation.severity === "major" ? 2 : 1,
@@ -120,6 +126,7 @@ function declaredHiddenChecks(
       const result = adapter.evaluate(input, expectation.evaluation.target);
       return {
         id: `hidden-${expectation.id}`,
+        category: "outcome-contract" as const,
         description: expectation.description,
         outcome: result.outcome,
         weight: expectation.severity === "critical" ? 3 : expectation.severity === "major" ? 2 : 1,
@@ -135,6 +142,7 @@ function caseMatchesManifest(input: DeterministicCheckContext): DeterministicChe
     input.manifest.target.stage === input.stage;
   return {
     id: "case-manifest-consistency",
+    category: "run-integrity",
     description: "The case, version, and stage match the immutable run manifest.",
     outcome: matches ? "pass" : "fail",
     weight: 1,
@@ -152,6 +160,7 @@ function hiddenExpectationsAreIsolated(input: DeterministicCheckContext): Determ
     .filter((id) => serialized.includes(id));
   return {
     id: "hidden-expectations-isolated",
+    category: "run-integrity",
     description: "The runner-facing case projection excludes hidden evaluation expectations.",
     outcome: leakedIds.length === 0 ? "pass" : "fail",
     weight: 2,
@@ -170,6 +179,7 @@ function requiredDeliverablesExist(input: DeterministicCheckContext): Determinis
     if (deliverable.path === undefined) {
       return {
         id: `deliverable-${deliverable.id}`,
+        category: "artifact-contract" as const,
         description: deliverable.description,
         outcome: "not-applicable" as const,
         weight: 1,
@@ -183,6 +193,7 @@ function requiredDeliverablesExist(input: DeterministicCheckContext): Determinis
     );
     return {
       id: `deliverable-${deliverable.id}`,
+      category: "artifact-contract" as const,
       description: deliverable.description,
       outcome: present ? "pass" as const : "fail" as const,
       weight: 1,
@@ -207,6 +218,7 @@ function declaredDeterministicChecks(
       if (adapter === undefined) {
         return {
           id: `criterion-${criterion.id}`,
+          category: "outcome-contract" as const,
           description: criterion.description,
           outcome: "not-applicable" as const,
           weight: 1,
@@ -218,6 +230,7 @@ function declaredDeterministicChecks(
       const result = adapter.evaluate(input, criterion.measure.target);
       return {
         id: `criterion-${criterion.id}`,
+        category: "outcome-contract" as const,
         description: adapter.description,
         outcome: result.outcome,
         weight: 1,

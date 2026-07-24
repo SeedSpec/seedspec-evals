@@ -42,12 +42,37 @@ Only guidance delivery varies:
 | --- | --- | --- | --- |
 | `no-guidance` | None | No | Prohibited |
 | `embedded-guidance` | Full skill content in trusted instructions | No | Prohibited |
-| `skill-guidance` | Full skill content in `SKILL.md` | Yes | Required and observable |
+| `skill-guidance` | Full skill content in `SKILL.md` | Yes | Directed; consultation is observable |
 
 The initial skill is `skills/implement-stateful-workflows/SKILL.md`. It is
 deliberately implementation-oriented: behavioral modeling, one authoritative
 transition boundary, distinguishing tests, meaningful production paths, and
 adaptable seams. It does not select a framework.
+
+## SeedSpec-native gate treatment
+
+`skills/engineer-seedspec-realizations/SKILL.md` is the first SeedSpec-native
+implementation control loop. It applies seven risk-proportionate gates:
+
+1. obligation coverage;
+2. trust and authority;
+3. state and effects;
+4. operational surface;
+5. distinguishing verification;
+6. adversarial change review; and
+7. readiness.
+
+The skill uses progressive-disclosure references and one factual
+`REALIZATION_GATES.md` working record. The record shows what the agent
+consulted, found, changed, and verified; its existence and status words do not
+prove implementation quality. Package intent remains authoritative, and the
+skill may qualify or block its own completion claim without rewriting product
+policy.
+
+Run it through the ordinary `skill-guidance` treatment with adapter `none`.
+The independent evaluator scores realized correctness, security, reliability,
+maintainability, evidence, and other technical dimensions without awarding
+credit for gate attendance or matching skill vocabulary.
 
 ## Evidence sequence
 

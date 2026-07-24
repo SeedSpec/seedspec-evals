@@ -74,7 +74,10 @@ Do not reconstruct another total from the subject-authored trace. Leave user,
 agent, clarification, and correction subdivisions unavailable unless captured
 evidence distinguishes them.
 
-For implementation subjects, use the technical-review skill named by the handoff and place its findings in `technical`. Do not collapse technical quality, adherence, decision alignment, or cost into a single score.
+For implementation subjects, use the technical-review skill named by the
+handoff and place its findings and complete independent ordinal quality vector
+in `technical`. Do not collapse technical quality, adherence, decision
+alignment, contract-gate status, or cost into a single score.
 
 ## Finalization
 

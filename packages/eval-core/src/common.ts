@@ -70,6 +70,7 @@ export const TechnicalDimensionSchema = z.enum([
   "performance",
   "accessibility",
   "test-quality",
+  "evidence-quality",
   "profile-conformance",
 ]);
 

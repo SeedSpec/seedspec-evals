@@ -9,6 +9,7 @@ import {
   EvaluationVariantSchema,
   RunIdSchema,
   TraceBodySchema,
+  calculateContractGateSummary,
   createTrace,
   parseTrace,
   sha256Hex,
@@ -633,10 +634,11 @@ evaluate.command("deterministic")
       ok: true,
       runId: result.scorecard.runId,
       variant: result.scorecard.variant,
-      score: result.scorecard.summary,
+      assessmentScope: result.scorecard.assessmentScope,
+      contractGate: result.scorecard.gate,
       artifactManifestPath: result.artifactManifestPath,
       scorecardPath: result.scorecardPath,
-    }, `Deterministic evaluation completed for ${result.scorecard.runId} (${result.scorecard.variant}): ${String(result.scorecard.summary.earned)}/${String(result.scorecard.summary.possible)}.\nArtifacts: ${result.artifactManifestPath}\nScorecard: ${result.scorecardPath}\nNo model was called.`);
+    }, `Contract/integrity gate ${result.scorecard.gate?.status ?? "incomplete"} for ${result.scorecard.runId} (${result.scorecard.variant}): ${String(result.scorecard.gate?.passed ?? 0)} passed, ${String(result.scorecard.gate?.failed ?? 0)} failed, ${String(result.scorecard.gate?.unevaluated ?? 0)} unevaluated.\nThis is not an implementation-quality score.\nArtifacts: ${result.artifactManifestPath}\nContract evidence: ${result.scorecardPath}\nNo model was called.`);
   });
 
 evaluate.command("rubric-brief")
@@ -665,8 +667,20 @@ evaluate.command("scorecard")
   .argument("<scorecard>", "rubric or deterministic scorecard JSON")
   .action(async (file: string) => {
     const scorecard = await validateScorecardFile(file);
+    if (scorecard.kind === "deterministic") {
+      const gate = scorecard.gate ?? calculateContractGateSummary(scorecard.checks);
+      output({
+        ok: true,
+        runId: scorecard.runId,
+        variant: scorecard.variant,
+        kind: scorecard.kind,
+        assessmentScope: scorecard.assessmentScope,
+        contractGate: gate,
+      }, `Validated contract/integrity evidence for ${scorecard.runId} (${scorecard.variant}): ${gate.status}; ${String(gate.passed)} passed, ${String(gate.failed)} failed, ${String(gate.unevaluated)} unevaluated.\nThis is not an implementation-quality score.`);
+      return;
+    }
     output({ ok: true, runId: scorecard.runId, variant: scorecard.variant, kind: scorecard.kind, summary: scorecard.summary },
-      `Validated ${scorecard.kind} scorecard for ${scorecard.runId} (${scorecard.variant}): ${String(scorecard.summary.earned)}/${String(scorecard.summary.possible)}.`);
+      `Validated rubric scorecard for ${scorecard.runId} (${scorecard.variant}): ${String(scorecard.summary.earned)}/${String(scorecard.summary.possible)}.`);
   });
 
 evaluate.command("package-profile-brief")
@@ -797,6 +811,11 @@ program.command("compare")
   .action(async (files: string[], options: { baseline: string; out?: string }) => {
     const baseline = EvaluationVariantSchema.parse(options.baseline);
     const scorecards = await Promise.all(files.map(validateScorecardFile));
+    if (scorecards.some(({ kind }) => kind === "deterministic")) {
+      throw new Error(
+        "Contract/integrity gates cannot be ranked by weighted totals. Compare technical quality profiles or a predeclared independent rubric instead.",
+      );
+    }
     const report = createVariantComparison({ scorecards, baselineVariant: baseline, createdAt: new Date().toISOString() });
     const defaultPath = `runs/variant-comparison-${new Date().toISOString().replaceAll(/[:.]/g, "-")}.json`;
     const outPath = resolve(options.out ?? defaultPath);

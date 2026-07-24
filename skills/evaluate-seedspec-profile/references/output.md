@@ -126,4 +126,9 @@ Write JSON only. Do not include `profileId`; the CLI calculates it during finali
 
 Omit `runId`, `variant`, `case`, `package`, `process`, or `technical` only when they are genuinely outside the subject or unavailable. A run subject requires `runId`, `variant`, and its exact `case`; a standalone package subject may omit them. At least one of `subject.runId` and `subject.package` is required. Evidence must identify a relative path, artifact ID, or trace sequence and must include a relevance note.
 
+Implementation profiles must include `technical.quality` with exactly one
+dimension record for every dimension defined by the technical-review skill.
+Authorship profiles may omit `technical` entirely; the abbreviated
+authorship-only example above is not a valid implementation quality vector.
+
 For an evidence-bound run, include every comparison axis exactly once. `caseAxisId` is the stable denominator across profiles. Records without it are useful subject-specific findings, but they remain outside direct cross-variant comparison. The finalizer rejects missing, duplicated, unknown, or semantically changed case axes.

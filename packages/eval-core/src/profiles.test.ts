@@ -3,12 +3,26 @@ import { describe, expect, it } from "vitest";
 import {
   DecisionLedgerSchema,
   EvaluationProfileSchema,
+  TECHNICAL_QUALITY_DIMENSIONS,
+  TechnicalQualityAssessmentSchema,
   createDecisionLedger,
   createEvaluationProfile,
   summarizeEvaluationProfile,
 } from "./profiles.js";
 
 const DIGEST = `sha256:${"a".repeat(64)}` as const;
+
+function qualityDimensions(level = 3) {
+  return TECHNICAL_QUALITY_DIMENSIONS.map((dimension) => ({
+    dimension,
+    status: "assessed" as const,
+    level,
+    confidence: 0.8,
+    assessment: `${dimension} is supported by the fixture evidence.`,
+    evidence: [{ path: "report.md", note: `${dimension} fixture evidence` }],
+    findingIds: [] as string[],
+  }));
+}
 
 function profileBody() {
   return {
@@ -99,6 +113,14 @@ function profileBody() {
         confidence: 0.8,
         evidence: [{ path: "src/health.ts", note: "Implemented health behavior" }],
       }],
+      quality: {
+        rubricVersion: "0.1.0" as const,
+        dimensions: qualityDimensions(),
+        findings: [],
+        readiness: "robust" as const,
+        summary: "The independent vector is robust across assessed dimensions.",
+        limitations: [],
+      },
       adaptationChallenges: [],
       summary: "The implementation is technically coherent for the evaluated scope.",
     },
@@ -117,7 +139,111 @@ describe("descriptive evaluation profiles", () => {
     expect(summary.decisions).toMatchObject({ total: 1, material: 1, ambientMaterial: 0 });
     expect(summary.obligations).toMatchObject({ total: 1, covered: 1 });
     expect(summary.technical).toMatchObject({ checks: 1, pass: 1 });
+    expect(summary.technical?.quality).toMatchObject({
+      readiness: "robust",
+      assessed: TECHNICAL_QUALITY_DIMENSIONS.length,
+      unknown: 0,
+    });
     expect(summary).not.toHaveProperty("score");
+  });
+
+  it("caps readiness when independent evidence identifies an open critical finding", () => {
+    const dimensions = qualityDimensions();
+    const security = dimensions.find(({ dimension }) => dimension === "security")!;
+    security.level = 0;
+    security.findingIds.push("public-auth-secret");
+    const quality = TechnicalQualityAssessmentSchema.parse({
+      rubricVersion: "0.1.0",
+      dimensions,
+      findings: [{
+        id: "public-auth-secret",
+        dimension: "security",
+        severity: "critical",
+        status: "open",
+        description: "Authentication secrets are public.",
+        assessment: "Any user can cross the trust boundary.",
+        evidence: [{ path: "src/config.ts", note: "Public credential" }],
+      }],
+      readiness: "blocked",
+      summary: "An open critical security finding blocks readiness.",
+      limitations: [],
+    });
+    expect(quality.readiness).toBe("blocked");
+    expect(() => TechnicalQualityAssessmentSchema.parse({
+      ...quality,
+      readiness: "robust",
+    })).toThrow(/expected blocked/);
+  });
+
+  it("prevents robust dimensions from coexisting with open or unknown material findings", () => {
+    const openDimensions = qualityDimensions();
+    openDimensions.find(({ dimension }) => dimension === "reliability")!.findingIds.push("non-atomic-write");
+    expect(() => TechnicalQualityAssessmentSchema.parse({
+      rubricVersion: "0.1.0",
+      dimensions: openDimensions,
+      findings: [{
+        id: "non-atomic-write",
+        dimension: "reliability",
+        severity: "material",
+        status: "open",
+        description: "Persistence can expose a partial write.",
+        assessment: "The failure path can corrupt durable state.",
+        evidence: [{ path: "src/store.ts", note: "Non-atomic write" }],
+      }],
+      readiness: "robust",
+      summary: "Invalid fixture.",
+      limitations: [],
+    })).toThrow(/caps its dimension at level 2/);
+
+    const unknownDimensions = qualityDimensions();
+    unknownDimensions.find(({ dimension }) => dimension === "security")!.findingIds.push("session-boundary-unknown");
+    expect(() => TechnicalQualityAssessmentSchema.parse({
+      rubricVersion: "0.1.0",
+      dimensions: unknownDimensions,
+      findings: [{
+        id: "session-boundary-unknown",
+        dimension: "security",
+        severity: "material",
+        status: "unknown",
+        description: "Session invalidation could not be established.",
+        assessment: "Available evidence does not reveal invalidation behavior.",
+        evidence: [{ path: "src/auth.ts", note: "No observable invalidation path" }],
+      }],
+      readiness: "robust",
+      summary: "Invalid fixture.",
+      limitations: [],
+    })).toThrow(/requires an unknown dimension assessment/);
+  });
+
+  it("keeps unknown dimensions unscored and makes readiness indeterminate", () => {
+    const dimensions = qualityDimensions().map((dimension) =>
+      dimension.dimension === "accessibility"
+        ? {
+            ...dimension,
+            status: "unknown" as const,
+            level: undefined,
+            evidence: [],
+            assessment: "No browser or assistive-technology evidence was captured.",
+          }
+        : dimension);
+    const quality = TechnicalQualityAssessmentSchema.parse({
+      rubricVersion: "0.1.0",
+      dimensions,
+      findings: [],
+      readiness: "indeterminate",
+      summary: "Accessibility remains unknown.",
+      limitations: ["No browser evidence."],
+    });
+    expect(quality.dimensions.find(({ dimension }) => dimension === "accessibility")?.level).toBeUndefined();
+    expect(() => TechnicalQualityAssessmentSchema.parse({
+      ...quality,
+      readiness: "robust",
+    })).toThrow(/expected indeterminate/);
+    expect(() => TechnicalQualityAssessmentSchema.parse({
+      ...quality,
+      dimensions: quality.dimensions.map((dimension) =>
+        dimension.dimension === "accessibility" ? { ...dimension, level: 3 } : dimension),
+    })).toThrow(/cannot receive an ordinal level/);
   });
 
   it("content-addresses an observable decision ledger without treating it as adjudication", () => {

@@ -96,6 +96,15 @@ performance, accessibility, test quality, and implementation-profile
 conformance. Package-supplied review skills may contribute evidence but cannot
 be the sole independent judge of the package that supplied them.
 
+Every implementation profile also includes an independent ordinal technical
+quality vector. Its fixed general dimensions do not mirror implementation-skill
+gates. Each dimension is assessed from cited evidence at level 0 through 4, or
+is preserved as unknown or not applicable. Unknown evidence receives no level.
+Open critical findings cap readiness at blocked, and the vector is never
+averaged into a normalized score. See [Independent technical quality
+evaluation](technical-quality.md) for anchors, readiness rules, blind judging,
+and sensitivity tests.
+
 Adaptation challenges are the strongest evidence of flexibility. They run only
 when declared by a case, supplied by an author, or explicitly approved by an
 operator, and they must use a disposable copy. The profile records observable

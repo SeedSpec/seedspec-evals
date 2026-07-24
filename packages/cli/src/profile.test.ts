@@ -11,6 +11,7 @@ import {
   finalizeDecisionLedgerFile,
   finalizeEvaluationProfileFile,
   formatEvaluationProfile,
+  inspectSeedSpecPackageIfPresent,
   validateEvaluationProfileFile,
   validateDecisionLedgerFile,
 } from "./profile.js";
@@ -46,6 +47,15 @@ describe("evaluation profile CLI helpers", () => {
     expect(identifiesExclusiveReservation(
       "The due date is stored in America/Chicago while reserving the listing.",
     )).toBe(false);
+  });
+
+  it("accepts Markdown-only authored implementation input without invoking SeedSpec package inspection", async () => {
+    const directory = await temporaryDirectory();
+    await writeFile(resolve(directory, "spec.md"), "# Small application\n", "utf8");
+    await expect(inspectSeedSpecPackageIfPresent(
+      directory,
+      resolve(directory, "missing-seedspec-cli.js"),
+    )).resolves.toBeUndefined();
   });
 
   it("finalizes, validates, and formats a profile body", async () => {

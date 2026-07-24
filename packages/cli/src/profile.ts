@@ -22,6 +22,8 @@ import {
   parseEvaluationProfile,
   parseDecisionLedger,
   summarizeEvaluationProfile,
+  TECHNICAL_QUALITY_RUBRIC_VERSION,
+  calculateContractGateSummary,
   type EvaluationProfile,
   type DecisionLedger,
   type EvaluationProfileBody,
@@ -145,6 +147,24 @@ export function formatProfileComparison(comparison: ProfileComparison): string {
         : `| ${axis.caseAxisId} | ${axis.importance} | ${observation.treatment ?? observation.variant} | ${observation.coverage} | ${observation.distinguishing} | ${observation.confidence.toFixed(2)} |`);
     }
   }
+  if ((comparison.technicalQualityAxes?.length ?? 0) > 0) {
+    lines.push(
+      "",
+      "## Independent technical quality vector",
+      "",
+      "Levels are ordinal anchors (0 compromised, 1 fragile, 2 serviceable, 3 robust, 4 exceptional). They are not averaged into an overall score.",
+      "",
+      "| Dimension | Treatment / variant | Status | Level | Critical findings | Material findings | Confidence |",
+      "|---|---|---|---:|---:|---:|---:|",
+    );
+    for (const axis of comparison.technicalQualityAxes ?? []) {
+      for (const observation of axis.observations) {
+        lines.push(observation.status === "assessed"
+          ? `| ${axis.dimension} | ${observation.treatment ?? observation.variant} | assessed | ${String(observation.level)} | ${String(observation.openCriticalFindings)} | ${String(observation.openMaterialFindings)} | ${observation.confidence.toFixed(2)} |`
+          : `| ${axis.dimension} | ${observation.treatment ?? observation.variant} | ${observation.status} | — | ${metric(observation.openCriticalFindings)} | ${metric(observation.openMaterialFindings)} | ${observation.confidence === undefined ? "—" : observation.confidence.toFixed(2)} |`);
+      }
+    }
+  }
   lines.push(
     "",
     "## Process capture",
@@ -198,6 +218,14 @@ export function formatEvaluationProfile(profile: EvaluationProfile): string {
       `- ${String(summary.technical.checks)} checks: ${String(summary.technical.pass)} pass, ${String(summary.technical.fail)} fail, ${String(summary.technical.concern)} concern, ${String(summary.technical.unknown)} unknown`,
       `- ${String(summary.technical.adaptationChallenges)} adaptation challenges`,
     );
+    if (summary.technical.quality !== undefined) {
+      lines.push(
+        `- Independent quality readiness: ${summary.technical.quality.readiness}`,
+        `- ${String(summary.technical.quality.assessed)} dimensions assessed, ${String(summary.technical.quality.unknown)} unknown, ${String(summary.technical.quality.notApplicable)} not applicable`,
+        `- ${String(summary.technical.quality.openCriticalFindings)} open critical findings`,
+        "- Ordinal dimension levels are evidence anchors, not values to average into an overall score.",
+      );
+    }
   }
   lines.push(
     "",
@@ -323,9 +351,11 @@ export async function buildRunProfileBrief(options: {
   const packagePath = manifest.target.stage === "implementation"
     ? resolve(runDirectory, "input", "authored")
     : resolve(runDirectory, "workspace");
-  const packageIdentity = ["raw-source", "markdown-authored"].includes(manifest.variant)
-    ? undefined
-    : inspectPackage(packagePath, resolve(options.seedSpecCli));
+  // Implementation variants identify the evaluation treatment, not the format of
+  // the transported authored input. A Markdown brief is a valid implementation
+  // input and must not be sent through SeedSpec package inspection merely because
+  // its run variant is `seedspec-implementation`.
+  const packageIdentity = await inspectSeedSpecPackageIfPresent(packagePath, resolve(options.seedSpecCli));
   const packageKind = packageIdentity?.kind;
   const packageReference = packageIdentity === undefined ? undefined : {
     ...(packageIdentity.id === undefined ? {} : { id: packageIdentity.id }),
@@ -403,10 +433,11 @@ export async function buildRunProfileBrief(options: {
         limitations: [...subjectRun.limitations],
       },
     }),
-    deterministic: {
+    contractGate: {
       path: "deterministic-scorecard.json",
-      summary: deterministic.summary,
+      summary: deterministic.gate ?? calculateContractGateSummary(deterministic.checks),
       checks: deterministic.checks,
+      interpretation: deterministic.interpretation,
     },
     reportPath: "report.md",
     ...(await fileExists(resolve(runDirectory, "decision-ledger.json")) ? { decisionLedgerPath: "decision-ledger.json" } : {}),
@@ -423,6 +454,7 @@ export async function buildRunProfileBrief(options: {
       "When subjectRun is present, use its provider-reported usage and exact outer run interval for process metrics instead of the subject-authored trace's unavailable or reconstructed values.",
       "When subjectRun.turnCount is present, use it as the reported total turn count. Do not infer a different count from subject-authored trace events.",
       "Adaptation challenge definitions are evaluation prompts, not captured outcomes. Do not execute a challenge during profile evaluation; emit not-run unless the envelope supplies a separate captured adaptation run.",
+      "Treat contractGate only as run-integrity and outcome-contract evidence. Its check counts do not establish implementation quality and must not influence ordinal technical levels without underlying implementation evidence.",
     ],
   });
   const evidenceEnvelope = createProfileEvidenceEnvelope(evidenceBody);
@@ -482,7 +514,7 @@ function profileBrief(options: {
     "",
     "## Evaluation objective",
     "",
-    "Produce a descriptive profile, not a winner or quality grade. Establish the decision surface, expected and observed provenance where evidence permits, obligation-to-evidence coverage, structural ownership, process measurements, technical findings, and limitations.",
+    "Produce a descriptive profile and, for implementations, an independently anchored technical quality vector. Do not collapse the result into one winner or overall quality grade. Establish the decision surface, expected and observed provenance where evidence permits, obligation-to-evidence coverage, structural ownership, process measurements, technical findings, and limitations.",
     "",
     "Do not reward author control over intentional agent latitude. Classify a decision as ambient only when a material choice lacks attributable authority; a deliberately delegated or open choice is not ambient. Preserve unknown and mixed attribution and include confidence.",
     ...(options.stage === "authorship" ? ["A request to complete or improve a specification is not blanket delegation of material product policy. Compare authored choices at the authorship stage; do not mark them not-observed merely because no implementation exists.", ""] : []),
@@ -559,6 +591,16 @@ async function materializeRunEvaluatorGuidance(
         }
       : {}),
   };
+}
+
+export async function inspectSeedSpecPackageIfPresent(packagePath: string, seedSpecCli: string): Promise<{
+  id?: string;
+  version?: string;
+  digest: `sha256:${string}`;
+  kind?: string;
+} | undefined> {
+  if (!await fileExists(resolve(packagePath, "seedspec.yaml"))) return undefined;
+  return inspectPackage(packagePath, seedSpecCli);
 }
 
 function inspectPackage(packagePath: string, seedSpecCli: string): {
@@ -664,6 +706,16 @@ function assertProfileMatchesEvidence(body: EvaluationProfileBody, evidence: Pro
   }
   assertDecisionAxes(body, evidence);
   assertObligationAxes(body, evidence);
+  if (evidence.subject.stage === "implementation") {
+    if (body.technical?.quality === undefined) {
+      throw new Error("Implementation profiles must include the independent technical quality vector.");
+    }
+    if (body.technical.quality.rubricVersion !== TECHNICAL_QUALITY_RUBRIC_VERSION) {
+      throw new Error(
+        `Technical quality must use rubric version ${TECHNICAL_QUALITY_RUBRIC_VERSION}.`,
+      );
+    }
+  }
 }
 
 function assertDecisionAxes(body: EvaluationProfileBody, evidence: ProfileEvidenceEnvelope): void {

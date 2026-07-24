@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createProfileComparison } from "./profile-comparisons.js";
-import { createEvaluationProfile } from "./profiles.js";
+import { createEvaluationProfile, TECHNICAL_QUALITY_DIMENSIONS } from "./profiles.js";
 
 const CASE_DIGEST = `sha256:${"a".repeat(64)}` as const;
 
@@ -96,5 +96,78 @@ describe("profile comparisons", () => {
     expect(comparison.unmatched.every(({ decisionIds }) => decisionIds.includes("variant-specific-choice"))).toBe(true);
     expect(comparison).not.toHaveProperty("score");
     expect(comparison).not.toHaveProperty("winner");
+  });
+
+  it("compares independent technical vectors without averaging dimension levels", () => {
+    const implementationProfile = (
+      runCharacter: string,
+      treatment: string,
+      securityLevel: number,
+    ) => createEvaluationProfile({
+      schemaVersion: 1,
+      subject: {
+        stage: "implementation",
+        runId: `run_${runCharacter.repeat(64)}`,
+        variant: "seedspec-implementation",
+        treatment,
+        case: { id: "comparison-case", version: "1.0.0", digest: CASE_DIGEST },
+      },
+      createdAt: "2026-07-22T12:00:00.000Z",
+      evaluator: { id: "profile-evaluator", version: "0.1.0", kind: "agent" },
+      decisions: [],
+      obligations: [],
+      structure: [],
+      technical: {
+        checks: [],
+        quality: {
+          rubricVersion: "0.1.0",
+          dimensions: TECHNICAL_QUALITY_DIMENSIONS.map((dimension) => ({
+            dimension,
+            status: "assessed",
+            level: dimension === "security" ? securityLevel : 3,
+            confidence: 0.8,
+            assessment: `${dimension} fixture assessment.`,
+            evidence: [{ path: "report.md", note: `${dimension} fixture evidence` }],
+            findingIds: [],
+          })),
+          findings: [],
+          readiness: securityLevel === 2 ? "serviceable" : "robust",
+          summary: "Fixture technical vector.",
+          limitations: [],
+        },
+        adaptationChallenges: [],
+        summary: "Fixture technical evaluation.",
+      },
+      summary: "Implementation fixture.",
+      limitations: [],
+    });
+    const comparison = createProfileComparison({
+      profiles: [
+        implementationProfile("d", "baseline", 2),
+        implementationProfile("e", "guided", 3),
+      ],
+      comparisonAxes: {
+        decisions: [{
+          id: "authorship-only-decision",
+          stages: ["authorship"],
+          title: "Authorship-only decision",
+          description: "Not applicable to this implementation comparison.",
+          materiality: "minor",
+        }],
+        obligations: [{
+          id: "authorship-only-obligation",
+          stages: ["authorship"],
+          kind: "behavior",
+          description: "Not applicable to this implementation comparison.",
+          importance: "minor",
+        }],
+      },
+      createdAt: "2026-07-22T13:00:00.000Z",
+    });
+
+    const security = comparison.technicalQualityAxes?.find(({ dimension }) => dimension === "security");
+    expect(security?.observations.map((observation) =>
+      observation.status === "assessed" ? observation.level : null)).toEqual([2, 3]);
+    expect(comparison).not.toHaveProperty("technicalQualityScore");
   });
 });
