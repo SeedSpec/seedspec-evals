@@ -60,7 +60,7 @@ The manifest is an execution commitment, not descriptive metadata added after a 
 
 The Worker supports one-run submission plus a Workflow coordinator that fans out up to 100 reviewed envelopes, submits each idempotently, and waits for terminal states. Evaluation and aggregate experiment records remain separate stages; the coordinator does not turn model output into a score.
 
-Think lifecycle hooks record observable assistant output, tool calls and results, usage, statuses, timing, and errors in the run Durable Object. A terminal export produces the same content-addressed trace shape used by desktop parity runners. Initial user material remains bound in the immutable envelope instead of being duplicated into every trace. Capture capabilities and limitations are explicit, and model reasoning is never stored.
+Think lifecycle hooks record observable assistant output, tool calls and results, usage, statuses, timing, and errors in the run Durable Object. Tool calls are recorded before execution and matched results retain Think-reported server-side duration. A terminal export derives elapsed run time from the durable event timestamps and produces the same content-addressed trace shape used by desktop parity runners. Initial user material remains bound in the immutable envelope instead of being duplicated into every trace. Capture capabilities and limitations are explicit, and model reasoning is never stored.
 
 Evaluation profiles convert package, trace, process, and implementation evidence
 into content-addressed descriptive records. They preserve decision attribution

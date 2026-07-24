@@ -1,9 +1,7 @@
-import { spawn, execFileSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile, rename, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { performance } from "node:perf_hooks";
-import { StringDecoder } from "node:string_decoder";
 
 import {
   RunManifestSchema,
@@ -15,9 +13,12 @@ import {
   type SubjectRun,
 } from "@seedspec/eval-core";
 
+import {
+  spawnJsonlProcessCaptured,
+  type ObservedLineTiming,
+} from "./jsonl-capture.js";
 import { preflightDesktopRunner } from "./runner-control.js";
 
-const MAX_CAPTURE_BYTES = 64 * 1024 * 1024;
 const CLAUDE_TOOLS = "Bash,Read,Write,Edit,Glob,Grep";
 
 type ClaudeUsage =
@@ -32,11 +33,7 @@ type ClaudeUsage =
       costUsd?: number;
     };
 
-export interface ClaudeLineTiming {
-  readonly providerLine: number;
-  readonly observedAt: string;
-  readonly elapsedMs: number;
-}
+export type ClaudeLineTiming = ObservedLineTiming;
 
 export async function runClaudeSubject(options: {
   runDirectory: string;
@@ -376,7 +373,10 @@ function createRunnerObservedTraceEvents(
             ...timingData,
             toolUseId,
             isError: block["is_error"] === true,
-            ...(durationMs === undefined ? {} : { durationMs }),
+            ...(durationMs === undefined ? {} : {
+              durationMs,
+              durationBasis: "runner-observed-event-interval",
+            }),
             ...contentEvidence(block["content"]),
           });
         }
@@ -582,85 +582,12 @@ export async function spawnClaudeProcessCaptured(
   timedOut: boolean;
   lineTimings: ClaudeLineTiming[];
 }> {
-  return new Promise((resolvePromise, reject) => {
-    const startedMonotonic = performance.now();
-    const child = spawn(executable, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
-    let totalBytes = 0;
-    let settled = false;
-    let timedOut = false;
-    const lineTimings: ClaudeLineTiming[] = [];
-    const decoder = new StringDecoder("utf8");
-    let pendingStdout = "";
-    let providerLine = 0;
-    let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
-    const durationTimer = setTimeout(() => {
-      timedOut = true;
-      child.kill("SIGTERM");
-      forceKillTimer = setTimeout(() => child.kill("SIGKILL"), 5_000);
-    }, maxDurationMs);
-    const rejectOnce = (error: Error): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(durationTimer);
-      if (forceKillTimer !== undefined) clearTimeout(forceKillTimer);
-      reject(error);
-    };
-    const capture = (chunks: Buffer[]) => (chunk: Buffer) => {
-      totalBytes += chunk.byteLength;
-      if (totalBytes > MAX_CAPTURE_BYTES) {
-        child.kill("SIGTERM");
-        rejectOnce(new Error(`Claude Code subject output exceeded ${String(MAX_CAPTURE_BYTES)} bytes.`));
-        return;
-      }
-      chunks.push(Buffer.from(chunk));
-    };
-    const observeCompleteLines = (text: string, final: boolean): void => {
-      pendingStdout += text;
-      const completeLines: string[] = [];
-      let newlineIndex = pendingStdout.indexOf("\n");
-      while (newlineIndex >= 0) {
-        completeLines.push(pendingStdout.slice(0, newlineIndex).replace(/\r$/, ""));
-        pendingStdout = pendingStdout.slice(newlineIndex + 1);
-        newlineIndex = pendingStdout.indexOf("\n");
-      }
-      if (final && pendingStdout.length > 0) {
-        completeLines.push(pendingStdout.replace(/\r$/, ""));
-        pendingStdout = "";
-      }
-      const observedAt = new Date().toISOString();
-      const elapsedMs = Math.max(0, Math.round(performance.now() - startedMonotonic));
-      for (const line of completeLines) {
-        providerLine += 1;
-        if (line.trim().length === 0) continue;
-        lineTimings.push({
-          providerLine,
-          observedAt,
-          elapsedMs,
-        });
-      }
-    };
-    child.stdout.on("data", (chunk: Buffer) => {
-      capture(stdout)(chunk);
-      observeCompleteLines(decoder.write(chunk), false);
-    });
-    child.stderr.on("data", capture(stderr));
-    child.on("error", rejectOnce);
-    child.on("close", (code) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(durationTimer);
-      if (forceKillTimer !== undefined) clearTimeout(forceKillTimer);
-      observeCompleteLines(decoder.end(), true);
-      resolvePromise({
-        stdout: Buffer.concat(stdout),
-        stderr: Buffer.concat(stderr),
-        exitCode: code ?? -1,
-        timedOut,
-        lineTimings,
-      });
-    });
+  return spawnJsonlProcessCaptured({
+    executable,
+    args,
+    cwd,
+    maxDurationMs,
+    outputLabel: "Claude Code subject",
   });
 }
 

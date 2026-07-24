@@ -177,7 +177,12 @@ describe("captured Claude Code process limits", () => {
       timestamp: "2026-07-24T12:00:03.500Z",
       kind: "tool-result",
       name: "Bash",
-      data: { toolUseId: "tool-1", observedElapsedMs: 3_500, durationMs: 2_500 },
+      data: {
+        toolUseId: "tool-1",
+        observedElapsedMs: 3_500,
+        durationMs: 2_500,
+        durationBasis: "runner-observed-event-interval",
+      },
     });
     expect(trace.events[3]?.name).toBe("subject-timed-out");
     expect(trace.events[3]?.data).toEqual({

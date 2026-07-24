@@ -42,10 +42,17 @@ node packages/cli/dist/index.js runner codex-run \
   --confirm-model-execution
 ```
 
-This writes `subject-events.jsonl`, `subject-stderr.log`, `subject-final.md`, and
-content-addressed `subject-run.json` beside the subject's own finalized trace.
-Profile evidence prefers this provider-reported usage and outer run interval
-without treating it as hidden reasoning or decision provenance.
+This writes `subject-events.jsonl`, `subject-stderr.log`, `subject-final.md`,
+content-addressed `subject-run.json`, and an independent
+`capture-trace.json` beside the subject's own finalized trace. Every retained
+Codex event receives the wall-clock time and monotonic elapsed time at which
+the runner observed its complete JSONL line. Paired `item.started` and
+`item.completed` records expose derived durations for commands, file changes,
+and other Codex tool items. Events delivered in one stdout chunk can share an
+observation timestamp. Profile evidence prefers this runner-owned timing,
+provider-reported usage, and outer run interval without treating any of them as
+hidden reasoning or decision provenance. The adapter enforces the immutable
+manifest duration limit.
 
 ## 3. Claude Code
 
@@ -98,6 +105,13 @@ node packages/cli/dist/index.js matrix status <plan-id> \
 ```
 
 The confirmation flag is intentionally required at the model-execution boundary. The coordinator durably submits each envelope, polls child runs, and returns a compact result. Cancelling with the matching plan terminates the coordinator and requests cancellation for active child runs.
+
+Think records event timestamps when it durably appends each lifecycle event.
+Per-tool `beforeToolCall` and `afterToolCall` hooks preserve matching tool-call
+IDs, success or failure, and Think-reported server-side `durationMs`. Trace
+export adds `observedElapsedMs` relative to the durable submission start.
+These values describe the harness boundary and tool execution; they do not
+claim provider-internal model timing.
 
 For a single envelope, `run submit` remains available.
 

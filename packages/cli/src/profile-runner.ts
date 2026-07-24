@@ -13,6 +13,17 @@ import { finalizeEvaluationProfileFile, validateEvaluationProfileFile } from "./
 
 const MAX_CAPTURE_BYTES = 64 * 1024 * 1024;
 
+export type CodexUsage =
+  | { capture: "unavailable" }
+  | {
+      capture: "provider-reported";
+      inputTokens: number;
+      cachedInputTokens: number;
+      outputTokens: number;
+      reasoningOutputTokens: number;
+      totalTokens: number;
+    };
+
 export async function runCodexProfileEvaluator(options: {
   runDirectory: string;
   codexExecutable: string;
@@ -123,14 +134,7 @@ export function codexModelSelector(model: string): string {
 export function parseCodexEvaluatorEvents(jsonl: string): {
   eventCount: number;
   threadId?: string;
-  usage: {
-    capture: "provider-reported" | "unavailable";
-    inputTokens?: number;
-    cachedInputTokens?: number;
-    outputTokens?: number;
-    reasoningOutputTokens?: number;
-    totalTokens?: number;
-  };
+  usage: CodexUsage;
   limitations: string[];
 } {
   let eventCount = 0;
@@ -147,7 +151,7 @@ export function parseCodexEvaluatorEvents(jsonl: string): {
     try {
       event = JSON.parse(line) as Record<string, unknown>;
     } catch {
-      limitations.push(`Codex JSONL line ${String(index + 1)} was not valid JSON and was excluded from usage accounting.`);
+      limitations.push(`Codex JSONL line ${String(index + 1)} was not valid JSON and was excluded from captured events and usage accounting.`);
       continue;
     }
     eventCount += 1;
