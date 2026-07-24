@@ -1,6 +1,6 @@
 import type { WorkspaceLike } from "@cloudflare/think";
 import type { EvaluationStage, EvaluationVariant } from "@seedspec/eval-core";
-import seedSpecManifestSchema from "@seedspec/protocol/schemas/v0.1/seedspec.schema.json" with { type: "json" };
+import seedSpecManifestSchema from "@seedspec/protocol/schemas/v0.2/seedspec.schema.json" with { type: "json" };
 import { Ajv2020, type ErrorObject } from "ajv/dist/2020.js";
 import { tool, type ToolSet } from "ai";
 import { parse as parseYaml } from "yaml";
@@ -8,9 +8,9 @@ import { z } from "zod";
 
 import { FROZEN_PROTOCOL_SNAPSHOT } from "./protocol-snapshot.generated.js";
 
-const PROTOCOL_VERSION = "0.1";
+const PROTOCOL_VERSION = "0.2";
 const PROTOCOL_PACKAGE_VERSION = FROZEN_PROTOCOL_SNAPSHOT.version;
-const TOOL_FORMAT_VERSION = "0.1.0-alpha.1";
+const TOOL_FORMAT_VERSION = "0.2.0";
 const KINDS = ["solution", "application", "feature", "workflow", "automation", "configuration", "integration"] as const;
 const AREAS = [
   "concern-separation",
@@ -58,7 +58,7 @@ export function createSeedSpecTools(
   if (["raw-source", "markdown-authored"].includes(variant)) return {};
   const shared = {
     seedspec_package_check: tool({
-      description: "Validate a SeedSpec 0.1 package in the Think workspace using the canonical @seedspec/protocol manifest schema plus package references, semantics, configuration, resources, and digest checks.",
+      description: "Validate a SeedSpec 0.2 package in the Think workspace using the canonical @seedspec/protocol manifest schema plus package references, semantics, configuration, resources, and digest checks.",
       inputSchema: z.strictObject({ root: RootSchema }),
       execute: async ({ root }) => checkPackage(workspace, root),
     }),

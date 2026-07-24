@@ -235,7 +235,7 @@ function implementationInstructions(
 }
 
 function skillVersion(source: string): string {
-  return /^version:\s*([A-Za-z0-9._-]+)\s*$/m.exec(source)?.[1] ?? "0.1.0-alpha.1";
+  return /^version:\s*([A-Za-z0-9._-]+)\s*$/m.exec(source)?.[1] ?? "0.2.0";
 }
 
 function skillName(source: string): string {

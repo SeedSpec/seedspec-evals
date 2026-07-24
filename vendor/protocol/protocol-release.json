@@ -1,0 +1,184 @@
+{
+  "manifest_version": "1",
+  "protocol_family": "0.2",
+  "release_id": "0.2.0",
+  "status": "experimental",
+  "schema_package": {
+    "name": "@seedspec/protocol",
+    "version": "0.2.0"
+  },
+  "schemas": [
+    {
+      "path": "packages/protocol/schemas/v0.2/application.schema.json",
+      "digest": "sha256:1e8f65cb106033491b40a3cd123ae5a5eecc6573435b3c29437448dadd03027b"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/applied-intent-input.schema.json",
+      "digest": "sha256:4a2af648b558cd48202c17eb8217588a577b29bf51337c7de6df9dca8a6d03e0"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/artifact-index.schema.json",
+      "digest": "sha256:cce961233d4c747f060e99eba304ca7d0a1b32f1b0f88e4208b0044a67c674dd"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/artifact-selections.schema.json",
+      "digest": "sha256:93a05f4c52286a82fef864a70dd8c83056ac63a91b42066a38211381b5469420"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/capability-conformance-result.schema.json",
+      "digest": "sha256:5a1701a1563e210a8b8ec7dbfa24564d6d4bc266b43fc0d2f3e60da1bd49ac09"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/capability-conformance-suite.schema.json",
+      "digest": "sha256:affb400b285cfeebe4a876eb9cf4eb9f95736b425d2fa44579976c20e9c66def"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/capability-scenarios.schema.json",
+      "digest": "sha256:e3ecc23ed4857310ad1c189b1d4be352df0aa1ac0d07500b7885dcd10b5da09a"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/completion-scope-input.schema.json",
+      "digest": "sha256:4e8c97d9b0a335a8cacc899c25fcccfb73cffa1d9790c04f8806a5c41958df4c"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/completion-scope.schema.json",
+      "digest": "sha256:2d2edc10538a3139dbe95afea9384aad0c747fbf0ac88c58074678bb088eec29"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/component-index.schema.json",
+      "digest": "sha256:2f24c486cf718f78ac3a23b0c30606c67789b9a672e740712b35d676644606a2"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/configuration-selections.schema.json",
+      "digest": "sha256:d186e7ecc9d8d4d32bc580358d085d74c3608c9ef96f287caf6eeec47ee858c2"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/conformance-report.schema.json",
+      "digest": "sha256:2d1936a00e1337e97e555fc5bcb52257e5c7bd351e6f6a231e691dc05f97415b"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/conformance.schema.json",
+      "digest": "sha256:02eb8e9857dfa51486d341bedc3f7c2e07e56e3d84c49711c9f1bb71d5a90769"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/feature.schema.json",
+      "digest": "sha256:e3300cc6bf586be8e8663f367864b726a4daa163d62cde06c8cb7438a6c691f2"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/implementation-profile-state.schema.json",
+      "digest": "sha256:9e34bc73949b96836d3df976421ab7b38a97e6ca3499189a43cf87c7d585c67c"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/implementation-resource-index.schema.json",
+      "digest": "sha256:403f1f1c6c2f9329d1450d5b3e6698c241fc8497faaa6bd000191dd14a294480"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/implementation-resource-manifest.schema.json",
+      "digest": "sha256:cf05dfab07176f5eee9e88224e3ba06e61e1fd71c817c2969de13306ebc86039"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/implementation-resource-state.schema.json",
+      "digest": "sha256:dbfa17bdb6fe03fe004fcbb04d960bc68ecdb6edce6a506fa9b6ce6baafacb67"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/lock.schema.json",
+      "digest": "sha256:975eabf099c02916de2dd82bb9c36246e32a526d6cc59b7a320f3df48cff2e63"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/project.schema.json",
+      "digest": "sha256:eac0925b20952c0887dc4929f578ed5891c12c366d81ea5d7ad7ed607f3d5ad6"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/protocol-release.schema.json",
+      "digest": "sha256:7f3c74450e874cef763a433889255d854da298d9744451ed46167bfd6f03c09f"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/resolution-receipt.schema.json",
+      "digest": "sha256:f47f1ad14b7f175693e4db4708aa30f6d40741fd01d5770ff9c6584912762267"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/resolved-config.schema.json",
+      "digest": "sha256:fc79fbdc8f29a6c79747d96f9d626095e253acd9691b5b12126e26f9e8bbc5ad"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/resolved-intent.schema.json",
+      "digest": "sha256:d07aac42a06b42785177a0733632293673b0d50e8dbdbcc37da7ba3cd706fc70"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/seedspec.schema.json",
+      "digest": "sha256:d61a5676136d5fc51268e241cd059e11222fa58507dd0587effed58aa5b2f788"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/task-index.schema.json",
+      "digest": "sha256:d3768e7e3f201abadac0f1d95aa6057c18c7432f2187167a710bd8cc5696d9cf"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/task-runbook.schema.json",
+      "digest": "sha256:0f47fcb6d820c677e456fd832541b4587a1e72defdd937bea72fac3c8f414baf"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/technical-preferences.schema.json",
+      "digest": "sha256:aa0682ee7d60e99e42d7cac0f51fc630646f1bc11c1b03c95476dd247ba12ad7"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.2/verification-state.schema.json",
+      "digest": "sha256:49d4a554019b71a602992ae16c6c774d3686a56366d07832aa3299104a25929c"
+    }
+  ],
+  "documents": [
+    {
+      "path": "documents/01-language.md",
+      "digest": "sha256:5e2ba6cc662d133904154023f710947ff85f119f5b238257f5b74b80b84c2ac1"
+    },
+    {
+      "path": "documents/protocol.md",
+      "digest": "sha256:d566dfbbe37a0d01acc5104f0c83d866eb4b4376e399ede2293c8d727005ff4e"
+    },
+    {
+      "path": "documents/operations.md",
+      "digest": "sha256:e7412d8853a987514997d78a637304dd6f58722440181fc0210109ee3eca8800"
+    },
+    {
+      "path": "documents/migrations.md",
+      "digest": "sha256:8dcad9296bb88c64957719ddd7d7be3be1396f4023dd2f52d47310e014e03a51"
+    }
+  ],
+  "operations": [
+    "validate",
+    "digest",
+    "resolve",
+    "resolve-resources",
+    "capability-conformance"
+  ],
+  "conformance": {
+    "suite_version": "0.2.0",
+    "index": "conformance/cases.yaml",
+    "bundle": "conformance-bundle.json",
+    "index_digest": "sha256:1e3b6418217937b78acaf952c81f1fefd0c72a23ba7cf2f4f04d3c02b7563821",
+    "bundle_digest": "sha256:4698023ace66dd64e9b19a927079ac1a98674797a81292e7aaa28cdedf48e27a"
+  },
+  "implementations": {
+    "runtime": {
+      "name": "@seedspec/runtime",
+      "version": "0.2.0"
+    },
+    "cli": {
+      "name": "@seedspec/cli",
+      "version": "0.2.0"
+    }
+  },
+  "source": {
+    "repository": "https://github.com/SeedSpec/seedspec"
+  },
+  "compatibility": [
+    {
+      "from_release": "0.1.0-alpha.6",
+      "status": "migrate",
+      "notes": "Set protocol_version to 0.2, revalidate package source, and regenerate resolved handoffs to receive exact 0.2.0 release binding and resolution receipts.",
+      "migration": {
+        "id": "protocol-0-2",
+        "guide": "documents/migrations.md"
+      }
+    }
+  ]
+}

@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seedspec.dev/releases/0.2.0/schemas/artifact-index.schema.json",
+  "title": "Resolved SeedSpec Artifact Index 0.1 Alpha",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol_version", "artifacts", "relationships"],
+  "properties": {
+    "protocol_version": { "const": "0.2" },
+    "artifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/resolvedArtifact" }
+    },
+    "relationships": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/resolvedRelationship" }
+    }
+  },
+  "$defs": {
+    "namespacedId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:\\.[a-z0-9][a-z0-9-]*){2,}$"
+    },
+    "localId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "relativePath": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9][A-Za-z0-9._-]*)*/?$"
+    },
+    "resolvedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package", "id", "type", "review", "disposition"],
+      "properties": {
+        "package": { "$ref": "#/$defs/namespacedId" },
+        "id": { "$ref": "#/$defs/localId" },
+        "type": { "$ref": "#/$defs/namespacedId" },
+        "path": { "$ref": "#/$defs/relativePath" },
+        "url": { "type": "string", "format": "uri" },
+        "source_path": { "$ref": "#/$defs/relativePath" },
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "media_type": { "type": "string", "minLength": 1 },
+        "format_version": { "type": "string", "minLength": 1 },
+        "conforms_to": { "type": "string", "format": "uri" },
+        "concerns": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/namespacedId" }
+        },
+        "intent_role": { "const": "primary" },
+        "evidence_for": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["subject", "claim"],
+            "properties": {
+              "subject": { "const": "package" },
+              "claim": { "type": "string", "minLength": 1, "maxLength": 500 }
+            }
+          }
+        },
+        "review": {
+          "enum": [
+            "before-planning",
+            "before-integration",
+            "before-activation",
+            "before-completion-claim",
+            "when-relevant"
+          ]
+        },
+        "disposition": {
+          "enum": ["selected", "declined", "deferred", "unreviewed"]
+        },
+        "selection_note": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "activation": { "const": "requires-specific-user-direction" }
+      },
+      "oneOf": [
+        { "required": ["path", "source_path"], "not": { "required": ["url"] } },
+        { "required": ["url"], "not": { "anyOf": [{ "required": ["path"] }, { "required": ["source_path"] }] } }
+      ],
+      "allOf": [
+        {
+          "if": { "required": ["intent_role"] },
+          "then": {
+            "properties": {
+              "review": { "const": "before-planning" },
+              "disposition": { "const": "selected" }
+            }
+          }
+        }
+      ]
+    },
+    "resolvedRelationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package", "from", "type", "to"],
+      "properties": {
+        "package": { "$ref": "#/$defs/namespacedId" },
+        "from": { "$ref": "#/$defs/localId" },
+        "type": { "$ref": "#/$defs/namespacedId" },
+        "to": { "$ref": "#/$defs/localId" },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

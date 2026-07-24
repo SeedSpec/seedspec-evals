@@ -25,7 +25,7 @@ Write JSON only. Do not include `profileId`; the CLI calculates it during finali
   "createdAt": "ISO-8601 timestamp with offset",
   "evaluator": {
     "id": "seedspec-profile-evaluator",
-    "version": "0.1.0-alpha.3",
+    "version": "0.2.0",
     "kind": "agent",
     "model": {
       "provider": "provider-id",

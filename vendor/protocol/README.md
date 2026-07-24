@@ -3,6 +3,11 @@
 Canonical schemas and version metadata for portable SeedSpec packages and
 resolved handoffs.
 
+The [SeedSpec language definition](https://github.com/SeedSpec/seedspec/blob/main/docs/01-language.md)
+is the first reference for protocol concepts, authority, processing, operations,
+and claims. This package supplies the exact machine-valid shapes and release
+metadata for that language.
+
 SeedSpec is a broader authoring-and-distribution system built around this
 protocol package. Guided authoring helps people produce useful seeds; this npm
 package supplies the neutral schemas and identifiers that let independent tools
@@ -28,7 +33,7 @@ introducing dependencies, branches, or package-owned progress state.
 ## Install
 
 ```bash
-npm install @seedspec/protocol@next
+npm install @seedspec/protocol@0.2.0
 ```
 
 ## Use
@@ -37,22 +42,30 @@ npm install @seedspec/protocol@next
 import {
   conformanceSuiteVersion,
   protocolPackageVersion,
+  protocolRelease,
+  protocolReleaseDigest,
   protocolSchemaNames,
   protocolVersion,
+  protocolDocumentDirectory,
   schemaDirectory
 } from "@seedspec/protocol";
 ```
 
-Individual schemas are exported beneath `@seedspec/protocol/schemas/v0.1/`.
-The package contains declarative schemas and metadata only; it does not execute
-SeedSpec package content.
+Individual schemas are exported beneath `@seedspec/protocol/schemas/v0.2/`.
+Normative documents are exported beneath `@seedspec/protocol/documents/`.
+The exact release manifest is exported as
+`@seedspec/protocol/protocol-release.json`, and the portable suite is bundled as
+`@seedspec/protocol/conformance-bundle.json` so an installed runtime can verify
+itself offline. The package contains declarative schemas, release metadata, and
+fixtures only; it does not execute SeedSpec package content.
 
-Protocol `0.1` is a design alpha. Pin exact prerelease versions when building
-interoperable tools.
+Protocol `0.2` is experimental. Pin exact versions when building interoperable
+tools.
 
 - Documentation: [seedspec.dev](https://seedspec.dev)
+- Language definition: [SeedSpec language](https://github.com/SeedSpec/seedspec/blob/main/docs/01-language.md)
 - Why semantic structure matters: [guide](https://github.com/SeedSpec/seedspec/blob/main/docs/semantic-structure.md)
-- Specification: [Protocol 0.1](https://github.com/SeedSpec/seedspec/blob/main/docs/protocol.md)
-- Canonical schemas: [seedspec.dev/schemas/v0.1](https://seedspec.dev/schemas/v0.1/seedspec.schema.json)
+- Specification: [Protocol 0.2](https://github.com/SeedSpec/seedspec/blob/main/docs/protocol.md)
+- Exact schemas: [seedspec.dev/releases/0.2.0/schemas](https://seedspec.dev/releases/0.2.0/schemas/seedspec.schema.json)
 - Conformance suite: [cases.yaml](https://github.com/SeedSpec/seedspec/blob/main/conformance/cases.yaml)
 - Source: [SeedSpec/seedspec](https://github.com/SeedSpec/seedspec)

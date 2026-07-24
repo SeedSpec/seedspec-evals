@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seedspec.dev/releases/0.2.0/schemas/resolution-receipt.schema.json",
+  "title": "SeedSpec Resolution Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["receipt_version", "receipt_id", "subject", "producer"],
+  "properties": {
+    "receipt_version": { "const": "1" },
+    "receipt_id": { "$ref": "#/$defs/digest" },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "protocol_release",
+        "packages",
+        "inputs",
+        "result"
+      ],
+      "properties": {
+        "operation": { "const": "resolve" },
+        "protocol_release": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "digest"],
+          "properties": {
+            "id": { "$ref": "#/$defs/semver" },
+            "digest": { "$ref": "#/$defs/digest" }
+          }
+        },
+        "packages": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["root", "additions"],
+          "properties": {
+            "root": { "$ref": "#/$defs/package" },
+            "additions": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/package" }
+            }
+          }
+        },
+        "inputs": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "configuration_selections": { "$ref": "#/$defs/digest" },
+            "applied_intent": { "$ref": "#/$defs/digest" },
+            "completion_scope": { "$ref": "#/$defs/digest" },
+            "technical_preferences": { "$ref": "#/$defs/digest" },
+            "artifact_selections": { "$ref": "#/$defs/digest" },
+            "decisions": { "$ref": "#/$defs/digest" },
+            "implementation_profiles": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "output_digest"],
+          "properties": {
+            "status": { "enum": ["ready", "needs-input"] },
+            "output_digest": { "$ref": "#/$defs/digest" },
+            "diagnostics": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 2 }
+            }
+          }
+        }
+      }
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "@seedspec/runtime" },
+        "version": { "$ref": "#/$defs/semver" }
+      }
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "digest"],
+      "properties": {
+        "id": { "type": "string", "minLength": 5 },
+        "version": { "$ref": "#/$defs/semver" },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    }
+  }
+}

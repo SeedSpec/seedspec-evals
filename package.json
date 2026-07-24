@@ -1,6 +1,6 @@
 {
   "name": "seedspec-evals",
-  "version": "0.1.0-alpha.3",
+  "version": "0.2.0",
   "private": true,
   "license": "Apache-2.0",
   "repository": {
@@ -18,6 +18,7 @@
   ],
   "scripts": {
     "protocol:sync": "node scripts/sync-protocol.mjs",
+    "protocol:verify": "node scripts/verify-protocol-snapshot.mjs",
     "build": "tsc -b",
     "clean": "tsc -b --clean",
     "typecheck": "tsc -b --pretty false",
@@ -25,7 +26,7 @@
     "test": "vitest run",
     "worker:types": "npm run cf-typegen --workspace @seedspec/eval-worker",
     "worker:dry-run": "npm run deploy:dry --workspace @seedspec/eval-worker",
-    "check": "npm run typecheck && npm run lint && npm test && npm run worker:dry-run",
+    "check": "npm run protocol:verify && npm run typecheck && npm run lint && npm test && npm run worker:dry-run",
     "eval": "node packages/cli/dist/index.js"
   },
   "devDependencies": {

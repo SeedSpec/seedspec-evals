@@ -41,16 +41,16 @@ export function buildDesktopManifest(envelope: ExecutionEnvelope, runner: Deskto
     runner: {
       id: runner === "codex" ? "codex-desktop" : "claude-code",
       kind: "agent",
-      version: "0.1.0-alpha.3",
+      version: "0.2.0",
     },
     tools: [
-      { name: "desktop-agent-workspace", version: "0.1.0-alpha.3", configuration: { runner } },
+      { name: "desktop-agent-workspace", version: "0.2.0", configuration: { runner } },
       ...(envelope.manifest.variant === "raw-source" ? [] : [
-        { name: "seedspec-simulated-author", version: "0.1.0-alpha.3" },
+        { name: "seedspec-simulated-author", version: "0.2.0" },
       ]),
       ...(usesSeedSpec(envelope.manifest.variant) ? [{
         name: "seedspec-cli",
-        version: "0.1.0-alpha.5",
+        version: "0.2.0",
         configuration: {
           protocolVersion: envelope.manifest.protocol.version,
           protocolRevision: envelope.manifest.protocol.revision ?? null,
@@ -59,7 +59,7 @@ export function buildDesktopManifest(envelope: ExecutionEnvelope, runner: Deskto
       }] : []),
       ...(usesSkill ? [{
         name: selectedSkillId,
-        version: "0.1.0-alpha.1",
+        version: "0.2.0",
         configuration: {
           digest: envelope.manifest.configuration?.["skillDigest"] ?? null,
           entrypoint: `guidance/${selectedSkillId}/SKILL.md`,

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seedspec.dev/releases/0.2.0/schemas/capability-conformance-suite.schema.json",
+  "title": "SeedSpec Capability Conformance Suite 0.1 Alpha",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol_version", "capability", "coverage", "checks"],
+  "properties": {
+    "protocol_version": { "const": "0.2" },
+    "capability": { "$ref": "#/$defs/capabilityIdentity" },
+    "coverage": { "enum": ["partial", "full"] },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/check" }
+    }
+  },
+  "$defs": {
+    "namespacedId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:\\.[a-z0-9][a-z0-9-]*){2,}$"
+    },
+    "localId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "capabilityVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9][A-Za-z0-9._-]*)*$"
+    },
+    "capabilityIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "$ref": "#/$defs/namespacedId" },
+        "version": { "$ref": "#/$defs/capabilityVersion" }
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "subject", "description", "path"],
+      "properties": {
+        "id": { "$ref": "#/$defs/localId" },
+        "kind": { "enum": ["json-schema", "acceptance-scenarios", "eval-suite"] },
+        "subject": { "enum": ["data-shape", "behavior", "interaction", "outcome"] },
+        "description": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "path": { "$ref": "#/$defs/relativePath" },
+        "runner": { "$ref": "#/$defs/namespacedId" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "enum": ["acceptance-scenarios", "eval-suite"] } }, "required": ["kind"] },
+          "then": { "required": ["runner"] },
+          "else": { "not": { "required": ["runner"] } }
+        }
+      ]
+    }
+  }
+}

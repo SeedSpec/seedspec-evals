@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seedspec.dev/releases/0.2.0/schemas/verification-state.schema.json",
+  "title": "SeedSpec Verification State 0.1 Alpha",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol_version", "scope_digest", "status", "items"],
+  "properties": {
+    "protocol_version": { "const": "0.2" },
+    "scope_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "status": {
+      "enum": ["not-started", "in-progress", "failed", "verified-with-gaps", "verified"]
+    },
+    "items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/verificationItem" }
+    }
+  },
+  "$defs": {
+    "localId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "verificationItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "result", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/localId" },
+        "result": { "enum": ["not-run", "pass", "partial", "fail"] },
+        "evidence": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/evidenceReference" }
+        },
+        "note": { "type": "string", "minLength": 1, "maxLength": 1000 }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "result": { "const": "not-run" } },
+            "required": ["result"]
+          },
+          "then": { "properties": { "evidence": { "maxItems": 0 } } },
+          "else": { "properties": { "evidence": { "minItems": 1 } } }
+        }
+      ]
+    },
+    "evidenceReference": {
+      "description": "Evidence about this realization or its outcome. It cannot be used as package-author evidence merely because it appears in verification state.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject", "reference", "source"],
+      "properties": {
+        "subject": { "enum": ["realization", "outcome"] },
+        "reference": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "source": {
+          "enum": ["implementing-agent", "end-user", "tool", "external-system"]
+        },
+        "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "observed_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}
