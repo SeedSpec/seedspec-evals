@@ -328,19 +328,28 @@ async function implementationVerificationAdapters(
       description: "At least one executed acceptance scenario distinguishes conflicting or concurrent reservations.",
       evaluate: () => {
         const concurrency = verification.report.scenarios.filter(({ id, assessment }) =>
-          /(concurr|conflict|exclusive|overlap|reservation|one winner|simultaneous)/i
-            .test(`${id}\n${assessment ?? ""}`));
+          identifiesExclusiveReservation(`${id}\n${assessment ?? ""}`));
         const passed = concurrency.filter(linkedPasses).length;
         return {
           outcome: concurrency.length > 0 && passed === concurrency.length ? "pass" as const : "fail" as const,
           message: concurrency.length === 0
-            ? "No scenario identifies concurrent, conflicting, overlapping, exclusive, or reservation behavior."
+            ? "No scenario identifies competing requests, exclusive reservation, or a rejected second acceptance."
             : `${String(passed)}/${String(concurrency.length)} concurrency-related scenarios have executed, linked evidence.`,
           evidence,
         };
       },
     },
   ];
+}
+
+export function identifiesExclusiveReservation(value: string): boolean {
+  return [
+    /\b(?:concurr\w*|conflict\w*|exclusiv\w*|overlap\w*|simultan\w*|contend\w*|race)\b/i,
+    /\bdouble[- ](?:lend\w*|loan\w*|book\w*)\b/i,
+    /\b(?:one winner|first\b.{0,48}\bwins?|(?:only|exactly) one\b.{0,48}\baccept\w*)\b/i,
+    /\bsecond (?:request|acceptance|decision)\b.{0,64}\b(?:reject\w*|deni\w*|fail\w*|block\w*)\b/i,
+    /\b(?:one|single|exclusive|conflicting|overlapping)\b.{0,48}\breserv\w*\b/i,
+  ].some((pattern) => pattern.test(value));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

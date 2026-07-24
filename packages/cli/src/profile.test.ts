@@ -15,7 +15,10 @@ import {
   validateDecisionLedgerFile,
 } from "./profile.js";
 import { createExperimentPlan } from "./plan.js";
-import { evaluateRunDirectoryDeterministically } from "./evaluate.js";
+import {
+  evaluateRunDirectoryDeterministically,
+  identifiesExclusiveReservation,
+} from "./evaluate.js";
 import { verifyImplementationRun } from "./implementation-verification.js";
 import { bundleAuthoredInput, materializeAuthoredInput } from "./authored-input.js";
 
@@ -33,6 +36,18 @@ async function temporaryDirectory(): Promise<string> {
 }
 
 describe("evaluation profile CLI helpers", () => {
+  it("recognizes equivalent exclusive-reservation evidence without matching an ordinary reservation", () => {
+    expect(identifiesExclusiveReservation(
+      "Two pending requests race through the exclusivity guard and exactly one is accepted.",
+    )).toBe(true);
+    expect(identifiesExclusiveReservation(
+      "A second request is rejected without changing the first accepted borrower.",
+    )).toBe(true);
+    expect(identifiesExclusiveReservation(
+      "The due date is stored in America/Chicago while reserving the listing.",
+    )).toBe(false);
+  });
+
   it("finalizes, validates, and formats a profile body", async () => {
     const directory = await temporaryDirectory();
     const draft = resolve(directory, "evaluation-profile-draft.json");
@@ -193,11 +208,14 @@ describe("evaluation profile CLI helpers", () => {
         schemaVersion: 1,
         verificationCommands: [{ id: "test", argv: ["node", "verification.test.js"] }],
         scenarios: Array.from({ length: 8 }, (_, index) => ({
-          id: index === 0 ? "concurrent-reservation" : `scenario-${String(index + 1)}`,
+          id: index === 0 ? "scenario-10" : `scenario-${String(index + 1)}`,
           outcome: "pass",
           commandIds: ["test"],
           evidence: ["verification.test.js"],
-          ...(index === 0 ? { criterion: "An undeclared subject annotation." } : {}),
+          ...(index === 0 ? {
+            assessment: "Two pending requests race through the exclusivity guard and exactly one is accepted.",
+            criterion: "An undeclared subject annotation.",
+          } : {}),
         })),
         accessibility: {
           viewportWidth: 360,
@@ -242,12 +260,14 @@ describe("evaluation profile CLI helpers", () => {
       diagnostics: [{ path: "$.scenarios[0]", keys: ["criterion"] }],
     });
     expect(verificationResult.verification.report.scenarios[0]).not.toHaveProperty("criterion");
-    await evaluateRunDirectoryDeterministically({
+    const deterministic = await evaluateRunDirectoryDeterministically({
       runDirectory,
       caseRoot: resolve("cases"),
       seedSpecCli: resolve("unused-seedspec-cli.js"),
       createdAt: "2026-07-22T12:00:02.000Z",
     });
+    expect(deterministic.scorecard.checks.find(({ id }) =>
+      id === "hidden-concurrent-request-safety")?.outcome).toBe("pass");
     const fakeSeedSpecCli = resolve(root, "fake-seedspec-cli.mjs");
     await writeFile(fakeSeedSpecCli, `process.stdout.write(JSON.stringify({ id: "fixture.package", version: "1.0.0", kind: "application", digest: "sha256:${"a".repeat(64)}" }));\n`, "utf8");
 
