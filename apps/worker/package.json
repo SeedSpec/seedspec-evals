@@ -15,7 +15,7 @@
     "@seedspec/eval-core": "0.2.0",
     "@seedspec/eval-harness": "0.2.0",
     "agents": "0.17.4",
-    "ai": "6.0.233",
+    "ai": "7.0.37",
     "ajv": "8.20.0",
     "workers-ai-provider": "3.3.1",
     "yaml": "2.9.0",
