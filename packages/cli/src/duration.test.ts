@@ -6,7 +6,8 @@ describe("parseDurationMs", () => {
   it("parses explicit millisecond, second, minute, and hour units", () => {
     expect(parseDurationMs("250ms")).toBe(250);
     expect(parseDurationMs("30s")).toBe(30_000);
-    expect(parseDurationMs("15m")).toBe(DEFAULT_MAX_DURATION_MS);
+    expect(parseDurationMs("15m")).toBe(15 * 60 * 1000);
+    expect(parseDurationMs("30m")).toBe(DEFAULT_MAX_DURATION_MS);
     expect(parseDurationMs("1h")).toBe(3_600_000);
   });
 

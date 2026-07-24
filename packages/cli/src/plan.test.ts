@@ -387,7 +387,7 @@ describe("createExperimentPlan", () => {
     expect(desktopBrief).not.toMatch(/seedspec/i);
   });
 
-  it("defaults to fifteen minutes and content-addresses a configured duration", async () => {
+  it("defaults to thirty minutes and content-addresses a configured duration", async () => {
     const cases = await loadCaseLibrary(resolve("cases"));
     const common = {
       cases: cases.slice(0, 1),
@@ -406,7 +406,7 @@ describe("createExperimentPlan", () => {
       maxDurationMs: 90_000,
     });
 
-    expect(defaultPlan.envelopes[0]!.manifest.limits.maxDurationMs).toBe(15 * 60 * 1000);
+    expect(defaultPlan.envelopes[0]!.manifest.limits.maxDurationMs).toBe(30 * 60 * 1000);
     expect(configuredPlan.envelopes[0]!.manifest.limits.maxDurationMs).toBe(90_000);
     expect(configuredPlan.envelopes[0]!.manifest.runId)
       .not.toBe(defaultPlan.envelopes[0]!.manifest.runId);

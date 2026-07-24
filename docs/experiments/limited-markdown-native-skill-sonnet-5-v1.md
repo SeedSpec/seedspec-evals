@@ -120,6 +120,32 @@ The remaining dimensions were ties:
 - both had real HTTP and negative-path tests, but neither supplied live browser
   accessibility or a separately captured adaptation run.
 
+## Why the subjects took this long
+
+The subject contract required more than generating application code. Each agent
+also inspected immutable inputs, requested material author clarifications,
+built and repeatedly executed a working application, produced acceptance
+evidence, attempted protocol/tool inspection, and prepared a report, decision
+evidence, and finalized trace.
+
+The captured Claude streams show the operational difference:
+
+| Treatment run | Provider events | Observable tool calls | Bash calls | Reasoning blocks removed |
+| --- | ---: | ---: | ---: | ---: |
+| No guidance, 15m ceiling | 165 | 59 | 29 | 25 |
+| Native skill, 15m ceiling | 161 | 58 | 32 | 37 |
+| Native skill recovery, 20m ceiling | 313 | 113 | 60 | 53 |
+
+Both skill attempts repeatedly ran tests and spent their final observable work
+on manual HTTP smoke checks or process cleanup instead of preserving enough
+time for required run evidence. The recovery attempt performed roughly twice
+as many observable tool calls as the successful control. This supports adding
+an explicit remaining-time and evidence-reservation rule to the skill.
+
+The provider streams do not contain exact per-event timestamps, so they cannot
+establish how much of the interval was model latency versus individual local
+commands. Only the outer run intervals are exact.
+
 ## Decision and obligation observations
 
 Both artifacts aligned on every fixed author-controlled decision. Each covered
@@ -163,3 +189,13 @@ persistence is introduced.
 
 This is one control artifact and two timed-out treatment attempts. It is
 directional evidence, not an estimate of average treatment effect.
+
+## Operational follow-up
+
+After this experiment, the planner default increased from 15 to 30 minutes.
+Individual experiments may still select a smaller or larger immutable ceiling
+with `--max-duration`. The Claude adapter also now emits a canonical
+controller-owned `failed` or `timed_out` trace when a subject terminates before
+finalizing its own trace. The detailed sanitized provider event stream remains
+the underlying observable record; the controller trace points to it and does
+not reconstruct events or imply successful delivery.

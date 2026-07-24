@@ -1,6 +1,6 @@
 import { InvalidArgumentError } from "commander";
 
-export const DEFAULT_MAX_DURATION_MS = 15 * 60 * 1000;
+export const DEFAULT_MAX_DURATION_MS = 30 * 60 * 1000;
 
 const UNIT_MULTIPLIERS = {
   ms: 1,
