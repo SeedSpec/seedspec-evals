@@ -20,7 +20,7 @@ import { ExperimentPlanSchema, type ExperimentPlan } from "./contracts.js";
 import { DEFAULT_MAX_DURATION_MS } from "./duration.js";
 import { FROZEN_PROTOCOL_SNAPSHOT } from "./protocol-snapshot.generated.js";
 
-const EVALUATION_VERSION = "0.1.0-alpha.3";
+const EVALUATION_VERSION = "0.2.0";
 
 export interface PlanOptions {
   readonly cases: readonly LoadedEvaluationCase[];
@@ -279,7 +279,7 @@ function toolsForVariant(
       name: "seedspec-package-check",
       version: HARNESS_VERSION,
       configuration: {
-        protocolVersion: "0.1",
+        protocolVersion: "0.2",
         protocolPackage: `@seedspec/protocol@${protocolSnapshot.version}`,
         protocolRevision: protocolSnapshot.sourceDigest,
         adapter: "think-workspace",

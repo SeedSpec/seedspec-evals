@@ -33,7 +33,7 @@ describe("desktop runner control boundary", () => {
       models: ["openai/gpt-5.6-sol"],
       repetitions: 1,
       gatewayId: "seedspec-evals",
-      protocolVersion: "0.1.0-alpha.5",
+      protocolVersion: "0.2.0",
       createdAt: "2026-07-22T12:00:00.000Z",
       maxSteps: 6,
     });
@@ -139,7 +139,7 @@ describe("desktop runner control boundary", () => {
       models: ["openai/gpt-5.6-sol"],
       repetitions: 1,
       gatewayId: "seedspec-evals",
-      protocolVersion: "0.1.0-alpha.5",
+      protocolVersion: "0.2.0",
       createdAt: "2026-07-22T12:00:00.000Z",
       maxSteps: 6,
     });

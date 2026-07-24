@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seedspec.dev/releases/0.2.0/schemas/resolved-intent.schema.json",
+  "title": "Resolved SeedSpec Intent 0.1 Alpha",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol_version", "status", "packages", "contributions", "unresolved"],
+  "properties": {
+    "protocol_version": { "const": "0.2" },
+    "status": { "enum": ["affirmed", "review"] },
+    "packages": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/resolvedPackageIntent" }
+    },
+    "contributions": {
+      "type": "array",
+      "items": {
+        "$ref": "https://seedspec.dev/releases/0.2.0/schemas/applied-intent-input.schema.json#/$defs/contribution"
+      }
+    },
+    "unresolved": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "affirmed" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "unresolved": { "maxItems": 0 },
+          "packages": {
+            "items": {
+              "properties": {
+                "use": { "enum": ["as-authored", "adapted", "partial"] }
+              }
+            }
+          },
+          "contributions": {
+            "items": {
+              "properties": { "status": { "enum": ["affirmed", "observed"] } }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "namespacedId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:\\.[a-z0-9][a-z0-9-]*){2,}$"
+    },
+    "localId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9][A-Za-z0-9._-]*)*/?$"
+    },
+    "intentFormat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "$ref": "#/$defs/namespacedId" },
+        "artifact": { "$ref": "#/$defs/localId" },
+        "format_version": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "conforms_to": { "type": "string", "format": "uri" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "org.seedspec.intent.native" } },
+            "required": ["type"]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                { "required": ["artifact"] },
+                { "required": ["format_version"] },
+                { "required": ["conforms_to"] }
+              ]
+            }
+          },
+          "else": { "required": ["artifact"] }
+        }
+      ]
+    },
+    "resolvedPackageIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "package",
+        "version",
+        "digest",
+        "entrypoint",
+        "provenance",
+        "format",
+        "use"
+      ],
+      "properties": {
+        "package": { "$ref": "#/$defs/namespacedId" },
+        "version": { "$ref": "#/$defs/semver" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "entrypoint": { "$ref": "#/$defs/relativePath" },
+        "provenance": { "const": "package-author" },
+        "format": { "$ref": "#/$defs/intentFormat" },
+        "use": { "enum": ["unreviewed", "as-authored", "adapted", "partial"] },
+        "note": { "type": "string", "minLength": 1, "maxLength": 1000 }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "use": { "enum": ["adapted", "partial"] } },
+            "required": ["use"]
+          },
+          "then": { "required": ["note"] }
+        }
+      ]
+    }
+  }
+}

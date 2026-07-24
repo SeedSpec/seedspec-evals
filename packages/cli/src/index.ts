@@ -76,7 +76,7 @@ import {
 } from "./runner-control.js";
 import { createVariantComparison } from "@seedspec/evaluators";
 
-const CLI_VERSION = "0.1.0-alpha.3";
+const CLI_VERSION = "0.2.0";
 const CLI_ENTRY_PATH = fileURLToPath(import.meta.url);
 const EVALUATION_REPOSITORY_ROOT = resolve(dirname(CLI_ENTRY_PATH), "../../..");
 const DEFAULT_DESKTOP_RUNNER_ROOT = resolve(EVALUATION_REPOSITORY_ROOT, "../..", "agent-eval-runs");
@@ -130,7 +130,7 @@ experiment.command("plan")
   .option("--variant <variant...>", "evaluation variant(s); defaults to every standard variant for the stage")
   .option("--repetitions <count>", "runs per case/model", parsePositiveInteger, 1)
   .option("--gateway <id>", "Cloudflare AI Gateway ID", "seedspec-evals")
-  .option("--protocol-version <version>", "frozen SeedSpec protocol package version", "0.1.0-alpha.5")
+  .option("--protocol-version <version>", "frozen SeedSpec protocol package version", "0.2.0")
   .option("--max-steps <count>", "maximum Think steps per turn", parsePositiveInteger, 6)
   .option("--max-duration <duration>", "maximum wall-clock time per run (for example 30m or 1h)", parseDurationMs, DEFAULT_MAX_DURATION_MS)
   .option("--authored-input <directory>", "authored workspace to content-address and deliver to implementation runners")
@@ -190,7 +190,7 @@ experiment.command("skill-plan")
   .requiredOption("--model <model...>", "AI Gateway model slug(s)")
   .option("--repetitions <count>", "runs per case/model/treatment", parsePositiveInteger, 1)
   .option("--gateway <id>", "Cloudflare AI Gateway ID", "seedspec-evals")
-  .option("--protocol-version <version>", "frozen SeedSpec protocol package version", "0.1.0-alpha.5")
+  .option("--protocol-version <version>", "frozen SeedSpec protocol package version", "0.2.0")
   .option("--max-steps <count>", "maximum Think steps per turn", parsePositiveInteger, 8)
   .option("--max-duration <duration>", "maximum wall-clock time per run (for example 30m or 1h)", parseDurationMs, DEFAULT_MAX_DURATION_MS)
   .option("--skill <file>", "package-scoped SKILL.md to deliver in controlled treatments", SHAPE_SOLUTION_INTENT_SKILL)
@@ -239,7 +239,7 @@ experiment.command("implementation-skill-plan")
   .requiredOption("--authored-input <directory>", "completed authored package to freeze for every implementation treatment")
   .option("--repetitions <count>", "runs per case/model/treatment", parsePositiveInteger, 1)
   .option("--gateway <id>", "Cloudflare AI Gateway ID", "seedspec-evals")
-  .option("--protocol-version <version>", "frozen SeedSpec protocol package version", "0.1.0-alpha.5")
+  .option("--protocol-version <version>", "frozen SeedSpec protocol package version", "0.2.0")
   .option("--max-steps <count>", "maximum Think steps per turn", parsePositiveInteger, 8)
   .option("--max-duration <duration>", "maximum wall-clock time per run (for example 30m or 1h)", parseDurationMs, DEFAULT_MAX_DURATION_MS)
   .option("--skill <file>", "package-scoped implementation SKILL.md to deliver in the controlled treatment", IMPLEMENT_STATEFUL_WORKFLOWS_SKILL)

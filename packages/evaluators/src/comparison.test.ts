@@ -15,7 +15,7 @@ function scorecard(runCharacter: string, variant: "raw-source" | "seedspec-minim
     stage: "authorship",
     variant,
     createdAt: "2026-07-21T12:00:00.000Z",
-    evaluator: { id: "seedspec-authorship-rubric", kind: "rubric", version: "0.1.0-alpha.3" },
+    evaluator: { id: "seedspec-authorship-rubric", kind: "rubric", version: "0.2.0" },
     kind: "rubric",
     judgeModel: { provider: "test", modelId: "test/judge", parameters: {} },
     summary: { earned: points, possible: 4, normalized: points / 4 },

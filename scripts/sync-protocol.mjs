@@ -14,9 +14,7 @@ const status = execFileSync("git", ["status", "--porcelain"], {
   cwd: sourceRoot,
   encoding: "utf8",
 }).trim();
-if (status.length > 0) {
-  throw new Error(`Refusing to snapshot a dirty protocol checkout: ${sourceRoot}`);
-}
+const sourceDirty = status.length > 0;
 
 const commit = execFileSync("git", ["rev-parse", "HEAD"], {
   cwd: sourceRoot,
@@ -29,7 +27,15 @@ if (packageJson.name !== "@seedspec/protocol") {
 
 await rm(destination, { recursive: true, force: true });
 await mkdir(destination, { recursive: true });
-for (const entry of ["package.json", "README.md", "schemas", "src"]) {
+for (const entry of [
+  "package.json",
+  "README.md",
+  "schemas",
+  "src",
+  "documents",
+  "protocol-release.json",
+  "conformance-bundle.json"
+]) {
   await cp(resolve(sourcePackage, entry), resolve(destination, entry), { recursive: true });
 }
 
@@ -41,6 +47,7 @@ const snapshot = {
   version: packageJson.version,
   sourceRepository: packageJson.repository?.url ?? null,
   sourceCommit: commit,
+  sourceDirty,
   sourceDigest,
   sourceDirectory: packageJson.repository?.directory ?? basename(sourcePackage),
 };
@@ -53,7 +60,10 @@ for (const output of [
   await writeFile(output, generatedModule, "utf8");
 }
 
-process.stdout.write(`Synced ${packageJson.name}@${packageJson.version} from ${commit}.\n`);
+process.stdout.write(
+  `Synced ${packageJson.name}@${packageJson.version} from ${commit}`
+  + `${sourceDirty ? " plus working-tree bytes" : ""}.\n`
+);
 
 async function digestDirectory(root) {
   const paths = [];

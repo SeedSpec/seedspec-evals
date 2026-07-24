@@ -66,7 +66,7 @@ export function evaluateDeterministically(input: DeterministicEvaluationInput): 
     evaluator: {
       id: "seedspec-eval-deterministic",
       kind: "deterministic",
-      version: "0.1.0-alpha.3",
+      version: "0.2.0",
     },
     kind: "deterministic",
     assessmentScope: "run-contract-and-integrity",

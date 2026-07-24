@@ -26,7 +26,12 @@ The first scenario corpus covers a sparse application, a feature for an existing
 - `vendor/protocol` — frozen, unpublished protocol snapshot used by the current experiments
 - `docs` — architecture, lifecycle, and experiment notes
 
-This alpha is distributed as a repository. Its workspace packages are intentionally private and are not published to npm. A public eval library or CLI should be published only when external consumers need a stable programmatic interface rather than a clone-and-run lab.
+The 0.2 evaluation toolchain is distributed as a repository. Its workspace
+packages are intentionally private and are not published to npm. A public eval
+library or CLI should be published only when external consumers need a stable
+programmatic interface rather than a clone-and-run lab. See the
+[evidence published with SeedSpec 0.2](docs/0.2-evidence.md) for the narrow
+findings and their limits.
 
 ## Safety posture
 

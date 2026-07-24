@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seedspec.dev/releases/0.2.0/schemas/conformance-report.schema.json",
+  "title": "SeedSpec Conformance Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_version",
+    "status",
+    "protocol_release",
+    "protocol_family",
+    "suite",
+    "runtime",
+    "environment",
+    "extensions",
+    "totals",
+    "package_digests",
+    "results"
+  ],
+  "properties": {
+    "report_version": { "const": "1" },
+    "status": {
+      "enum": ["conformant", "nonconformant", "incomplete"]
+    },
+    "protocol_release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "digest"],
+      "properties": {
+        "id": { "$ref": "#/$defs/semver" },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "protocol_family": { "const": "0.2" },
+    "suite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "source",
+        "index_digest",
+        "bundle_digest",
+        "release_bound"
+      ],
+      "properties": {
+        "version": { "$ref": "#/$defs/semver" },
+        "source": { "type": "string", "minLength": 1 },
+        "index_digest": { "$ref": "#/$defs/digest" },
+        "bundle_digest": { "$ref": "#/$defs/digest" },
+        "release_bound": { "type": "boolean" }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "@seedspec/runtime" },
+        "version": { "$ref": "#/$defs/semver" }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "architecture",
+        "node",
+        "yaml_parser",
+        "json_parser"
+      ],
+      "properties": {
+        "platform": { "type": "string", "minLength": 1 },
+        "architecture": { "type": "string", "minLength": 1 },
+        "node": { "type": "string", "minLength": 1 },
+        "yaml_parser": { "type": "string", "minLength": 1 },
+        "json_parser": { "type": "string", "minLength": 1 }
+      }
+    },
+    "extensions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "passed", "failed", "skipped"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "passed": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "package_digests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["case", "digest"],
+        "properties": {
+          "case": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "digest": { "$ref": "#/$defs/digest" }
+        }
+      }
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "operation", "status"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "operation": {
+            "enum": [
+              "validate",
+              "resolve",
+              "digest-stability",
+              "capability-conformance"
+            ]
+          },
+          "status": { "enum": ["passed", "failed", "skipped"] },
+          "output": { "type": "object" },
+          "error_code": { "type": "string", "minLength": 2 },
+          "message": { "type": "string", "minLength": 1 }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "status": { "const": "failed" } } },
+            "then": { "required": ["error_code", "message"] }
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}

@@ -77,7 +77,7 @@ export async function createSkillExperimentPlan(options: SkillExperimentPlanOpti
     if (skillEnabled) {
       tools.push({
         name: skillId,
-        version: "0.1.0-alpha.1",
+        version: "0.2.0",
         configuration: { digest: skillDigest, delivery: "runner-local-skill" },
       });
     }
