@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   claudeModelSelector,
+  createClaudeControllerTrace,
   parseClaudeCodeEvents,
   spawnClaudeProcessCaptured,
 } from "./claude-subject-runner.js";
@@ -95,5 +96,39 @@ describe("captured Claude Code process limits", () => {
 
     expect(result.timedOut).toBe(true);
     expect(result.exitCode).not.toBe(0);
+  });
+
+  it("creates a canonical timed-out controller trace without claiming reconstructed events", () => {
+    const trace = createClaudeControllerTrace({
+      identity: {
+        runId: `run_${"a".repeat(64)}`,
+        sourceRunId: `run_${"b".repeat(64)}`,
+        variant: "seedspec-implementation",
+        runner: { id: "claude-code", kind: "agent", version: "0.1.0" },
+        model: { provider: "anthropic", modelId: "anthropic/claude-sonnet-5", parameters: {} },
+      },
+      startedAt: "2026-07-24T12:00:00.000Z",
+      finishedAt: "2026-07-24T12:30:00.000Z",
+      status: "timed_out",
+      exitCode: -1,
+      eventCount: 42,
+      usageCaptured: false,
+      limitations: ["Provider usage was unavailable."],
+    });
+
+    expect(trace.status).toBe("timed_out");
+    expect(trace.capture.messages).toBe("unavailable");
+    expect(trace.capture.usage).toBe("unavailable");
+    expect(trace.events).toHaveLength(1);
+    expect(trace.events[0]?.kind).toBe("status");
+    expect(trace.events[0]?.name).toBe("subject-timed-out");
+    expect(trace.events[0]?.data).toEqual({
+      exitCode: -1,
+      capturedProviderEventCount: 42,
+      providerEventsPath: "subject-events.jsonl",
+    });
+    expect(trace.limitations).toContain(
+      "Canonical message, tool-call, and tool-result events were not reconstructed from the retained provider event sidecar.",
+    );
   });
 });

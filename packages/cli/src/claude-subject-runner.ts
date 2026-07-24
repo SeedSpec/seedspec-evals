@@ -1,12 +1,15 @@
 import { spawn, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rename, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import {
   RunManifestSchema,
+  createTrace,
   createSubjectRun,
   parseTrace,
+  type Trace,
+  type TraceBody,
   type SubjectRun,
 } from "@seedspec/eval-core";
 
@@ -110,20 +113,60 @@ export async function runClaudeSubject(options: {
   let trace:
     | { traceId: string; path: string; digest: `sha256:${string}`; byteLength: number }
     | undefined;
-  if (execution.exitCode === 0 && !execution.timedOut && modelMatched) {
-    try {
-      const traceBytes = await readFile(tracePath);
-      const parsedTrace = parseTrace(JSON.parse(traceBytes.toString("utf8")) as unknown);
-      if (parsedTrace.runId !== manifest.runId) throw new Error("Finalized trace does not match the subject run ID.");
-      trace = {
-        traceId: parsedTrace.traceId,
-        path: "trace.json",
-        digest: digest(traceBytes),
-        byteLength: traceBytes.byteLength,
-      };
-    } catch (error) {
-      limitations.push(`The Claude Code process exited successfully, but the finalized subject trace was unavailable or invalid: ${errorMessage(error)}`);
+  let subjectFinalizedTrace = false;
+  try {
+    const traceBytes = await readFile(tracePath);
+    const parsedTrace = parseTrace(JSON.parse(traceBytes.toString("utf8")) as unknown);
+    if (parsedTrace.runId !== manifest.runId) throw new Error("Finalized trace does not match the subject run ID.");
+    trace = {
+      traceId: parsedTrace.traceId,
+      path: "trace.json",
+      digest: digest(traceBytes),
+      byteLength: traceBytes.byteLength,
+    };
+    subjectFinalizedTrace = true;
+  } catch (error) {
+    if (await fileExists(tracePath)) {
+      const invalidTraceBytes = await readFile(tracePath);
+      const invalidTracePath = `subject-trace.invalid-${digest(invalidTraceBytes).slice("sha256:".length, 19)}.json`;
+      await rename(tracePath, resolve(runDirectory, invalidTracePath));
+      limitations.push(
+        `The invalid subject trace was preserved as ${invalidTracePath}: ${errorMessage(error)}`,
+      );
     }
+    const controllerTrace = createClaudeControllerTrace({
+      identity: {
+        runId: manifest.runId,
+        ...(typeof manifest.configuration?.["sourceRunId"] === "string"
+          ? { sourceRunId: manifest.configuration["sourceRunId"] }
+          : {}),
+        variant: manifest.variant,
+        runner: manifest.runner,
+        model: {
+          provider: manifest.model.provider,
+          modelId: manifest.model.modelId,
+          parameters: JSON.parse(JSON.stringify(manifest.model.parameters)) as TraceBody["model"]["parameters"],
+        },
+      },
+      startedAt,
+      finishedAt,
+      status: execution.timedOut ? "timed_out" : "failed",
+      exitCode: execution.exitCode,
+      eventCount: parsedEvents.eventCount,
+      usageCaptured: parsedEvents.usage.capture === "provider-reported",
+      limitations,
+    });
+    const traceBytes = Buffer.from(`${JSON.stringify(controllerTrace, null, 2)}\n`, "utf8");
+    await writeFile(tracePath, traceBytes, { flag: "wx" });
+    trace = {
+      traceId: controllerTrace.traceId,
+      path: "trace.json",
+      digest: digest(traceBytes),
+      byteLength: traceBytes.byteLength,
+    };
+    limitations.push(
+      "The subject did not finalize a trace; the Claude adapter wrote a canonical controller trace for the failed run without reconstructing canonical events.",
+    );
   }
   const run = createSubjectRun({
     schemaVersion: 1,
@@ -137,7 +180,7 @@ export async function runClaudeSubject(options: {
     reasoningEffort: "high",
     startedAt,
     finishedAt,
-    status: execution.exitCode === 0 && !execution.timedOut && modelMatched && trace !== undefined ? "succeeded" : "failed",
+    status: execution.exitCode === 0 && !execution.timedOut && modelMatched && subjectFinalizedTrace ? "succeeded" : "failed",
     exitCode: execution.exitCode,
     usage: parsedEvents.usage,
     events: {
@@ -169,6 +212,52 @@ export function claudeModelSelector(model: string): string {
     throw new Error(`Claude Code requires an Anthropic model slug, received ${model}.`);
   }
   return model.slice("anthropic/".length);
+}
+
+export function createClaudeControllerTrace(options: {
+  identity: Pick<TraceBody, "runId" | "sourceRunId" | "variant" | "runner" | "model">;
+  startedAt: string;
+  finishedAt: string;
+  status: "failed" | "timed_out";
+  exitCode: number;
+  eventCount: number;
+  usageCaptured: boolean;
+  limitations: readonly string[];
+}): Trace {
+  return createTrace({
+    schemaVersion: 1,
+    ...options.identity,
+    startedAt: options.startedAt,
+    finishedAt: options.finishedAt,
+    status: options.status,
+    capture: {
+      messages: "unavailable",
+      toolCalls: "unavailable",
+      toolResults: "unavailable",
+      timing: "run-only",
+      usage: options.usageCaptured ? "provider-summary" : "unavailable",
+      artifacts: "unavailable",
+      reasoning: "not-collected",
+    },
+    events: [{
+      sequence: 0,
+      timestamp: options.finishedAt,
+      kind: "status",
+      actor: "runner",
+      name: options.status === "timed_out" ? "subject-timed-out" : "subject-failed",
+      data: {
+        exitCode: options.exitCode,
+        capturedProviderEventCount: options.eventCount,
+        providerEventsPath: "subject-events.jsonl",
+      },
+    }],
+    limitations: [
+      "The controller generated this terminal trace because the subject did not finalize a valid trace.",
+      "Canonical message, tool-call, and tool-result events were not reconstructed from the retained provider event sidecar.",
+      ...options.limitations,
+    ],
+    redactions: [],
+  });
 }
 
 export function parseClaudeCodeEvents(jsonl: string): {
@@ -362,4 +451,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await readFile(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
