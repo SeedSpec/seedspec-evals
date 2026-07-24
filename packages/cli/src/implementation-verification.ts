@@ -164,7 +164,7 @@ export async function verifyImplementationRun(options: {
     },
     limitations: [
       sandbox === "darwin-sandbox-exec"
-        ? "The verifier executed declared local commands against a disposable realization copy in a macOS sandbox that denied network access and writes outside the temporary copy."
+        ? "The verifier executed declared local commands against a disposable realization copy in a macOS sandbox that allowed loopback-only networking while denying remote network access and writes outside the temporary copy."
         : "The verifier executed declared local commands against a disposable realization copy without an operating-system sandbox after explicit unsandboxed approval.",
       "The verifier did not provide a browser.",
       "A passing command establishes execution, not that the subject-authored test is semantically distinguishing; the independent technical review assesses test quality.",
@@ -277,17 +277,22 @@ function sandboxInvocation(
   temporaryHome: string,
 ): { readonly executable: string; readonly args: readonly string[] } {
   if (sandbox === "unsandboxed") return { executable, args };
-  const profile = [
-    "(version 1)",
-    "(allow default)",
-    "(deny network*)",
-    "(deny file-write*)",
-    `(allow file-write* (subpath ${JSON.stringify(temporaryHome)}))`,
-  ].join(" ");
+  const profile = darwinVerificationSandboxProfile(temporaryHome);
   return {
     executable: "/usr/bin/sandbox-exec",
     args: ["-p", profile, executable, ...args],
   };
+}
+
+export function darwinVerificationSandboxProfile(temporaryHome: string): string {
+  return [
+    "(version 1)",
+    "(allow default)",
+    "(deny network*)",
+    "(allow network* (local ip))",
+    "(deny file-write*)",
+    `(allow file-write* (subpath ${JSON.stringify(temporaryHome)}))`,
+  ].join(" ");
 }
 
 function primitiveErrorMessage(error: unknown): string {

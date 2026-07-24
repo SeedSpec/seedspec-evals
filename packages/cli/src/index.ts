@@ -27,6 +27,7 @@ import {
   materializeAuthoredInput,
 } from "./authored-input.js";
 import { CLI_DOCS } from "./docs.js";
+import { DEFAULT_MAX_DURATION_MS, parseDurationMs } from "./duration.js";
 import {
   buildRubricEvaluationBrief,
   evaluateRunDirectoryDeterministically,
@@ -131,6 +132,7 @@ experiment.command("plan")
   .option("--gateway <id>", "Cloudflare AI Gateway ID", "seedspec-evals")
   .option("--protocol-version <version>", "frozen SeedSpec protocol package version", "0.1.0-alpha.5")
   .option("--max-steps <count>", "maximum Think steps per turn", parsePositiveInteger, 6)
+  .option("--max-duration <duration>", "maximum wall-clock time per run (for example 15m or 1h)", parseDurationMs, DEFAULT_MAX_DURATION_MS)
   .option("--authored-input <directory>", "authored workspace to content-address and deliver to implementation runners")
   .option("--out <file>", "plan output path")
   .action(async (options: {
@@ -143,6 +145,7 @@ experiment.command("plan")
     gateway: string;
     protocolVersion: string;
     maxSteps: number;
+    maxDuration: number;
     authoredInput?: string;
     out?: string;
   }) => {
@@ -167,6 +170,7 @@ experiment.command("plan")
       protocolVersion: options.protocolVersion,
       createdAt,
       maxSteps: options.maxSteps,
+      maxDurationMs: options.maxDuration,
       ...(authoredInput === undefined
         ? {}
         : { authoredInput }),
@@ -188,6 +192,7 @@ experiment.command("skill-plan")
   .option("--gateway <id>", "Cloudflare AI Gateway ID", "seedspec-evals")
   .option("--protocol-version <version>", "frozen SeedSpec protocol package version", "0.1.0-alpha.5")
   .option("--max-steps <count>", "maximum Think steps per turn", parsePositiveInteger, 8)
+  .option("--max-duration <duration>", "maximum wall-clock time per run (for example 15m or 1h)", parseDurationMs, DEFAULT_MAX_DURATION_MS)
   .option("--skill <file>", "package-scoped SKILL.md to deliver in controlled treatments", SHAPE_SOLUTION_INTENT_SKILL)
   .option("--out <file>", "plan output path")
   .action(async (options: {
@@ -198,6 +203,7 @@ experiment.command("skill-plan")
     gateway: string;
     protocolVersion: string;
     maxSteps: number;
+    maxDuration: number;
     skill: string;
     out?: string;
   }) => {
@@ -214,6 +220,7 @@ experiment.command("skill-plan")
       protocolVersion: options.protocolVersion,
       createdAt,
       maxSteps: options.maxSteps,
+      maxDurationMs: options.maxDuration,
       skillPath: resolve(options.skill),
     });
     const defaultPath = `runs/${createdAt.replaceAll(/[:.]/g, "-")}-skill-${plan.planId.slice(0, 17)}.json`;
@@ -234,6 +241,7 @@ experiment.command("implementation-skill-plan")
   .option("--gateway <id>", "Cloudflare AI Gateway ID", "seedspec-evals")
   .option("--protocol-version <version>", "frozen SeedSpec protocol package version", "0.1.0-alpha.5")
   .option("--max-steps <count>", "maximum Think steps per turn", parsePositiveInteger, 8)
+  .option("--max-duration <duration>", "maximum wall-clock time per run (for example 15m or 1h)", parseDurationMs, DEFAULT_MAX_DURATION_MS)
   .option("--skill <file>", "package-scoped implementation SKILL.md to deliver in the controlled treatment", IMPLEMENT_STATEFUL_WORKFLOWS_SKILL)
   .option("--treatment <id...>", "treatments to plan: no-guidance, embedded-guidance, or skill-guidance")
   .option("--skill-treatment-id <id>", "comparison label for the skill-guidance arm", "skill-guidance")
@@ -256,6 +264,7 @@ experiment.command("implementation-skill-plan")
     gateway: string;
     protocolVersion: string;
     maxSteps: number;
+    maxDuration: number;
     skill: string;
     treatment?: string[];
     skillTreatmentId: string;
@@ -284,6 +293,7 @@ experiment.command("implementation-skill-plan")
       protocolVersion: options.protocolVersion,
       createdAt,
       maxSteps: options.maxSteps,
+      maxDurationMs: options.maxDuration,
       skillPath,
       guidanceInput,
       authoredInput,

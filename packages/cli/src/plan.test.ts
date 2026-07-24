@@ -387,6 +387,31 @@ describe("createExperimentPlan", () => {
     expect(desktopBrief).not.toMatch(/seedspec/i);
   });
 
+  it("defaults to fifteen minutes and content-addresses a configured duration", async () => {
+    const cases = await loadCaseLibrary(resolve("cases"));
+    const common = {
+      cases: cases.slice(0, 1),
+      stage: "authorship" as const,
+      variants: ["seedspec-guided"] as const,
+      models: ["openai/gpt-5.6-sol"],
+      repetitions: 1,
+      gatewayId: "seedspec-evals",
+      protocolVersion: "0.1.0-alpha.5",
+      createdAt: "2026-07-21T12:00:00.000Z",
+      maxSteps: 6,
+    };
+    const defaultPlan = await createExperimentPlan(common);
+    const configuredPlan = await createExperimentPlan({
+      ...common,
+      maxDurationMs: 90_000,
+    });
+
+    expect(defaultPlan.envelopes[0]!.manifest.limits.maxDurationMs).toBe(15 * 60 * 1000);
+    expect(configuredPlan.envelopes[0]!.manifest.limits.maxDurationMs).toBe(90_000);
+    expect(configuredPlan.envelopes[0]!.manifest.runId)
+      .not.toBe(defaultPlan.envelopes[0]!.manifest.runId);
+  });
+
   it("keeps hidden expectations and simulated answers out of model material", async () => {
     const cases = await loadCaseLibrary(resolve("cases"));
     const selected = cases.filter(({ case: evaluationCase }) =>

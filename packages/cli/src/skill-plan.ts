@@ -32,6 +32,7 @@ export interface SkillExperimentPlanOptions {
   readonly protocolVersion: string;
   readonly createdAt: string;
   readonly maxSteps: number;
+  readonly maxDurationMs?: number;
   readonly skillPath: string;
 }
 
@@ -53,6 +54,7 @@ export async function createSkillExperimentPlan(options: SkillExperimentPlanOpti
     protocolVersion: options.protocolVersion,
     createdAt: options.createdAt,
     maxSteps: options.maxSteps,
+    ...(options.maxDurationMs === undefined ? {} : { maxDurationMs: options.maxDurationMs }),
   });
 
   const envelopes = base.envelopes.flatMap((envelope) => SKILL_TREATMENTS.map((treatment, treatmentIndex) => {

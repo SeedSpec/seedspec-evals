@@ -36,6 +36,7 @@ export interface ImplementationSkillExperimentPlanOptions {
   readonly protocolVersion: string;
   readonly createdAt: string;
   readonly maxSteps: number;
+  readonly maxDurationMs?: number;
   readonly skillPath: string;
   readonly guidanceInput: AuthoredInputBundle;
   readonly authoredInput: AuthoredInputBundle;
@@ -76,6 +77,7 @@ export async function createImplementationSkillExperimentPlan(
     protocolVersion: options.protocolVersion,
     createdAt: options.createdAt,
     maxSteps: options.maxSteps,
+    ...(options.maxDurationMs === undefined ? {} : { maxDurationMs: options.maxDurationMs }),
     authoredInput: options.authoredInput,
   });
 

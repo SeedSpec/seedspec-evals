@@ -17,6 +17,7 @@ import type { LoadedEvaluationCase } from "@seedspec/eval-case-library";
 import { HARNESS_VERSION, RunAgentConfigSchema } from "@seedspec/eval-harness";
 
 import { ExperimentPlanSchema, type ExperimentPlan } from "./contracts.js";
+import { DEFAULT_MAX_DURATION_MS } from "./duration.js";
 import { FROZEN_PROTOCOL_SNAPSHOT } from "./protocol-snapshot.generated.js";
 
 const EVALUATION_VERSION = "0.1.0-alpha.3";
@@ -31,6 +32,7 @@ export interface PlanOptions {
   readonly protocolVersion: string;
   readonly createdAt: string;
   readonly maxSteps: number;
+  readonly maxDurationMs?: number;
   readonly authoredInput?: AuthoredInputBundle;
 }
 
@@ -40,6 +42,10 @@ export async function createExperimentPlan(options: PlanOptions): Promise<Experi
   }
   if (options.models.length === 0) throw new Error("At least one model is required.");
   if (options.variants.length === 0) throw new Error("At least one evaluation variant is required.");
+  const maxDurationMs = options.maxDurationMs ?? DEFAULT_MAX_DURATION_MS;
+  if (!Number.isSafeInteger(maxDurationMs) || maxDurationMs < 1) {
+    throw new Error("Maximum duration must be a positive safe integer in milliseconds.");
+  }
   if (options.stage === "implementation" && options.authoredInput === undefined) {
     throw new Error("Implementation planning requires --authored-input.");
   }
@@ -117,7 +123,7 @@ export async function createExperimentPlan(options: PlanOptions): Promise<Experi
           ],
           limits: {
             maxTurns: 1,
-            maxDurationMs: 15 * 60 * 1000,
+            maxDurationMs,
             maxInputBytes: 384 * 1024,
             maxOutputBytes: 8 * 1024 * 1024,
           },
