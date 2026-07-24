@@ -19,7 +19,7 @@ import { HARNESS_VERSION, RunAgentConfigSchema } from "@seedspec/eval-harness";
 import { ExperimentPlanSchema, type ExperimentPlan } from "./contracts.js";
 import { FROZEN_PROTOCOL_SNAPSHOT } from "./protocol-snapshot.generated.js";
 
-const EVALUATION_VERSION = "0.1.0-alpha.2";
+const EVALUATION_VERSION = "0.1.0-alpha.3";
 
 export interface PlanOptions {
   readonly cases: readonly LoadedEvaluationCase[];

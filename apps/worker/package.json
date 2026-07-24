@@ -1,6 +1,6 @@
 {
   "name": "@seedspec/eval-worker",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,8 +12,8 @@
   "dependencies": {
     "@cloudflare/think": "0.13.0",
     "@seedspec/protocol": "file:../../vendor/protocol",
-    "@seedspec/eval-core": "0.1.0-alpha.2",
-    "@seedspec/eval-harness": "0.1.0-alpha.2",
+    "@seedspec/eval-core": "0.1.0-alpha.3",
+    "@seedspec/eval-harness": "0.1.0-alpha.3",
     "agents": "0.17.4",
     "ai": "6.0.233",
     "ajv": "8.20.0",

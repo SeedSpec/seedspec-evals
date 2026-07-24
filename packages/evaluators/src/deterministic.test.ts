@@ -81,7 +81,7 @@ describe("evaluateDeterministically", () => {
       variant: "seedspec-guided",
       repetition: 0,
       createdAt: "2026-07-21T12:00:00.000Z",
-      protocol: { name: "seedspec", version: "0.1.0-alpha.4" },
+      protocol: { name: "seedspec", version: "0.1.0-alpha.5" },
       runner: { id: "unit-test", kind: "local", version: "1.0.0" },
       model: { provider: "test", modelId: "none", parameters: {} },
       harness: { name: "unit-test", version: "1.0.0" },

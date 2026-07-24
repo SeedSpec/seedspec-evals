@@ -31,6 +31,7 @@
         "intent_status": { "enum": ["affirmed", "review"] },
         "implementation_profile_status": { "enum": ["not-declared", "recorded", "review"] },
         "completion_scope_status": { "enum": ["recorded", "review"] },
+        "capability_status": { "enum": ["not-evaluated", "not-run", "incomplete", "failed", "passed"] },
         "review_count": { "type": "integer", "minimum": 0 },
         "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
         "preserved_extension": {
@@ -57,7 +58,7 @@
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
         "description": { "type": "string", "minLength": 1 },
-        "operation": { "enum": ["validate", "resolve", "digest-stability"] },
+        "operation": { "enum": ["validate", "resolve", "digest-stability", "capability-conformance"] },
         "package": { "type": "string", "minLength": 1 },
         "root": { "type": "string", "minLength": 1 },
         "additions": {
@@ -72,6 +73,8 @@
         "configuration_selection": { "enum": ["examples", "omitted"] },
         "intent_selection": { "enum": ["affirmed", "omitted"] },
         "applied_intent": { "type": "string", "minLength": 1 },
+        "capability": { "type": "string", "minLength": 5 },
+        "result_file": { "type": "string", "minLength": 1 },
         "expect": { "$ref": "#/$defs/expectation" }
       },
       "allOf": [
@@ -82,6 +85,10 @@
         {
           "if": { "properties": { "operation": { "const": "resolve" } } },
           "then": { "required": ["root", "additions"] }
+        },
+        {
+          "if": { "properties": { "operation": { "const": "capability-conformance" } } },
+          "then": { "required": ["package", "capability", "result_file"] }
         },
         {
           "not": { "required": ["intent_selection", "applied_intent"] }

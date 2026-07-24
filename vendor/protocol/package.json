@@ -1,13 +1,14 @@
 {
   "name": "@seedspec/protocol",
-  "version": "0.1.0-alpha.4",
-  "description": "Canonical schemas and metadata for the SeedSpec Protocol",
+  "version": "0.1.0-alpha.5",
+  "description": "Schemas and metadata for portable, agent-ready SeedSpec packages",
   "keywords": [
     "seedspec",
     "protocol",
     "json-schema",
     "agents",
-    "specifications"
+    "specifications",
+    "portable"
   ],
   "type": "module",
   "exports": {

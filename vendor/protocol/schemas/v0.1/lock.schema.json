@@ -54,7 +54,12 @@
       "properties": {
         "id": { "$ref": "#/$defs/namespacedId" },
         "version": { "$ref": "#/$defs/capabilityVersion" },
-        "provider": { "$ref": "#/$defs/lockedPackage" }
+        "provider": { "$ref": "#/$defs/lockedPackage" },
+        "change_history": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/capabilityRevisionChange" }
+        },
+        "conformance_suite": { "$ref": "#/$defs/relativePath" }
       }
     },
     "requirementBinding": {
@@ -94,17 +99,34 @@
     "providerCandidate": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["provider", "provided_version", "revision_status"],
+      "required": [
+        "provider",
+        "provided_version",
+        "revision_status",
+        "revision_direction",
+        "revision_difference",
+        "review_severity",
+        "change_evidence",
+        "declared_changes"
+      ],
       "properties": {
         "provider": { "$ref": "#/$defs/lockedPackage" },
         "provided_version": { "$ref": "#/$defs/capabilityVersion" },
-        "revision_status": { "enum": ["tested-revision", "different-revision"] }
+        "revision_status": { "enum": ["tested-revision", "different-revision"] },
+        "revision_direction": { "enum": ["exact", "provider-newer", "provider-older"] },
+        "revision_difference": { "enum": ["none", "patch", "minor", "major"] },
+        "review_severity": { "enum": ["none", "low", "medium", "high"] },
+        "change_evidence": { "enum": ["not-needed", "complete", "partial", "unavailable"] },
+        "declared_changes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/capabilityRevisionChange" }
+        }
       }
     },
     "compositionReview": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["code", "packages"],
+      "required": ["code", "severity", "packages"],
       "properties": {
         "code": {
           "enum": [
@@ -117,6 +139,7 @@
             "declared-requirement-cycle"
           ]
         },
+        "severity": { "enum": ["low", "medium", "high"] },
         "packages": {
           "type": "array",
           "minItems": 1,
@@ -124,8 +147,79 @@
           "items": { "$ref": "#/$defs/namespacedId" }
         },
         "capability": { "$ref": "#/$defs/namespacedId" },
+        "revision": { "$ref": "#/$defs/revisionReview" },
         "reason": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "code": { "const": "revision-difference" } }, "required": ["code"] },
+          "then": { "required": ["revision"] },
+          "else": { "not": { "required": ["revision"] } }
+        }
+      ]
+    },
+    "revisionReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tested_against",
+        "provided_version",
+        "direction",
+        "difference",
+        "change_evidence",
+        "declared_changes"
+      ],
+      "properties": {
+        "tested_against": { "$ref": "#/$defs/capabilityVersion" },
+        "provided_version": { "$ref": "#/$defs/capabilityVersion" },
+        "direction": { "enum": ["provider-newer", "provider-older"] },
+        "difference": { "enum": ["patch", "minor", "major"] },
+        "change_evidence": { "enum": ["complete", "partial", "unavailable"] },
+        "declared_changes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/capabilityRevisionChange" }
+        }
       }
+    },
+    "capabilityChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "summary"],
+      "properties": {
+        "id": { "$ref": "#/$defs/localId" },
+        "type": { "enum": ["breaking", "additive", "clarifying"] },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "contract_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/localId" }
+        }
+      }
+    },
+    "capabilityRevisionChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to", "changes"],
+      "properties": {
+        "from": { "$ref": "#/$defs/capabilityVersion" },
+        "to": { "$ref": "#/$defs/capabilityVersion" },
+        "changes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/capabilityChange" }
+        }
+      }
+    },
+    "localId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9][A-Za-z0-9._-]*)*$"
     },
     "namespacedId": {
       "type": "string",

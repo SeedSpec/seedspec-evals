@@ -52,7 +52,7 @@ describe("Think SeedSpec workspace tools", () => {
       ok: true,
       canonicalManifestSchema: {
         package: "@seedspec/protocol",
-        version: "0.1.0-alpha.4",
+        version: "0.1.0-alpha.5",
       },
       packageValidationAdapter: "think-workspace",
       manifest: { id: "dev.seedspec.test-package", kind: "application" },

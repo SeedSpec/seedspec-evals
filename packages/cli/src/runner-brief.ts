@@ -41,12 +41,12 @@ export function buildDesktopManifest(envelope: ExecutionEnvelope, runner: Deskto
     runner: {
       id: runner === "codex" ? "codex-desktop" : "claude-code",
       kind: "agent",
-      version: "0.1.0-alpha.2",
+      version: "0.1.0-alpha.3",
     },
     tools: [
-      { name: "desktop-agent-workspace", version: "0.1.0-alpha.2", configuration: { runner } },
+      { name: "desktop-agent-workspace", version: "0.1.0-alpha.3", configuration: { runner } },
       ...(envelope.manifest.variant === "raw-source" ? [] : [
-        { name: "seedspec-simulated-author", version: "0.1.0-alpha.2" },
+        { name: "seedspec-simulated-author", version: "0.1.0-alpha.3" },
       ]),
       ...(usesSeedSpec(envelope.manifest.variant) ? [{
         name: "seedspec-cli",

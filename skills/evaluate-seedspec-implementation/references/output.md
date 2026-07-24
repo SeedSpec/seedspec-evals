@@ -18,7 +18,7 @@ Return JSON only, conforming to `ScorecardSchema`:
   "evaluator": {
     "id": "seedspec-implementation-rubric",
     "kind": "rubric",
-    "version": "0.1.0-alpha.2"
+    "version": "0.1.0-alpha.3"
   },
   "kind": "rubric",
   "judgeModel": {

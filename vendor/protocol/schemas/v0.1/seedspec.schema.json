@@ -116,6 +116,10 @@
     "implementation_resources": {
       "$ref": "#/$defs/implementationResourceDeclaration"
     },
+    "tasks": {
+      "description": "Package-relative path to an ordered implementation task runbook.",
+      "$ref": "#/$defs/relativePath"
+    },
     "compatibility": {
       "oneOf": [
         {
@@ -202,7 +206,51 @@
       "properties": {
         "id": { "$ref": "#/$defs/namespacedId" },
         "version": { "$ref": "#/$defs/capabilityVersion" },
-        "contract": { "$ref": "#/$defs/relativePath" }
+        "contract": { "$ref": "#/$defs/relativePath" },
+        "change_history": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/capabilityRevisionChange" }
+        },
+        "conformance": { "$ref": "#/$defs/capabilityConformance" }
+      }
+    },
+    "capabilityChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "summary"],
+      "properties": {
+        "id": { "$ref": "#/$defs/localId" },
+        "type": { "enum": ["breaking", "additive", "clarifying"] },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "contract_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/localId" }
+        }
+      }
+    },
+    "capabilityRevisionChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to", "changes"],
+      "properties": {
+        "from": { "$ref": "#/$defs/capabilityVersion" },
+        "to": { "$ref": "#/$defs/capabilityVersion" },
+        "changes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/capabilityChange" }
+        }
+      }
+    },
+    "capabilityConformance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["suite"],
+      "properties": {
+        "suite": { "$ref": "#/$defs/relativePath" }
       }
     },
     "requirementDeclaration": {
