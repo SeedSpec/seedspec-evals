@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seedspec.dev/releases/0.2.0/schemas/application.schema.json",
+  "title": "SeedSpec Application Kind-Hint Manifest",
+  "allOf": [
+    { "$ref": "seedspec.schema.json" },
+    {
+      "type": "object",
+      "properties": { "kind": { "const": "application" } }
+    }
+  ]
+}

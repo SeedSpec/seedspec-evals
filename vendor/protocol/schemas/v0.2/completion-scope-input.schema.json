@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seedspec.dev/releases/0.2.0/schemas/completion-scope-input.schema.json",
+  "title": "SeedSpec Completion Scope Input 0.1 Alpha",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol_version", "items"],
+  "properties": {
+    "protocol_version": { "const": "0.2" },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/scopeItem" }
+    }
+  },
+  "$defs": {
+    "namespacedId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:\\.[a-z0-9][a-z0-9-]*){2,}$"
+    },
+    "localId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "references": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+    },
+    "verificationPlan": {
+      "description": "The agreed plan for proving this completion-scope item. It is a target for later evidence, not evidence that the item already passes.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject", "method", "timing", "evidence"],
+      "properties": {
+        "subject": { "enum": ["realization", "outcome"] },
+        "method": {
+          "oneOf": [
+            {
+              "enum": [
+                "user-confirmation",
+                "environment-inspection",
+                "tool-check",
+                "document-review",
+                "manual-observation"
+              ]
+            },
+            { "$ref": "#/$defs/namespacedId" }
+          ]
+        },
+        "timing": { "enum": ["completion", "post-realization"] },
+        "evidence": { "const": "required" },
+        "guidance": { "type": "string", "minLength": 1, "maxLength": 1000 }
+      }
+    },
+    "componentItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id", "package", "component", "selection", "verification"],
+      "properties": {
+        "kind": { "const": "component" },
+        "id": { "$ref": "#/$defs/localId" },
+        "package": { "$ref": "#/$defs/namespacedId" },
+        "component": { "const": "acceptance" },
+        "selection": { "enum": ["all", "subset"] },
+        "included_references": { "$ref": "#/$defs/references" },
+        "deferred_references": { "$ref": "#/$defs/references" },
+        "excluded_references": { "$ref": "#/$defs/references" },
+        "note": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "verification": { "$ref": "#/$defs/verificationPlan" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "selection": { "const": "subset" } },
+            "required": ["selection"]
+          },
+          "then": { "required": ["included_references"] },
+          "else": {
+            "not": {
+              "anyOf": [
+                { "required": ["included_references"] },
+                { "required": ["deferred_references"] },
+                { "required": ["excluded_references"] }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "criterionItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id", "package", "disposition", "statement"],
+      "properties": {
+        "kind": { "const": "criterion" },
+        "id": { "$ref": "#/$defs/localId" },
+        "package": { "$ref": "#/$defs/namespacedId" },
+        "disposition": { "enum": ["included", "deferred", "excluded"] },
+        "statement": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "verification": { "$ref": "#/$defs/verificationPlan" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "disposition": { "const": "included" } },
+            "required": ["disposition"]
+          },
+          "then": { "required": ["verification"] }
+        }
+      ]
+    },
+    "scopeItem": {
+      "oneOf": [
+        { "$ref": "#/$defs/componentItem" },
+        { "$ref": "#/$defs/criterionItem" }
+      ]
+    }
+  }
+}

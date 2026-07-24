@@ -28,7 +28,7 @@ function fakeWorkspace(files: Record<string, string>): WorkspaceLike {
 
 const files = {
   "seedspec.yaml": [
-    "protocol_version: '0.1'",
+    "protocol_version: '0.2'",
     "id: dev.seedspec.test-package",
     "name: Test package",
     "version: 0.1.0",
@@ -52,7 +52,7 @@ describe("Think SeedSpec workspace tools", () => {
       ok: true,
       canonicalManifestSchema: {
         package: "@seedspec/protocol",
-        version: "0.1.0-alpha.5",
+        version: "0.2.0",
       },
       packageValidationAdapter: "think-workspace",
       manifest: { id: "dev.seedspec.test-package", kind: "application" },

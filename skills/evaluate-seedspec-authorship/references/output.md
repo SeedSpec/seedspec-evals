@@ -18,7 +18,7 @@ Return JSON only, conforming to `ScorecardSchema`. Use this shape:
   "evaluator": {
     "id": "seedspec-authorship-rubric",
     "kind": "rubric",
-    "version": "0.1.0-alpha.3"
+    "version": "0.2.0"
   },
   "kind": "rubric",
   "judgeModel": {

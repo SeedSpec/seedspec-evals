@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seedspec.dev/releases/0.2.0/schemas/configuration-selections.schema.json",
+  "title": "SeedSpec Configuration Selections 0.1 Alpha",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol_version", "packages"],
+  "properties": {
+    "protocol_version": { "const": "0.2" },
+    "packages": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/packageSelection" }
+    }
+  },
+  "$defs": {
+    "namespacedId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:\\.[a-z0-9][a-z0-9-]*){2,}$"
+    },
+    "packageSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package", "selection"],
+      "properties": {
+        "package": { "$ref": "#/$defs/namespacedId" },
+        "selection": { "enum": ["example", "custom"] },
+        "values": { "type": "object" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "selection": { "const": "example" } },
+            "required": ["selection"]
+          },
+          "then": { "not": { "required": ["values"] } },
+          "else": { "required": ["values"] }
+        }
+      ]
+    }
+  }
+}

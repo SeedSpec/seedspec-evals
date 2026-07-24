@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seedspec.dev/releases/0.2.0/schemas/protocol-release.schema.json",
+  "title": "SeedSpec Exact Protocol Release",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_version",
+    "protocol_family",
+    "release_id",
+    "status",
+    "schema_package",
+    "schemas",
+    "documents",
+    "operations",
+    "conformance",
+    "implementations",
+    "compatibility"
+  ],
+  "properties": {
+    "manifest_version": { "const": "1" },
+    "protocol_family": { "const": "0.2" },
+    "release_id": { "$ref": "#/$defs/semver" },
+    "status": { "enum": ["experimental", "release-candidate", "stable"] },
+    "schema_package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "@seedspec/protocol" },
+        "version": { "$ref": "#/$defs/semver" }
+      }
+    },
+    "schemas": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/digestedFile" }
+    },
+    "documents": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/digestedFile" }
+    },
+    "operations": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "validate",
+          "digest",
+          "resolve",
+          "resolve-resources",
+          "capability-conformance"
+        ]
+      }
+    },
+    "conformance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "suite_version",
+        "index",
+        "bundle",
+        "index_digest",
+        "bundle_digest"
+      ],
+      "properties": {
+        "suite_version": { "$ref": "#/$defs/semver" },
+        "index": { "const": "conformance/cases.yaml" },
+        "bundle": { "const": "conformance-bundle.json" },
+        "index_digest": { "$ref": "#/$defs/digest" },
+        "bundle_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "implementations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtime", "cli"],
+      "properties": {
+        "runtime": { "$ref": "#/$defs/packageVersion" },
+        "cli": { "$ref": "#/$defs/packageVersion" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository"],
+      "properties": {
+        "repository": { "type": "string", "format": "uri" },
+        "revision": { "type": "string", "pattern": "^[a-f0-9]{40}$" }
+      }
+    },
+    "compatibility": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/compatibility" }
+    }
+  },
+  "$defs": {
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "portablePath": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+    },
+    "digestedFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "digest"],
+      "properties": {
+        "path": { "$ref": "#/$defs/portablePath" },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "packageVersion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "$ref": "#/$defs/semver" }
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from_release", "status", "notes"],
+      "properties": {
+        "from_release": { "$ref": "#/$defs/semver" },
+        "status": {
+          "enum": ["compatible", "revalidate", "migrate", "unsupported"]
+        },
+        "notes": { "type": "string", "minLength": 1 },
+        "migration": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "guide"],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+            },
+            "guide": { "$ref": "#/$defs/portablePath" }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "migrate" } } },
+          "then": { "required": ["migration"] },
+          "else": { "not": { "required": ["migration"] } }
+        }
+      ]
+    }
+  }
+}

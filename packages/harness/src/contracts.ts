@@ -18,7 +18,7 @@ export { JsonObjectSchema, RunIdSchema } from "@seedspec/eval-core";
 export type { JsonObject, JsonPrimitive, JsonValue } from "@seedspec/eval-core";
 
 export const HARNESS_NAME = "seedspec-eval-harness";
-export const HARNESS_VERSION = "0.1.0-alpha.3";
+export const HARNESS_VERSION = "0.2.0";
 export const RUNNER_ID = "cloudflare-think";
 export const DEFAULT_MAX_STEPS = 6;
 export const MAX_MAX_STEPS = 12;
