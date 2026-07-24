@@ -15,6 +15,12 @@ The completed Sol-versus-Terra matrix is recorded in
 It tests whether stronger procedural guidance can compensate for a less-capable
 implementing model while holding the Sol evaluator constant.
 
+The preserved minimal-Markdown implementations were rescored with the
+independent technical quality vector in
+[`docs/experiments/minimal-technical-quality-vector-v1.md`](experiments/minimal-technical-quality-vector-v1.md).
+That pass demonstrates a useful quality gradient without rerunning or changing
+the subjects.
+
 This lab asks a narrow question:
 
 > Does a package-scoped technical skill cause an implementing agent to produce
