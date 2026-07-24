@@ -430,6 +430,10 @@ export async function buildRunProfileBrief(options: {
         eventCount: subjectRun.events.count,
         ...(capturedTurnCount === undefined ? {} : { turnCount: capturedTurnCount }),
         ...(subjectRun.events.threadId === undefined ? {} : { threadId: subjectRun.events.threadId }),
+        ...(subjectRun.captureTrace === undefined ? {} : {
+          captureTracePath: subjectRun.captureTrace.path,
+          captureTraceId: subjectRun.captureTrace.traceId,
+        }),
         limitations: [...subjectRun.limitations],
       },
     }),
@@ -452,6 +456,7 @@ export async function buildRunProfileBrief(options: {
       "For authorship, a request to complete or improve a specification is not blanket delegation of material product policy. Use ambient when the authoring agent selected a material product choice without attributable authority, and use not-observed only when the authored material contains no choice to compare.",
       "Do not estimate tokens, cache activity, turns, timing, technical outcomes, or provenance that the envelope and cited files do not establish.",
       "When subjectRun is present, use its provider-reported usage and exact outer run interval for process metrics instead of the subject-authored trace's unavailable or reconstructed values.",
+      "When subjectRun.captureTracePath is present, use that runner-owned trace for event timing and matched tool-call duration; treat those values as harness observations, not provider-internal execution timestamps.",
       "When subjectRun.turnCount is present, use it as the reported total turn count. Do not infer a different count from subject-authored trace events.",
       "Adaptation challenge definitions are evaluation prompts, not captured outcomes. Do not execute a challenge during profile evaluation; emit not-run unless the envelope supplies a separate captured adaptation run.",
       "Treat contractGate only as run-integrity and outcome-contract evidence. Its check counts do not establish implementation quality and must not influence ordinal technical levels without underlying implementation evidence.",

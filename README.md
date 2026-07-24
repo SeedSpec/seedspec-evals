@@ -148,12 +148,19 @@ node packages/cli/dist/index.js runner claude-run <isolated-claude-run-directory
   --confirm-model-execution
 ```
 
-The Claude adapter requires an `anthropic/...` model in the run manifest,
-disables settings, MCP servers, session persistence, web tools, and reasoning
-capture, and retains sanitized JSONL events plus provider-reported token,
-cache, cost, model, session, timing, and final-response evidence. It enforces
-the immutable run-duration limit and records a timeout as failed evidence
-rather than allowing an over-budget result to appear successful.
+Both desktop adapters write an automatic `capture-trace.json` independently of
+the subject-authored semantic trace. Each complete provider event receives the
+wall-clock time and monotonic elapsed time at which the runner observed it.
+Matched Codex `item.started`/`item.completed` records and Claude tool-call/result
+records receive derived durations. These are harness observations, not
+provider-internal timestamps. Both adapters enforce the immutable run-duration
+limit and record a timeout as failed evidence rather than allowing an
+over-budget result to appear successful.
+
+The Claude adapter additionally requires an `anthropic/...` model in the run
+manifest, disables settings, MCP servers, session persistence, web tools, and
+reasoning capture, and retains sanitized JSONL events plus provider-reported
+token, cache, cost, model, session, timing, and final-response evidence.
 
 After a desktop run finishes, verify its executable claims, evaluate its
 contract/integrity gate, and prepare a descriptive evaluation profile:

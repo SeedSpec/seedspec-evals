@@ -10,6 +10,8 @@ import {
   type ChatResponseResult,
   type StepContext,
   type ThinkSubmissionInspection,
+  type ToolCallContext,
+  type ToolCallResultContext,
   type TurnConfig,
 } from "@cloudflare/think";
 import {
@@ -35,6 +37,7 @@ import { z } from "zod";
 
 import { errorClass, structuredLog } from "./logging.js";
 import { createSeedSpecTools, digestPackage, seedSpecToolNamesForVariant } from "./seedspec-tools.js";
+import { boundedObservedTiming } from "./trace-timing.js";
 
 const WORKSPACE_TOOLS = ["read", "write", "edit", "list", "find", "grep"];
 
@@ -174,18 +177,6 @@ export class SeedSpecEvalAgent extends Think<Env> {
     if (context.text.length > 0) {
       this.appendTraceEvent("message", "assistant", "step-text", { stepNumber: context.stepNumber, text: context.text });
     }
-    for (const call of context.toolCalls) {
-      this.appendTraceEvent("tool-call", "assistant", call.toolName, {
-        stepNumber: context.stepNumber,
-        input: toJsonValue(call.input),
-      });
-    }
-    for (const result of context.toolResults) {
-      this.appendTraceEvent("tool-result", "tool", result.toolName, {
-        stepNumber: context.stepNumber,
-        output: toJsonValue("output" in result ? result.output : null),
-      });
-    }
     this.appendTraceEvent("usage", "runner", "step-usage", {
       stepNumber: context.stepNumber,
       finishReason: context.finishReason,
@@ -194,6 +185,27 @@ export class SeedSpecEvalAgent extends Think<Env> {
       totalTokens: context.usage.totalTokens ?? null,
       cachedInputTokens: context.usage.cachedInputTokens ?? null,
       reasoningTokens: context.usage.reasoningTokens ?? null,
+    });
+  }
+
+  override beforeToolCall(context: ToolCallContext): void {
+    this.appendTraceEvent("tool-call", "assistant", context.toolName, {
+      toolCallId: context.toolCallId,
+      stepNumber: context.stepNumber ?? null,
+      input: toJsonValue(context.input),
+    });
+  }
+
+  override afterToolCall(context: ToolCallResultContext): void {
+    this.appendTraceEvent("tool-result", "tool", context.toolName, {
+      toolCallId: context.toolCallId,
+      stepNumber: context.stepNumber ?? null,
+      durationMs: context.durationMs,
+      durationBasis: "think-tool-lifecycle",
+      success: context.success,
+      ...(context.success
+        ? { output: toJsonValue(context.output) }
+        : { error: toJsonValue(context.error) }),
     });
   }
 
@@ -370,14 +382,20 @@ export class SeedSpecEvalAgent extends Think<Env> {
     const finishedAt = new Date(latest.completedAt ?? Date.now()).toISOString();
     const lowerBound = Date.parse(startedAt);
     const upperBound = Date.parse(finishedAt);
-    const events: TraceEvent[] = rows.map((row, sequence) => ({
-      sequence,
-      timestamp: new Date(Math.min(upperBound, Math.max(lowerBound, Date.parse(row.event_at)))).toISOString(),
-      kind: row.kind,
-      actor: row.actor,
-      ...(row.name === null ? {} : { name: row.name }),
-      data: parseTraceData(row.data_json),
-    }));
+    const events: TraceEvent[] = rows.map((row, sequence) => {
+      const timing = boundedObservedTiming(row.event_at, lowerBound, upperBound);
+      return {
+        sequence,
+        timestamp: timing.timestamp,
+        kind: row.kind,
+        actor: row.actor,
+        ...(row.name === null ? {} : { name: row.name }),
+        data: {
+          ...parseTraceData(row.data_json),
+          observedElapsedMs: timing.observedElapsedMs,
+        },
+      };
+    });
     const artifactSummary = summarizeArtifactDigest(await digestPackage(this.workspace, "."));
     events.push({
       sequence: events.length,
@@ -385,7 +403,10 @@ export class SeedSpecEvalAgent extends Think<Env> {
       kind: "artifact",
       actor: "runner",
       name: "workspace-digest",
-      data: artifactSummary,
+      data: {
+        ...artifactSummary,
+        observedElapsedMs: Math.max(0, upperBound - lowerBound),
+      },
     });
     const status = latest.status === "completed"
       ? "succeeded"
@@ -408,7 +429,13 @@ export class SeedSpecEvalAgent extends Think<Env> {
         status,
         capture: { messages: "partial", toolCalls: "full", toolResults: "full", timing: "event", usage: "tokens", artifacts: "digests", reasoning: "not-collected" },
         events,
-        limitations: ["The user input is represented by the immutable run envelope rather than duplicated in the trace.", "Artifact contents remain in the durable workspace; the trace records observable tool events and final export metadata."],
+        limitations: [
+          "The user input is represented by the immutable run envelope rather than duplicated in the trace.",
+          "Artifact contents remain in the durable workspace; the trace records observable tool events and final export metadata.",
+          "Event timestamps record when the Think runner durably appended each event, not when the model provider began or completed internal work.",
+          "observedElapsedMs is derived from durable wall-clock event time relative to the submission start.",
+          "Tool-result durationMs is reported by Think's per-tool lifecycle hook and measures server-side tool execution.",
+        ],
         redactions: [],
       })),
     };
