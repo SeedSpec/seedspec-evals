@@ -2,6 +2,8 @@ import { spawn, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile, rename, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { performance } from "node:perf_hooks";
+import { StringDecoder } from "node:string_decoder";
 
 import {
   RunManifestSchema,
@@ -30,6 +32,12 @@ type ClaudeUsage =
       costUsd?: number;
     };
 
+export interface ClaudeLineTiming {
+  readonly providerLine: number;
+  readonly observedAt: string;
+  readonly elapsedMs: number;
+}
+
 export async function runClaudeSubject(options: {
   runDirectory: string;
   evaluationRepositoryRoot: string;
@@ -55,6 +63,7 @@ export async function runClaudeSubject(options: {
   const finalMessagePath = resolve(runDirectory, "subject-final.md");
   const runPath = resolve(runDirectory, "subject-run.json");
   const tracePath = resolve(runDirectory, "trace.json");
+  const captureTracePath = resolve(runDirectory, "capture-trace.json");
   const version = execFileSync(options.claudeExecutable, ["--version"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
@@ -134,38 +143,49 @@ export async function runClaudeSubject(options: {
         `The invalid subject trace was preserved as ${invalidTracePath}: ${errorMessage(error)}`,
       );
     }
-    const controllerTrace = createClaudeControllerTrace({
-      identity: {
-        runId: manifest.runId,
-        ...(typeof manifest.configuration?.["sourceRunId"] === "string"
-          ? { sourceRunId: manifest.configuration["sourceRunId"] }
-          : {}),
-        variant: manifest.variant,
-        runner: manifest.runner,
-        model: {
-          provider: manifest.model.provider,
-          modelId: manifest.model.modelId,
-          parameters: JSON.parse(JSON.stringify(manifest.model.parameters)) as TraceBody["model"]["parameters"],
-        },
+  }
+  const subjectSucceeded =
+    execution.exitCode === 0 && !execution.timedOut && modelMatched && subjectFinalizedTrace;
+  const captureTrace = createClaudeCaptureTrace({
+    identity: {
+      runId: manifest.runId,
+      ...(typeof manifest.configuration?.["sourceRunId"] === "string"
+        ? { sourceRunId: manifest.configuration["sourceRunId"] }
+        : {}),
+      variant: manifest.variant,
+      runner: manifest.runner,
+      model: {
+        provider: manifest.model.provider,
+        modelId: manifest.model.modelId,
+        parameters: JSON.parse(JSON.stringify(manifest.model.parameters)) as TraceBody["model"]["parameters"],
       },
-      startedAt,
-      finishedAt,
-      status: execution.timedOut ? "timed_out" : "failed",
-      exitCode: execution.exitCode,
-      eventCount: parsedEvents.eventCount,
-      usageCaptured: parsedEvents.usage.capture === "provider-reported",
-      limitations,
-    });
-    const traceBytes = Buffer.from(`${JSON.stringify(controllerTrace, null, 2)}\n`, "utf8");
-    await writeFile(tracePath, traceBytes, { flag: "wx" });
+    },
+    startedAt,
+    finishedAt,
+    status: subjectSucceeded ? "succeeded" : execution.timedOut ? "timed_out" : "failed",
+    exitCode: execution.exitCode,
+    events: parsedEvents.sanitizedEvents,
+    providerLineNumbers: parsedEvents.providerLineNumbers,
+    lineTimings: execution.lineTimings,
+    usage: parsedEvents.usage,
+    limitations,
+  });
+  const captureTraceBytes = Buffer.from(`${JSON.stringify(captureTrace, null, 2)}\n`, "utf8");
+  await writeFile(captureTracePath, captureTraceBytes, { flag: "wx" });
+  const captureTraceReference = {
+    traceId: captureTrace.traceId,
+    path: "capture-trace.json",
+    digest: digest(captureTraceBytes),
+    byteLength: captureTraceBytes.byteLength,
+  };
+  if (!subjectFinalizedTrace) {
+    await writeFile(tracePath, captureTraceBytes, { flag: "wx" });
     trace = {
-      traceId: controllerTrace.traceId,
+      ...captureTraceReference,
       path: "trace.json",
-      digest: digest(traceBytes),
-      byteLength: traceBytes.byteLength,
     };
     limitations.push(
-      "The subject did not finalize a trace; the Claude adapter wrote a canonical controller trace for the failed run without reconstructing canonical events.",
+      "The subject did not finalize a trace; trace.json contains the canonical runner-observed capture trace and the run remains failed.",
     );
   }
   const run = createSubjectRun({
@@ -180,7 +200,7 @@ export async function runClaudeSubject(options: {
     reasoningEffort: "high",
     startedAt,
     finishedAt,
-    status: execution.exitCode === 0 && !execution.timedOut && modelMatched && subjectFinalizedTrace ? "succeeded" : "failed",
+    status: subjectSucceeded ? "succeeded" : "failed",
     exitCode: execution.exitCode,
     usage: parsedEvents.usage,
     events: {
@@ -201,6 +221,7 @@ export async function runClaudeSubject(options: {
       byteLength: finalMessage.byteLength,
     },
     ...(trace === undefined ? {} : { trace }),
+    captureTrace: captureTraceReference,
     limitations,
   });
   await writeFile(runPath, `${JSON.stringify(run, null, 2)}\n`, "utf8");
@@ -214,16 +235,29 @@ export function claudeModelSelector(model: string): string {
   return model.slice("anthropic/".length);
 }
 
-export function createClaudeControllerTrace(options: {
+export function createClaudeCaptureTrace(options: {
   identity: Pick<TraceBody, "runId" | "sourceRunId" | "variant" | "runner" | "model">;
   startedAt: string;
   finishedAt: string;
-  status: "failed" | "timed_out";
+  status: "succeeded" | "failed" | "timed_out";
   exitCode: number;
-  eventCount: number;
-  usageCaptured: boolean;
+  events: readonly Record<string, unknown>[];
+  providerLineNumbers: readonly number[];
+  lineTimings: readonly ClaudeLineTiming[];
+  usage: ClaudeUsage;
   limitations: readonly string[];
 }): Trace {
+  const timingByLine = new Map(options.lineTimings.map((timing) => [timing.providerLine, timing]));
+  const events = createRunnerObservedTraceEvents(
+    options.events,
+    options.providerLineNumbers,
+    timingByLine,
+    options.finishedAt,
+    options.exitCode,
+    options.status,
+    options.usage,
+  );
+  const timingCoverage = options.providerLineNumbers.filter((line) => timingByLine.has(line)).length;
   return createTrace({
     schemaVersion: 1,
     ...options.identity,
@@ -231,33 +265,194 @@ export function createClaudeControllerTrace(options: {
     finishedAt: options.finishedAt,
     status: options.status,
     capture: {
-      messages: "unavailable",
-      toolCalls: "unavailable",
-      toolResults: "unavailable",
-      timing: "run-only",
-      usage: options.usageCaptured ? "provider-summary" : "unavailable",
+      messages: "digests",
+      toolCalls: "names-only",
+      toolResults: "digests",
+      timing: "event",
+      usage: options.usage.capture === "provider-reported" ? "provider-summary" : "unavailable",
       artifacts: "unavailable",
       reasoning: "not-collected",
     },
-    events: [{
-      sequence: 0,
-      timestamp: options.finishedAt,
-      kind: "status",
-      actor: "runner",
-      name: options.status === "timed_out" ? "subject-timed-out" : "subject-failed",
-      data: {
-        exitCode: options.exitCode,
-        capturedProviderEventCount: options.eventCount,
-        providerEventsPath: "subject-events.jsonl",
-      },
-    }],
+    events,
     limitations: [
-      "The controller generated this terminal trace because the subject did not finalize a valid trace.",
-      "Canonical message, tool-call, and tool-result events were not reconstructed from the retained provider event sidecar.",
+      "Event timestamps record when the runner observed each complete Claude JSONL line, not when the provider began or completed internal work.",
+      "Events delivered in one stdout chunk can share an observation timestamp.",
+      "Tool duration is elapsed monotonic runner time between observed tool-call and matching tool-result events.",
+      `Runner timing covered ${String(timingCoverage)} of ${String(options.providerLineNumbers.length)} retained provider events.`,
       ...options.limitations,
     ],
     redactions: [],
   });
+}
+
+function createRunnerObservedTraceEvents(
+  providerEvents: readonly Record<string, unknown>[],
+  providerLineNumbers: readonly number[],
+  timingByLine: ReadonlyMap<number, ClaudeLineTiming>,
+  finishedAt: string,
+  exitCode: number,
+  status: "succeeded" | "failed" | "timed_out",
+  usage: ClaudeUsage,
+): TraceBody["events"] {
+  const traceEvents: TraceBody["events"] = [];
+  const toolCalls = new Map<string, { name: string; elapsedMs?: number }>();
+  const append = (
+    timestamp: string,
+    kind: TraceBody["events"][number]["kind"],
+    actor: TraceBody["events"][number]["actor"],
+    name: string,
+    data: TraceBody["events"][number]["data"],
+  ): void => {
+    traceEvents.push({
+      sequence: traceEvents.length,
+      timestamp,
+      kind,
+      actor,
+      name,
+      data,
+    });
+  };
+
+  for (const [eventIndex, providerEvent] of providerEvents.entries()) {
+    const providerLine = providerLineNumbers[eventIndex] ?? eventIndex + 1;
+    const timing = timingByLine.get(providerLine);
+    const timestamp = timing?.observedAt ?? finishedAt;
+    const timingData = {
+      providerEventSequence: eventIndex,
+      providerLine,
+      ...(timing === undefined ? {} : { observedElapsedMs: timing.elapsedMs }),
+    };
+    const eventType = typeof providerEvent["type"] === "string" ? providerEvent["type"] : "unknown";
+
+    if (eventType === "system") {
+      append(timestamp, "status", "system", safeEventName(providerEvent["subtype"], "provider-system"), {
+        ...timingData,
+        ...(typeof providerEvent["model"] === "string" ? { model: providerEvent["model"] } : {}),
+      });
+      continue;
+    }
+
+    if (eventType === "assistant" && isRecord(providerEvent["message"])) {
+      const content = providerEvent["message"]["content"];
+      if (!Array.isArray(content)) continue;
+      for (const block of content) {
+        if (!isRecord(block)) continue;
+        if (block["type"] === "text" && typeof block["text"] === "string") {
+          append(timestamp, "message", "assistant", "assistant-message", {
+            ...timingData,
+            ...contentEvidence(block["text"]),
+          });
+        }
+        if (block["type"] === "tool_use") {
+          const toolUseId = typeof block["id"] === "string" ? block["id"] : `unknown-${String(eventIndex)}`;
+          const name = safeEventName(block["name"], "unknown-tool");
+          toolCalls.set(toolUseId, {
+            name,
+            ...(timing === undefined ? {} : { elapsedMs: timing.elapsedMs }),
+          });
+          append(timestamp, "tool-call", "assistant", name, {
+            ...timingData,
+            toolUseId,
+          });
+        }
+      }
+      continue;
+    }
+
+    if (eventType === "user" && isRecord(providerEvent["message"])) {
+      const content = providerEvent["message"]["content"];
+      if (!Array.isArray(content)) continue;
+      for (const block of content) {
+        if (!isRecord(block)) continue;
+        if (block["type"] === "tool_result") {
+          const toolUseId = typeof block["tool_use_id"] === "string"
+            ? block["tool_use_id"]
+            : `unknown-${String(eventIndex)}`;
+          const call = toolCalls.get(toolUseId);
+          const durationMs = timing?.elapsedMs !== undefined && call?.elapsedMs !== undefined
+            ? Math.max(0, timing.elapsedMs - call.elapsedMs)
+            : undefined;
+          append(timestamp, "tool-result", "tool", call?.name ?? "unknown-tool", {
+            ...timingData,
+            toolUseId,
+            isError: block["is_error"] === true,
+            ...(durationMs === undefined ? {} : { durationMs }),
+            ...contentEvidence(block["content"]),
+          });
+        }
+        if (block["type"] === "text" && typeof block["text"] === "string") {
+          append(timestamp, "message", "user", "user-message", {
+            ...timingData,
+            ...contentEvidence(block["text"]),
+          });
+        }
+      }
+      continue;
+    }
+
+    if (eventType === "result") {
+      append(timestamp, "status", "runner", "provider-result", {
+        ...timingData,
+        ...(typeof providerEvent["subtype"] === "string" ? { subtype: providerEvent["subtype"] } : {}),
+        ...(nonnegativeNumber(providerEvent["duration_ms"]) === undefined
+          ? {}
+          : { providerDurationMs: nonnegativeNumber(providerEvent["duration_ms"])! }),
+        ...(nonnegativeNumber(providerEvent["duration_api_ms"]) === undefined
+          ? {}
+          : { providerApiDurationMs: nonnegativeNumber(providerEvent["duration_api_ms"])! }),
+        ...(integer(providerEvent["num_turns"]) === undefined
+          ? {}
+          : { providerTurns: integer(providerEvent["num_turns"])! }),
+      });
+      continue;
+    }
+
+    append(timestamp, "status", "runner", "provider-event", {
+      ...timingData,
+      providerEventType: eventType,
+    });
+  }
+
+  if (usage.capture === "provider-reported") {
+    append(finishedAt, "usage", "runner", "provider-usage", {
+      inputTokens: usage.inputTokens,
+      cachedInputTokens: usage.cachedInputTokens,
+      cacheCreationInputTokens: usage.cacheCreationInputTokens,
+      outputTokens: usage.outputTokens,
+      totalTokens: usage.totalTokens,
+      ...(usage.costUsd === undefined ? {} : { costUsd: usage.costUsd }),
+    });
+  }
+  append(
+    finishedAt,
+    "status",
+    "runner",
+    status === "succeeded" ? "subject-succeeded" : status === "timed_out" ? "subject-timed-out" : "subject-failed",
+    {
+      exitCode,
+      capturedProviderEventCount: providerEvents.length,
+      providerEventsPath: "subject-events.jsonl",
+    },
+  );
+  return traceEvents;
+}
+
+function contentEvidence(content: unknown): {
+  contentDigest: `sha256:${string}`;
+  byteLength: number;
+} {
+  const serialized = typeof content === "string" ? content : JSON.stringify(content ?? null);
+  const bytes = Buffer.from(serialized, "utf8");
+  return {
+    contentDigest: digest(bytes),
+    byteLength: bytes.byteLength,
+  };
+}
+
+function safeEventName(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim().slice(0, 256)
+    : fallback;
 }
 
 export function parseClaudeCodeEvents(jsonl: string): {
@@ -265,16 +460,10 @@ export function parseClaudeCodeEvents(jsonl: string): {
   sessionId?: string;
   model?: string;
   finalMessage: string;
-  usage: {
-    capture: "provider-reported" | "unavailable";
-    inputTokens?: number;
-    cachedInputTokens?: number;
-    cacheCreationInputTokens?: number;
-    outputTokens?: number;
-    totalTokens?: number;
-    costUsd?: number;
-  };
+  usage: ClaudeUsage;
   sanitizedJsonl: string;
+  sanitizedEvents: Record<string, unknown>[];
+  providerLineNumbers: number[];
   limitations: string[];
 } {
   let eventCount = 0;
@@ -286,6 +475,8 @@ export function parseClaudeCodeEvents(jsonl: string): {
   let reasoningRedactions = 0;
   const limitations: string[] = [];
   const sanitizedLines: string[] = [];
+  const sanitizedEvents: Record<string, unknown>[] = [];
+  const providerLineNumbers: number[] = [];
 
   for (const [index, line] of jsonl.split(/\r?\n/).entries()) {
     if (line.trim().length === 0) continue;
@@ -299,8 +490,10 @@ export function parseClaudeCodeEvents(jsonl: string): {
     eventCount += 1;
     const sanitized = redactReasoning(event, () => {
       reasoningRedactions += 1;
-    });
+    }) as Record<string, unknown>;
     sanitizedLines.push(JSON.stringify(sanitized));
+    sanitizedEvents.push(sanitized);
+    providerLineNumbers.push(index + 1);
 
     if (event["type"] === "system" && event["subtype"] === "init") {
       if (typeof event["session_id"] === "string") sessionId = event["session_id"];
@@ -329,6 +522,8 @@ export function parseClaudeCodeEvents(jsonl: string): {
     finalMessage,
     usage,
     sanitizedJsonl: sanitizedLines.length === 0 ? "" : `${sanitizedLines.join("\n")}\n`,
+    sanitizedEvents,
+    providerLineNumbers,
     limitations,
   };
 }
@@ -385,14 +580,20 @@ export async function spawnClaudeProcessCaptured(
   stderr: Buffer;
   exitCode: number;
   timedOut: boolean;
+  lineTimings: ClaudeLineTiming[];
 }> {
   return new Promise((resolvePromise, reject) => {
+    const startedMonotonic = performance.now();
     const child = spawn(executable, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
     let totalBytes = 0;
     let settled = false;
     let timedOut = false;
+    const lineTimings: ClaudeLineTiming[] = [];
+    const decoder = new StringDecoder("utf8");
+    let pendingStdout = "";
+    let providerLine = 0;
     let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
     const durationTimer = setTimeout(() => {
       timedOut = true;
@@ -415,7 +616,35 @@ export async function spawnClaudeProcessCaptured(
       }
       chunks.push(Buffer.from(chunk));
     };
-    child.stdout.on("data", capture(stdout));
+    const observeCompleteLines = (text: string, final: boolean): void => {
+      pendingStdout += text;
+      const completeLines: string[] = [];
+      let newlineIndex = pendingStdout.indexOf("\n");
+      while (newlineIndex >= 0) {
+        completeLines.push(pendingStdout.slice(0, newlineIndex).replace(/\r$/, ""));
+        pendingStdout = pendingStdout.slice(newlineIndex + 1);
+        newlineIndex = pendingStdout.indexOf("\n");
+      }
+      if (final && pendingStdout.length > 0) {
+        completeLines.push(pendingStdout.replace(/\r$/, ""));
+        pendingStdout = "";
+      }
+      const observedAt = new Date().toISOString();
+      const elapsedMs = Math.max(0, Math.round(performance.now() - startedMonotonic));
+      for (const line of completeLines) {
+        providerLine += 1;
+        if (line.trim().length === 0) continue;
+        lineTimings.push({
+          providerLine,
+          observedAt,
+          elapsedMs,
+        });
+      }
+    };
+    child.stdout.on("data", (chunk: Buffer) => {
+      capture(stdout)(chunk);
+      observeCompleteLines(decoder.write(chunk), false);
+    });
     child.stderr.on("data", capture(stderr));
     child.on("error", rejectOnce);
     child.on("close", (code) => {
@@ -423,11 +652,13 @@ export async function spawnClaudeProcessCaptured(
       settled = true;
       clearTimeout(durationTimer);
       if (forceKillTimer !== undefined) clearTimeout(forceKillTimer);
+      observeCompleteLines(decoder.end(), true);
       resolvePromise({
         stdout: Buffer.concat(stdout),
         stderr: Buffer.concat(stderr),
         exitCode: code ?? -1,
         timedOut,
+        lineTimings,
       });
     });
   });

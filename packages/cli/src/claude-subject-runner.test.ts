@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   claudeModelSelector,
-  createClaudeControllerTrace,
+  createClaudeCaptureTrace,
   parseClaudeCodeEvents,
   spawnClaudeProcessCaptured,
 } from "./claude-subject-runner.js";
@@ -67,6 +67,7 @@ describe("captured Claude Code subject events", () => {
     expect(parsed.sanitizedJsonl).toContain("reasoning-redacted");
     expect(parsed.sanitizedJsonl).not.toContain("private analysis");
     expect(parsed.sanitizedJsonl).not.toContain("secret");
+    expect(parsed.providerLineNumbers).toEqual([1, 2, 3]);
     expect(parsed.limitations).toEqual([
       "Removed 1 non-observable reasoning block(s) from captured Claude Code events.",
     ]);
@@ -98,8 +99,31 @@ describe("captured Claude Code process limits", () => {
     expect(result.exitCode).not.toBe(0);
   });
 
-  it("creates a canonical timed-out controller trace without claiming reconstructed events", () => {
-    const trace = createClaudeControllerTrace({
+  it("timestamps complete provider lines as the runner observes them", async () => {
+    const result = await spawnClaudeProcessCaptured(
+      process.execPath,
+      [
+        "-e",
+        [
+          "process.stdout.write(JSON.stringify({type:'system'}) + '\\n');",
+          "setTimeout(() => process.stdout.write(JSON.stringify({type:'result'}) + '\\n'), 25);",
+        ].join(""),
+      ],
+      process.cwd(),
+      1_000,
+    );
+
+    expect(result.timedOut).toBe(false);
+    expect(result.exitCode).toBe(0);
+    expect(result.lineTimings).toHaveLength(2);
+    expect(result.lineTimings[0]?.providerLine).toBe(1);
+    expect(result.lineTimings[1]?.providerLine).toBe(2);
+    expect(result.lineTimings[1]?.elapsedMs).toBeGreaterThanOrEqual(result.lineTimings[0]?.elapsedMs ?? 0);
+    expect(Date.parse(result.lineTimings[0]?.observedAt ?? "")).not.toBeNaN();
+  });
+
+  it("creates a canonical capture trace with runner-observed tool duration", () => {
+    const trace = createClaudeCaptureTrace({
       identity: {
         runId: `run_${"a".repeat(64)}`,
         sourceRunId: `run_${"b".repeat(64)}`,
@@ -111,24 +135,58 @@ describe("captured Claude Code process limits", () => {
       finishedAt: "2026-07-24T12:30:00.000Z",
       status: "timed_out",
       exitCode: -1,
-      eventCount: 42,
-      usageCaptured: false,
+      events: [
+        { type: "system", subtype: "init", model: "claude-sonnet-5" },
+        {
+          type: "assistant",
+          message: {
+            content: [{ type: "tool_use", id: "tool-1", name: "Bash", input: { command: "npm test" } }],
+          },
+        },
+        {
+          type: "user",
+          message: {
+            content: [{ type: "tool_result", tool_use_id: "tool-1", content: "all tests passed" }],
+          },
+        },
+      ],
+      providerLineNumbers: [1, 2, 3],
+      lineTimings: [
+        { providerLine: 1, observedAt: "2026-07-24T12:00:00.100Z", elapsedMs: 100 },
+        { providerLine: 2, observedAt: "2026-07-24T12:00:01.000Z", elapsedMs: 1_000 },
+        { providerLine: 3, observedAt: "2026-07-24T12:00:03.500Z", elapsedMs: 3_500 },
+      ],
+      usage: { capture: "unavailable" },
       limitations: ["Provider usage was unavailable."],
     });
 
     expect(trace.status).toBe("timed_out");
-    expect(trace.capture.messages).toBe("unavailable");
+    expect(trace.capture.messages).toBe("digests");
+    expect(trace.capture.toolCalls).toBe("names-only");
+    expect(trace.capture.toolResults).toBe("digests");
+    expect(trace.capture.timing).toBe("event");
     expect(trace.capture.usage).toBe("unavailable");
-    expect(trace.events).toHaveLength(1);
-    expect(trace.events[0]?.kind).toBe("status");
-    expect(trace.events[0]?.name).toBe("subject-timed-out");
-    expect(trace.events[0]?.data).toEqual({
+    expect(trace.events).toHaveLength(4);
+    expect(trace.events[1]).toMatchObject({
+      timestamp: "2026-07-24T12:00:01.000Z",
+      kind: "tool-call",
+      name: "Bash",
+      data: { toolUseId: "tool-1", observedElapsedMs: 1_000 },
+    });
+    expect(trace.events[2]).toMatchObject({
+      timestamp: "2026-07-24T12:00:03.500Z",
+      kind: "tool-result",
+      name: "Bash",
+      data: { toolUseId: "tool-1", observedElapsedMs: 3_500, durationMs: 2_500 },
+    });
+    expect(trace.events[3]?.name).toBe("subject-timed-out");
+    expect(trace.events[3]?.data).toEqual({
       exitCode: -1,
-      capturedProviderEventCount: 42,
+      capturedProviderEventCount: 3,
       providerEventsPath: "subject-events.jsonl",
     });
     expect(trace.limitations).toContain(
-      "Canonical message, tool-call, and tool-result events were not reconstructed from the retained provider event sidecar.",
+      "Event timestamps record when the runner observed each complete Claude JSONL line, not when the provider began or completed internal work.",
     );
   });
 });

@@ -142,9 +142,10 @@ time for required run evidence. The recovery attempt performed roughly twice
 as many observable tool calls as the successful control. This supports adding
 an explicit remaining-time and evidence-reservation rule to the skill.
 
-The provider streams do not contain exact per-event timestamps, so they cannot
-establish how much of the interval was model latency versus individual local
-commands. Only the outer run intervals are exact.
+The provider streams retained for these historical runs do not contain
+per-event timestamps, and the runner did not yet record event arrival time.
+They therefore cannot establish how much of the interval was model latency
+versus individual local commands. Only the outer run intervals are exact.
 
 ## Decision and obligation observations
 
@@ -194,8 +195,10 @@ directional evidence, not an estimate of average treatment effect.
 
 After this experiment, the planner default increased from 15 to 30 minutes.
 Individual experiments may still select a smaller or larger immutable ceiling
-with `--max-duration`. The Claude adapter also now emits a canonical
-controller-owned `failed` or `timed_out` trace when a subject terminates before
-finalizing its own trace. The detailed sanitized provider event stream remains
-the underlying observable record; the controller trace points to it and does
-not reconstruct events or imply successful delivery.
+with `--max-duration`. The Claude adapter now emits a separate canonical
+capture trace with runner-observed event timestamps, monotonic elapsed offsets,
+and derived durations between matched tool calls and results. If a subject
+terminates before finalizing its own trace, the capture trace also supplies the
+`failed` or `timed_out` canonical trace without implying successful delivery.
+These arrival times are available only for new runs; they cannot be recovered
+retroactively from this experiment's provider event files.

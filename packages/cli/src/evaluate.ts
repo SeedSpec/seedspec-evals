@@ -168,6 +168,7 @@ async function inventoryRunEvidence(runDirectory: string, workspace: string, man
     "source-envelope.json": "source",
     "report.md": "log",
     "trace.json": "tool-trace",
+    "capture-trace.json": "tool-trace",
     "subject-run.json": "tool-trace",
     "decision-ledger.json": "tool-trace",
     "implementation-verification.json": "tool-trace",

@@ -49,6 +49,12 @@ describe("captured subject runs", () => {
         digest: `sha256:${"1".repeat(64)}`,
         byteLength: 500,
       },
+      captureTrace: {
+        path: "capture-trace.json",
+        traceId: `trace_${"2".repeat(64)}`,
+        digest: `sha256:${"3".repeat(64)}`,
+        byteLength: 750,
+      },
       limitations: [],
     });
 
@@ -56,6 +62,7 @@ describe("captured subject runs", () => {
     expect(run.usage.cachedInputTokens).toBe(80);
     expect(run.usage.cacheCreationInputTokens).toBe(10);
     expect(run.usage.costUsd).toBe(0.0123);
+    expect(run.captureTrace?.path).toBe("capture-trace.json");
   });
 
   it("accepts captured Claude Code subject evidence", () => {

@@ -43,6 +43,9 @@ export const SubjectRunBodySchema = z.strictObject({
   trace: CapturedFileSchema.extend({
     traceId: z.string().regex(/^trace_[a-f0-9]{64}$/),
   }).optional(),
+  captureTrace: CapturedFileSchema.extend({
+    traceId: z.string().regex(/^trace_[a-f0-9]{64}$/),
+  }).optional(),
   limitations: z.array(z.string().trim().min(1).max(4_000)).max(64),
 }).superRefine((run, context) => {
   if (Date.parse(run.finishedAt) < Date.parse(run.startedAt)) {

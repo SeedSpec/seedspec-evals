@@ -73,7 +73,17 @@ export const ProfileEvidenceEnvelopeBodySchema = z.strictObject({
     eventCount: z.number().int().nonnegative(),
     turnCount: z.number().int().nonnegative().optional(),
     threadId: z.string().trim().min(1).max(256).optional(),
+    captureTracePath: SafeRelativePathSchema.optional(),
+    captureTraceId: z.string().regex(/^trace_[a-f0-9]{64}$/).optional(),
     limitations: z.array(z.string().trim().min(1).max(8_000)).max(256),
+  }).superRefine((subjectRun, context) => {
+    if ((subjectRun.captureTracePath === undefined) !== (subjectRun.captureTraceId === undefined)) {
+      context.addIssue({
+        code: "custom",
+        message: "captureTracePath and captureTraceId must be supplied together",
+        path: ["captureTracePath"],
+      });
+    }
   }).optional(),
   contractGate: z.strictObject({
     path: SafeRelativePathSchema,

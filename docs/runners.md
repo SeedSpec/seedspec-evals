@@ -74,7 +74,14 @@ It writes the same `subject-events.jsonl`, `subject-stderr.log`,
 Codex adapter. Provider-reported cache creation, cache reads, tokens, exact
 cost, resolved model, and session ID are retained. Thinking blocks are removed
 before the event stream is written and the redaction is declared as a capture
-limitation. The adapter terminates the subject at the immutable manifest
+limitation. The adapter also writes `capture-trace.json` independently of the
+subject-authored trace. Every retained provider event receives the wall-clock
+time and monotonic elapsed time at which the runner observed its complete JSONL
+line. Matched tool-call and tool-result events include the elapsed duration
+between those observations. This makes relative tool-use analysis reliable at
+the harness boundary, but it is not a claim about the provider's internal
+start or completion time; events delivered in one stdout chunk can share a
+timestamp. The adapter terminates the subject at the immutable manifest
 duration limit and records that run as failed.
 
 ## 4. Cloudflare Think
