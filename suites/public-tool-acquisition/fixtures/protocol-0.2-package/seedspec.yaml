@@ -1,0 +1,12 @@
+protocol_version: "0.2"
+id: org.seedspec.evals.cold-acquisition
+name: Cold Acquisition Fixture
+version: "0.2.0"
+kind: application
+definition:
+  entrypoint: definition/application.md
+configuration:
+  schema: configuration/schema.json
+  example: configuration/example.yaml
+provides:
+  capabilities: []
