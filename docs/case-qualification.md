@@ -66,3 +66,30 @@ Greenfield and highly open-ended implementations may not share a transplantable
 test layout. For those cases, use preserved counterfactual artifacts and blinded
 technical review rather than pretending that a syntactically failing overlay is
 meaningful.
+
+## Promote a stable semantic discovery
+
+When the same qualified behavior should become a cheap regression check, bind
+it to an executable deterministic-probe draft. Promotion requires selected
+semantic source probes for both:
+
+- a known-bad candidate whose command must fail; and
+- a valid-alternative candidate whose command must pass.
+
+```sh
+seedspec-eval cases probe-promote \
+  cases/<case>/qualification/deterministic-probe-draft.yaml \
+  --qualification cases/<case>/qualification/qualification.json
+
+seedspec-eval cases probe-run \
+  cases/<case>/qualification/deterministic-probe.json \
+  --qualification cases/<case>/qualification/qualification.json \
+  --confirm-code-execution
+```
+
+Promotion rechecks the qualification, case digest, source-probe outcomes,
+candidate classifications, and artifact tree digests. Execution uses a bounded
+runtime allowlist and disposable copies. The result is content-addressed and is
+`passed` only when every positive and negative control matches. Keep a discovery
+semantic when its behavior cannot be reduced to a stable observable boundary;
+do not replace flexible judgment with a brittle source-pattern warning.

@@ -333,7 +333,7 @@ async function implementationVerificationAdapters(
           && passed === accessibility.keyboardTasks.length;
         return {
           outcome: outcome ? "pass" as const : "fail" as const,
-          message: `${String(passed)}/${String(accessibility.keyboardTasks.length)} keyboard tasks have executed, linked evidence at viewport width ${String(accessibility.viewportWidth)}${viewportWidth === undefined ? "" : `; required width ${String(viewportWidth)}`}.`,
+          message: `${String(passed)}/${String(accessibility.keyboardTasks.length)} declared keyboard tasks have executed, linked evidence; minimum passing tasks ${String(minimumTasks)}; viewport width ${String(accessibility.viewportWidth)}${viewportWidth === undefined ? "" : `; required width ${String(viewportWidth)}`}.`,
           evidence,
         };
       },

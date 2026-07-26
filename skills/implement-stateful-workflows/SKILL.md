@@ -28,6 +28,17 @@ Represent each material state change through one authoritative application bound
 - persist the resulting state;
 - return a result that callers can handle explicitly.
 
+Evaluate every guard to a concrete result before branching or mutating. In
+particular, await asynchronous authorization, policy, and invariant checks; an
+unresolved promise is truthy and is not evidence that a transition is allowed.
+Treat every `await` as a possible state-change boundary: do not carry mutable
+entities or pre-await authorization facts across it unless a shared
+transaction, lock, or version check guarantees freshness. After a guard
+resolves, re-read and revalidate the actor, current state, and invariants inside
+the same atomic conflict boundary as the mutation. Match that boundary to all
+state read or replaced; per-entity locks do not protect shared whole-state
+snapshots or membership changes.
+
 Keep presentation code and transport adapters from duplicating transition rules. Prefer small, replaceable boundaries around storage, authentication, messaging, and external systems so the realization can be adapted without rewriting its behavioral core.
 
 ## Implement meaningful production paths

@@ -1,0 +1,1389 @@
+cases:
+  - id: executable-reservation-transition
+    kind: protocol
+    description: Implement an authoritative, atomic reservation transition as a small executable module.
+    prompt: >-
+      Complete the reservation service module. Both an HTTP adapter and a retry
+      worker will call this one service. At most one active reservation may
+      exist per item. Repeating the same request ID must return the original
+      reservation. A different request for an actively reserved item must fail
+      without mutating the winner. A new request may succeed at or after the
+      previous reservation's expiry. Unauthorized actors must be rejected
+      without creating a row. The supplied repository transaction serializes
+      decisions for one item across processes; process-local state is not an
+      authority. Do not add future product policy or external dependencies.
+    actions: []
+    artifact:
+      path: reservation-service.mjs
+      format: text
+      instructions: >-
+        Preserve the exported names and method signature. reserve receives
+        { itemId, requestId, actorId, nowMs, ttlMs }. Perform authorization,
+        idempotency lookup, active-reservation detection, and insertion inside
+        repository.transactItem(itemId, callback). The transaction object
+        exposes async canReserve(actorId, itemId), findByRequestId(requestId),
+        findActive(itemId, nowMs), and insert(draft). Insert a draft containing
+        itemId, requestId, actorId, createdAt: nowMs, and expiresAt:
+        nowMs + ttlMs. Throw the supplied typed errors for forbidden and
+        conflicting requests.
+      template: |
+        export class ReservationConflictError extends Error {
+          constructor() {
+            super("item already has an active reservation");
+            this.name = "ReservationConflictError";
+            this.code = "reservation-conflict";
+          }
+        }
+
+        export class ReservationUnauthorizedError extends Error {
+          constructor() {
+            super("actor cannot reserve this item");
+            this.name = "ReservationUnauthorizedError";
+            this.code = "reservation-unauthorized";
+          }
+        }
+
+        export function createReservationService(repository) {
+          return {
+            async reserve({ itemId, requestId, actorId, nowMs, ttlMs }) {
+              throw new Error("replace this placeholder with the authoritative transition");
+            },
+          };
+        }
+      assertions: []
+      probe:
+        timeoutMs: 10000
+        assertions:
+          - id: allowed-transition-persists
+            description: An authorized request creates and returns one persisted reservation.
+            weight: 2
+          - id: same-request-is-idempotent
+            description: Repeating one request ID returns the original row without duplication.
+            weight: 2
+          - id: competing-request-conflicts
+            description: Concurrent different requests produce one winner and one typed conflict.
+            weight: 3
+          - id: conflict-preserves-winner
+            description: A rejected collision does not mutate or replace the winning row.
+            weight: 2
+          - id: expired-reservation-replaced
+            description: A different request can reserve the item at or after expiry.
+            weight: 2
+          - id: unauthorized-request-rejected
+            description: An unauthorized actor receives the typed error and no row is created.
+            weight: 2
+        source: |
+          import {
+            ReservationConflictError,
+            ReservationUnauthorizedError,
+            createReservationService,
+          } from "./reservation-service.mjs";
+
+          const assertions = [];
+
+          async function check(id, operation) {
+            try {
+              const result = await operation();
+              assertions.push({ id, passed: result.passed, observed: result.observed });
+            } catch (error) {
+              assertions.push({
+                id,
+                passed: false,
+                observed: error instanceof Error
+                  ? `${error.name}: ${error.message}`
+                  : String(error),
+              });
+            }
+          }
+
+          class FakeRepository {
+            constructor(authorizedActors = ["alice"]) {
+              this.authorizedActors = new Set(authorizedActors);
+              this.rows = [];
+              this.locks = new Map();
+              this.nextId = 1;
+            }
+
+            async transactItem(itemId, operation) {
+              const previous = this.locks.get(itemId) ?? Promise.resolve();
+              let release;
+              const gate = new Promise((resolve) => { release = resolve; });
+              const current = previous.then(() => gate);
+              this.locks.set(itemId, current);
+              await previous;
+              const tx = {
+                canReserve: async (actorId) => this.authorizedActors.has(actorId),
+                findByRequestId: async (requestId) =>
+                  this.rows.find((row) => row.requestId === requestId),
+                findActive: async (candidateItemId, nowMs) =>
+                  this.rows.find((row) =>
+                    row.itemId === candidateItemId && row.expiresAt > nowMs),
+                insert: async (draft) => {
+                  await Promise.resolve();
+                  const row = { id: `reservation-${this.nextId++}`, ...draft };
+                  this.rows.push(row);
+                  return row;
+                },
+              };
+              try {
+                return await operation(tx);
+              } finally {
+                release();
+                if (this.locks.get(itemId) === current) this.locks.delete(itemId);
+              }
+            }
+          }
+
+          await check("allowed-transition-persists", async () => {
+            const repository = new FakeRepository();
+            const service = createReservationService(repository);
+            const result = await service.reserve({
+              itemId: "item-1",
+              requestId: "request-1",
+              actorId: "alice",
+              nowMs: 100,
+              ttlMs: 50,
+            });
+            return {
+              passed: repository.rows.length === 1
+                && result.id === repository.rows[0]?.id
+                && result.expiresAt === 150,
+              observed: JSON.stringify({ rows: repository.rows, result }),
+            };
+          });
+
+          await check("same-request-is-idempotent", async () => {
+            const repository = new FakeRepository();
+            const service = createReservationService(repository);
+            const input = {
+              itemId: "item-1",
+              requestId: "request-1",
+              actorId: "alice",
+              nowMs: 100,
+              ttlMs: 50,
+            };
+            const first = await service.reserve(input);
+            const second = await service.reserve({ ...input, nowMs: 110 });
+            return {
+              passed: repository.rows.length === 1 && first.id === second.id,
+              observed: JSON.stringify({ rows: repository.rows, first, second }),
+            };
+          });
+
+          let collisionSnapshot;
+          await check("competing-request-conflicts", async () => {
+            const repository = new FakeRepository();
+            const service = createReservationService(repository);
+            const settled = await Promise.allSettled([
+              service.reserve({
+                itemId: "item-1",
+                requestId: "request-a",
+                actorId: "alice",
+                nowMs: 100,
+                ttlMs: 50,
+              }),
+              service.reserve({
+                itemId: "item-1",
+                requestId: "request-b",
+                actorId: "alice",
+                nowMs: 100,
+                ttlMs: 50,
+              }),
+            ]);
+            const fulfilled = settled.filter(({ status }) => status === "fulfilled");
+            const rejected = settled.filter(({ status }) => status === "rejected");
+            const reason = rejected[0]?.reason;
+            collisionSnapshot = { repository, settled };
+            return {
+              passed: fulfilled.length === 1
+                && rejected.length === 1
+                && reason instanceof ReservationConflictError
+                && reason.code === "reservation-conflict",
+              observed: JSON.stringify({
+                rows: repository.rows,
+                statuses: settled.map(({ status }) => status),
+                rejectedCode: reason?.code,
+              }),
+            };
+          });
+
+          await check("conflict-preserves-winner", async () => {
+            const rows = collisionSnapshot?.repository.rows ?? [];
+            const settled = collisionSnapshot?.settled ?? [];
+            const winner = settled.find(({ status }) => status === "fulfilled")?.value;
+            return {
+              passed: rows.length === 1
+                && winner !== undefined
+                && rows[0]?.id === winner.id
+                && ["request-a", "request-b"].includes(rows[0]?.requestId),
+              observed: JSON.stringify({ rows, winner }),
+            };
+          });
+
+          await check("expired-reservation-replaced", async () => {
+            const repository = new FakeRepository();
+            const service = createReservationService(repository);
+            const first = await service.reserve({
+              itemId: "item-1",
+              requestId: "request-1",
+              actorId: "alice",
+              nowMs: 100,
+              ttlMs: 10,
+            });
+            const second = await service.reserve({
+              itemId: "item-1",
+              requestId: "request-2",
+              actorId: "alice",
+              nowMs: 110,
+              ttlMs: 10,
+            });
+            return {
+              passed: repository.rows.length === 2 && first.id !== second.id,
+              observed: JSON.stringify({ rows: repository.rows, first, second }),
+            };
+          });
+
+          await check("unauthorized-request-rejected", async () => {
+            const repository = new FakeRepository();
+            const service = createReservationService(repository);
+            let error;
+            try {
+              await service.reserve({
+                itemId: "item-1",
+                requestId: "request-1",
+                actorId: "mallory",
+                nowMs: 100,
+                ttlMs: 50,
+              });
+            } catch (caught) {
+              error = caught;
+            }
+            return {
+              passed: error instanceof ReservationUnauthorizedError
+                && error.code === "reservation-unauthorized"
+                && repository.rows.length === 0,
+              observed: JSON.stringify({
+                rows: repository.rows,
+                errorName: error?.name,
+                errorCode: error?.code,
+              }),
+            };
+          });
+
+          process.stdout.write(JSON.stringify({ assertions }));
+    expectations:
+      noGuidance:
+        consultedSkill: false
+        includeActions: []
+        excludeActions: []
+      skillGuidance:
+        consultedSkill: true
+        includeActions: []
+        excludeActions: []
+
+  - id: executable-async-guard-freshness
+    kind: protocol
+    description: Implement asynchronous authorization without using stale state or losing cross-key updates.
+    prompt: >-
+      Complete the community access service module. Authorization is
+      asynchronous and community membership or listing ownership may change
+      while it is pending. Community reads must reject a member removed while
+      authorization is pending. Listing updates must reject an owner whose
+      listing was transferred while authorization is pending. Concurrent
+      updates to different listings must both persist, and no successful result
+      may be absent from final state. Do not add external dependencies or
+      unrelated product policy.
+    actions: []
+    artifact:
+      path: async-guard-service.mjs
+      format: text
+      instructions: >-
+        Preserve the exported names and method signatures.
+        createCommunityAccessService(repository, authorizer) returns
+        viewCommunity({ actorId }) and updateListing({ actorId, listingId,
+        title }). authorizer.canAccess(actorId) is asynchronous. The repository
+        exposes transactState(callback) plus getMember(actorId),
+        communityView(), readState(), and replaceState(snapshot).
+        transactState serializes whole-state decisions and its callback exposes
+        synchronous getMember(actorId), getListing(listingId),
+        communityView(), and saveListing(draft). A current active member may
+        view the community. A current active listing owner may update its title.
+        Throw the supplied typed error when external authorization, current
+        membership, or current ownership fails. Return the current view or
+        persisted listing result.
+      template: |
+        export class CommunityUnauthorizedError extends Error {
+          constructor() {
+            super("actor is not authorized for the current community state");
+            this.name = "CommunityUnauthorizedError";
+            this.code = "community-unauthorized";
+          }
+        }
+
+        export function createCommunityAccessService(repository, authorizer) {
+          return {
+            async viewCommunity({ actorId }) {
+              throw new Error("replace this placeholder with a fresh post-await authorization boundary");
+            },
+
+            async updateListing({ actorId, listingId, title }) {
+              throw new Error("replace this placeholder with an atomic whole-state transition");
+            },
+          };
+        }
+      assertions: []
+      probe:
+        timeoutMs: 10000
+        assertions:
+          - id: current-member-can-view
+            description: A currently active and externally authorized member receives the community view.
+            weight: 1
+          - id: external-denial-rejected
+            description: A false asynchronous authorization result receives the typed error.
+            weight: 2
+          - id: post-await-removal-rejected
+            description: A member removed while authorization is pending cannot complete the read.
+            weight: 3
+          - id: removed-member-sees-no-private-state
+            description: The rejected stale read returns no current private community data.
+            weight: 3
+          - id: post-await-owner-change-rejected
+            description: A former owner cannot update a listing transferred while authorization is pending.
+            weight: 3
+          - id: owner-change-preserved
+            description: Rejecting the stale owner preserves the new owner and title.
+            weight: 3
+          - id: cross-key-updates-persist
+            description: Concurrent valid updates to two listings both remain durable.
+            weight: 3
+          - id: cross-key-results-match-state
+            description: Every successful cross-key result matches the final authoritative state.
+            weight: 2
+        source: |
+          import {
+            CommunityUnauthorizedError,
+            createCommunityAccessService,
+          } from "./async-guard-service.mjs";
+
+          const assertions = [];
+
+          async function check(id, operation) {
+            try {
+              const result = await operation();
+              assertions.push({ id, passed: result.passed, observed: result.observed });
+            } catch (error) {
+              assertions.push({
+                id,
+                passed: false,
+                observed: error instanceof Error
+                  ? `${error.name}: ${error.message}`
+                  : String(error),
+              });
+            }
+          }
+
+          class ControlledAuthorizer {
+            constructor(defaultDecision = true) {
+              this.defaultDecision = defaultDecision;
+              this.held = new Map();
+            }
+
+            hold(actorId) {
+              let release;
+              let markStarted;
+              const promise = new Promise((resolve) => {
+                release = resolve;
+              });
+              const started = new Promise((resolve) => {
+                markStarted = resolve;
+              });
+              this.held.set(actorId, { promise, release, started, markStarted });
+            }
+
+            async canAccess(actorId) {
+              const held = this.held.get(actorId);
+              if (held === undefined) return this.defaultDecision;
+              held.markStarted();
+              return held.promise;
+            }
+
+            async waitUntilStarted(actorId) {
+              await this.held.get(actorId)?.started;
+            }
+
+            release(actorId, decision) {
+              const held = this.held.get(actorId);
+              if (held === undefined) throw new Error("authorization is not held");
+              held.release(decision);
+              this.held.delete(actorId);
+            }
+          }
+
+          class FakeRepository {
+            constructor() {
+              this.state = {
+                revision: 1,
+                members: {
+                  alice: { id: "alice", active: true },
+                  bob: { id: "bob", active: true },
+                },
+                listings: {
+                  "tool-a": { id: "tool-a", ownerId: "alice", title: "Drill" },
+                  "tool-b": { id: "tool-b", ownerId: "alice", title: "Saw" },
+                },
+              };
+              this.transactionTail = Promise.resolve();
+              this.replaceBarrier = undefined;
+            }
+
+            getMember(actorId) {
+              return this.state.members[actorId];
+            }
+
+            communityView() {
+              return structuredClone({
+                revision: this.state.revision,
+                listings: this.state.listings,
+              });
+            }
+
+            readState() {
+              return structuredClone(this.state);
+            }
+
+            expectConcurrentReplacements(count) {
+              let release;
+              const promise = new Promise((resolve) => {
+                release = resolve;
+              });
+              this.replaceBarrier = { remaining: count, promise, release };
+            }
+
+            async replaceState(snapshot) {
+              const barrier = this.replaceBarrier;
+              if (barrier !== undefined) {
+                barrier.remaining -= 1;
+                if (barrier.remaining === 0) barrier.release();
+                await barrier.promise;
+              }
+              this.state = structuredClone(snapshot);
+            }
+
+            async transactState(operation) {
+              const previous = this.transactionTail;
+              let release;
+              const gate = new Promise((resolve) => {
+                release = resolve;
+              });
+              this.transactionTail = previous.then(() => gate);
+              await previous;
+              const original = structuredClone(this.state);
+              const tx = {
+                getMember: (actorId) =>
+                  structuredClone(this.state.members[actorId]),
+                getListing: (listingId) =>
+                  structuredClone(this.state.listings[listingId]),
+                communityView: () => this.communityView(),
+                saveListing: (draft) => {
+                  this.state.listings[draft.id] = structuredClone(draft);
+                  this.state.revision += 1;
+                  return structuredClone(this.state.listings[draft.id]);
+                },
+                removeMember: (actorId) => {
+                  delete this.state.members[actorId];
+                  this.state.revision += 1;
+                },
+              };
+              try {
+                return await operation(tx);
+              } catch (error) {
+                this.state = structuredClone(original);
+                throw error;
+              } finally {
+                release();
+              }
+            }
+          }
+
+          await check("current-member-can-view", async () => {
+            const repository = new FakeRepository();
+            const service = createCommunityAccessService(
+              repository,
+              new ControlledAuthorizer(true),
+            );
+            const view = await service.viewCommunity({ actorId: "alice" });
+            return {
+              passed: view.listings["tool-a"]?.title === "Drill",
+              observed: JSON.stringify(view),
+            };
+          });
+
+          await check("external-denial-rejected", async () => {
+            const repository = new FakeRepository();
+            const service = createCommunityAccessService(
+              repository,
+              new ControlledAuthorizer(false),
+            );
+            let error;
+            try {
+              await service.viewCommunity({ actorId: "alice" });
+            } catch (caught) {
+              error = caught;
+            }
+            return {
+              passed: error instanceof CommunityUnauthorizedError
+                && error.code === "community-unauthorized",
+              observed: JSON.stringify({
+                errorName: error?.name,
+                errorCode: error?.code,
+              }),
+            };
+          });
+
+          let removalSnapshot;
+          await check("post-await-removal-rejected", async () => {
+            const repository = new FakeRepository();
+            const authorizer = new ControlledAuthorizer(true);
+            authorizer.hold("alice");
+            const service = createCommunityAccessService(repository, authorizer);
+            const pending = service.viewCommunity({ actorId: "alice" });
+            await authorizer.waitUntilStarted("alice");
+            try {
+              await repository.transactState(async (tx) => {
+                await tx.saveListing({
+                  id: "tool-a",
+                  ownerId: "alice",
+                  title: "Rolled back title",
+                });
+                throw new Error("force state-graph replacement");
+              });
+            } catch {
+              // The rollback deliberately replaces the repository's state graph.
+            }
+            await repository.transactState((tx) => tx.removeMember("alice"));
+            authorizer.release("alice", true);
+            let result;
+            let error;
+            try {
+              result = await pending;
+            } catch (caught) {
+              error = caught;
+            }
+            removalSnapshot = { repository, result, error };
+            return {
+              passed: error instanceof CommunityUnauthorizedError
+                && error.code === "community-unauthorized",
+              observed: JSON.stringify({
+                result,
+                errorName: error?.name,
+                errorCode: error?.code,
+                state: repository.state,
+              }),
+            };
+          });
+
+          await check("removed-member-sees-no-private-state", async () => ({
+            passed: removalSnapshot?.result === undefined
+              && removalSnapshot?.repository.state.members.alice === undefined,
+            observed: JSON.stringify({
+              result: removalSnapshot?.result,
+              state: removalSnapshot?.repository.state,
+            }),
+          }));
+
+          let ownershipSnapshot;
+          await check("post-await-owner-change-rejected", async () => {
+            const repository = new FakeRepository();
+            const authorizer = new ControlledAuthorizer(true);
+            authorizer.hold("alice");
+            const service = createCommunityAccessService(repository, authorizer);
+            const pending = service.updateListing({
+              actorId: "alice",
+              listingId: "tool-a",
+              title: "Unauthorized stale edit",
+            });
+            await authorizer.waitUntilStarted("alice");
+            await repository.transactState(async (tx) => {
+              const listing = await tx.getListing("tool-a");
+              await tx.saveListing({
+                ...listing,
+                ownerId: "bob",
+                title: "Transferred safely",
+              });
+            });
+            authorizer.release("alice", true);
+            let result;
+            let error;
+            try {
+              result = await pending;
+            } catch (caught) {
+              error = caught;
+            }
+            ownershipSnapshot = { repository, result, error };
+            return {
+              passed: error instanceof CommunityUnauthorizedError
+                && error.code === "community-unauthorized",
+              observed: JSON.stringify({
+                result,
+                errorName: error?.name,
+                errorCode: error?.code,
+                state: repository.state,
+              }),
+            };
+          });
+
+          await check("owner-change-preserved", async () => {
+            const listing = ownershipSnapshot?.repository.state.listings["tool-a"];
+            return {
+              passed: listing?.ownerId === "bob"
+                && listing?.title === "Transferred safely"
+                && ownershipSnapshot?.result === undefined,
+              observed: JSON.stringify({
+                result: ownershipSnapshot?.result,
+                listing,
+              }),
+            };
+          });
+
+          let crossKeySnapshot;
+          await check("cross-key-updates-persist", async () => {
+            const repository = new FakeRepository();
+            repository.expectConcurrentReplacements(2);
+            const service = createCommunityAccessService(
+              repository,
+              new ControlledAuthorizer(true),
+            );
+            const settled = await Promise.allSettled([
+              service.updateListing({
+                actorId: "alice",
+                listingId: "tool-a",
+                title: "Cordless drill",
+              }),
+              service.updateListing({
+                actorId: "alice",
+                listingId: "tool-b",
+                title: "Hand saw",
+              }),
+            ]);
+            crossKeySnapshot = { repository, settled };
+            return {
+              passed: settled.every(({ status }) => status === "fulfilled")
+                && repository.state.listings["tool-a"]?.title === "Cordless drill"
+                && repository.state.listings["tool-b"]?.title === "Hand saw",
+              observed: JSON.stringify({
+                settled,
+                state: repository.state,
+              }),
+            };
+          });
+
+          await check("cross-key-results-match-state", async () => {
+            const repository = crossKeySnapshot?.repository;
+            const settled = crossKeySnapshot?.settled ?? [];
+            const results = settled.flatMap((result) =>
+              result.status === "fulfilled" ? [result.value] : []);
+            return {
+              passed: results.length === 2
+                && results.every((listing) =>
+                  repository?.state.listings[listing.id]?.title === listing.title),
+              observed: JSON.stringify({
+                results,
+                state: repository?.state,
+              }),
+            };
+          });
+
+          process.stdout.write(JSON.stringify({ assertions }));
+    expectations:
+      noGuidance:
+        consultedSkill: false
+        includeActions: []
+        excludeActions: []
+      skillGuidance:
+        consultedSkill: true
+        includeActions: []
+        excludeActions: []
+
+  - id: executable-state-outbox-recovery
+    kind: fallback
+    description: Implement an atomic state transition plus outbox record that recovers safely from a transient enqueue failure.
+    prompt: >-
+      Complete the shipment-readiness service module. Both an HTTP action and a
+      reconciliation worker call this service after payment. An authorized actor
+      may move a paid order to ready-to-ship and atomically enqueue exactly one
+      shipment-requested outbox record. Repeating the same request ID returns the
+      original result without another event. A different request after the order
+      is ready must receive a typed invalid-transition error. If outbox insertion
+      fails, neither the state change nor an idempotency result may remain; a
+      later retry must succeed exactly once. Use the supplied transaction rather
+      than process-local recovery state, and add no external dependencies.
+    actions: []
+    artifact:
+      path: shipment-readiness-service.mjs
+      format: text
+      instructions: >-
+        Preserve the exported names and method signature. markReady receives
+        { orderId, actorId, requestId, nowMs }. Perform the entire decision
+        inside repository.transactOrder(orderId, callback). The transaction
+        exposes async getOrder(), canMarkReady(actorId, order),
+        findByRequestId(requestId), saveOrder(draft), enqueueOutbox(draft), and
+        recordOperation({ requestId, result }). findByRequestId returns the
+        previously recorded { requestId, result } operation record or
+        undefined; return its result for a repeated request. Authorize before
+        returning an idempotent result. Only status paid may transition. Persist
+        status ready-to-ship, version + 1, and updatedAt; enqueue
+        { dedupeKey: "shipment:" + orderId, type: "shipment-requested",
+        payload: { orderId, version: saved.version }, createdAt: nowMs };
+        Record and return { order: saved, outbox: persistedOutbox }. Let
+        repository errors escape so its transaction can roll back. Throw the
+        supplied typed errors for authorization and invalid state.
+      template: |
+        export class ShipmentUnauthorizedError extends Error {
+          constructor() {
+            super("actor cannot mark this order ready");
+            this.name = "ShipmentUnauthorizedError";
+            this.code = "shipment-unauthorized";
+          }
+        }
+
+        export class ShipmentInvalidTransitionError extends Error {
+          constructor() {
+            super("order cannot transition to ready-to-ship");
+            this.name = "ShipmentInvalidTransitionError";
+            this.code = "shipment-invalid-transition";
+          }
+        }
+
+        export function createShipmentReadinessService(repository) {
+          return {
+            async markReady(input) {
+              throw new Error("replace this placeholder with the atomic state and outbox transition");
+            },
+          };
+        }
+      assertions: []
+      probe:
+        timeoutMs: 10000
+        assertions:
+          - id: ready-transition-and-outbox-persist
+            description: A paid order becomes ready and returns the persisted order and outbox record.
+            weight: 3
+          - id: readiness-request-is-idempotent
+            description: Repeating one request ID returns its original result with one outbox record.
+            weight: 2
+          - id: different-request-after-ready-rejected
+            description: A different request after readiness receives the typed invalid-transition error.
+            weight: 2
+          - id: unauthorized-readiness-rejected
+            description: An unauthorized actor cannot change the order or enqueue an event.
+            weight: 2
+          - id: outbox-failure-rolls-back
+            description: A transient outbox failure rolls back state, event, and idempotency evidence.
+            weight: 3
+          - id: retry-after-outbox-failure-succeeds-once
+            description: Retrying after the rolled-back failure persists one state change and one outbox event.
+            weight: 3
+        source: |
+          import {
+            ShipmentInvalidTransitionError,
+            ShipmentUnauthorizedError,
+            createShipmentReadinessService,
+          } from "./shipment-readiness-service.mjs";
+
+          const assertions = [];
+
+          async function check(id, operation) {
+            try {
+              const result = await operation();
+              assertions.push({ id, passed: result.passed, observed: result.observed });
+            } catch (error) {
+              assertions.push({
+                id,
+                passed: false,
+                observed: error instanceof Error
+                  ? `${error.name}: ${error.message}`
+                  : String(error),
+              });
+            }
+          }
+
+          class FakeRepository {
+            constructor(authorizedActors = ["alice"]) {
+              this.authorizedActors = new Set(authorizedActors);
+              this.order = {
+                id: "order-1",
+                status: "paid",
+                version: 1,
+                storageRevision: 1,
+                updatedAt: 0,
+              };
+              this.outbox = [];
+              this.operations = [];
+              this.locks = new Map();
+              this.nextStorageRevision = 2;
+              this.failNextOutbox = false;
+            }
+
+            async transactOrder(orderId, operation) {
+              const previous = this.locks.get(orderId) ?? Promise.resolve();
+              let release;
+              const gate = new Promise((resolve) => { release = resolve; });
+              const current = previous.then(() => gate);
+              this.locks.set(orderId, current);
+              await previous;
+              const original = {
+                order: structuredClone(this.order),
+                outbox: structuredClone(this.outbox),
+                operations: structuredClone(this.operations),
+              };
+              const tx = {
+                getOrder: async () => structuredClone(this.order),
+                canMarkReady: async (actorId) => this.authorizedActors.has(actorId),
+                findByRequestId: async (requestId) =>
+                  structuredClone(this.operations.find((row) => row.requestId === requestId)),
+                saveOrder: async (draft) => {
+                  this.order = {
+                    ...structuredClone(draft),
+                    storageRevision: this.nextStorageRevision++,
+                  };
+                  return structuredClone(this.order);
+                },
+                enqueueOutbox: async (draft) => {
+                  if (this.failNextOutbox) {
+                    this.failNextOutbox = false;
+                    throw new Error("simulated transient outbox failure");
+                  }
+                  const row = {
+                    id: `outbox-${this.outbox.length + 1}`,
+                    ...structuredClone(draft),
+                  };
+                  this.outbox.push(row);
+                  return structuredClone(row);
+                },
+                recordOperation: async (record) => {
+                  const row = structuredClone(record);
+                  this.operations.push(row);
+                  return structuredClone(row);
+                },
+              };
+              try {
+                return await operation(tx);
+              } catch (error) {
+                this.order = original.order;
+                this.outbox = original.outbox;
+                this.operations = original.operations;
+                throw error;
+              } finally {
+                release();
+                if (this.locks.get(orderId) === current) this.locks.delete(orderId);
+              }
+            }
+          }
+
+          function readinessInput(overrides = {}) {
+            return {
+              orderId: "order-1",
+              actorId: "alice",
+              requestId: "request-1",
+              nowMs: 100,
+              ...overrides,
+            };
+          }
+
+          await check("ready-transition-and-outbox-persist", async () => {
+            const repository = new FakeRepository();
+            const service = createShipmentReadinessService(repository);
+            const result = await service.markReady(readinessInput());
+            return {
+              passed: result.order.status === "ready-to-ship"
+                && result.order.version === 2
+                && result.order.storageRevision === repository.order.storageRevision
+                && result.outbox.id === repository.outbox[0]?.id
+                && result.outbox.dedupeKey === "shipment:order-1"
+                && result.outbox.type === "shipment-requested"
+                && result.outbox.payload?.version === 2
+                && repository.outbox.length === 1
+                && repository.operations.length === 1,
+              observed: JSON.stringify({
+                result,
+                order: repository.order,
+                outbox: repository.outbox,
+                operations: repository.operations,
+              }),
+            };
+          });
+
+          await check("readiness-request-is-idempotent", async () => {
+            const repository = new FakeRepository();
+            const service = createShipmentReadinessService(repository);
+            const first = await service.markReady(readinessInput());
+            const second = await service.markReady(readinessInput({ nowMs: 200 }));
+            return {
+              passed: first.order.storageRevision === second.order.storageRevision
+                && first.outbox.id === second.outbox.id
+                && repository.outbox.length === 1
+                && repository.operations.length === 1,
+              observed: JSON.stringify({
+                first,
+                second,
+                outbox: repository.outbox,
+                operations: repository.operations,
+              }),
+            };
+          });
+
+          await check("different-request-after-ready-rejected", async () => {
+            const repository = new FakeRepository();
+            const service = createShipmentReadinessService(repository);
+            await service.markReady(readinessInput());
+            let error;
+            try {
+              await service.markReady(readinessInput({
+                requestId: "request-2",
+                nowMs: 200,
+              }));
+            } catch (caught) {
+              error = caught;
+            }
+            return {
+              passed: error instanceof ShipmentInvalidTransitionError
+                && error.code === "shipment-invalid-transition"
+                && repository.outbox.length === 1
+                && repository.operations.length === 1
+                && repository.order.version === 2,
+              observed: JSON.stringify({
+                errorName: error?.name,
+                errorCode: error?.code,
+                order: repository.order,
+                outbox: repository.outbox,
+              }),
+            };
+          });
+
+          await check("unauthorized-readiness-rejected", async () => {
+            const repository = new FakeRepository();
+            const service = createShipmentReadinessService(repository);
+            let error;
+            try {
+              await service.markReady(readinessInput({ actorId: "mallory" }));
+            } catch (caught) {
+              error = caught;
+            }
+            return {
+              passed: error instanceof ShipmentUnauthorizedError
+                && error.code === "shipment-unauthorized"
+                && repository.order.status === "paid"
+                && repository.outbox.length === 0
+                && repository.operations.length === 0,
+              observed: JSON.stringify({
+                errorName: error?.name,
+                errorCode: error?.code,
+                order: repository.order,
+              }),
+            };
+          });
+
+          let recoveryRepository;
+          let firstFailure;
+          await check("outbox-failure-rolls-back", async () => {
+            const repository = new FakeRepository();
+            repository.failNextOutbox = true;
+            const service = createShipmentReadinessService(repository);
+            let error;
+            try {
+              await service.markReady(readinessInput());
+            } catch (caught) {
+              error = caught;
+            }
+            recoveryRepository = repository;
+            firstFailure = { service, error };
+            return {
+              passed: error?.message === "simulated transient outbox failure"
+                && repository.order.status === "paid"
+                && repository.order.version === 1
+                && repository.outbox.length === 0
+                && repository.operations.length === 0,
+              observed: JSON.stringify({
+                errorName: error?.name,
+                errorMessage: error?.message,
+                order: repository.order,
+                outbox: repository.outbox,
+                operations: repository.operations,
+              }),
+            };
+          });
+
+          await check("retry-after-outbox-failure-succeeds-once", async () => {
+            const repository = recoveryRepository;
+            const service = firstFailure?.service;
+            const result = await service.markReady(readinessInput({ nowMs: 200 }));
+            return {
+              passed: repository.order.status === "ready-to-ship"
+                && repository.order.version === 2
+                && repository.outbox.length === 1
+                && repository.operations.length === 1
+                && result.order.storageRevision === repository.order.storageRevision
+                && result.outbox.id === repository.outbox[0]?.id,
+              observed: JSON.stringify({
+                result,
+                order: repository.order,
+                outbox: repository.outbox,
+                operations: repository.operations,
+              }),
+            };
+          });
+
+          process.stdout.write(JSON.stringify({ assertions }));
+    expectations:
+      noGuidance:
+        consultedSkill: false
+        includeActions: []
+        excludeActions: []
+      skillGuidance:
+        consultedSkill: true
+        includeActions: []
+        excludeActions: []
+
+  - id: executable-custody-transfer
+    kind: protocol
+    description: Implement an authorized, versioned custody transfer with idempotency and concurrent stale-write protection.
+    prompt: >-
+      Complete the custody-transfer service module. One authoritative service is
+      called by both web and import adapters. A transfer is allowed only when
+      the actor is authorized, the supplied from-custodian matches current
+      custody, and expectedVersion matches the current asset version. Repeating
+      the same request ID returns its original persisted asset. Concurrent
+      different requests with the same expected version must produce one winner
+      and one typed stale-version failure without replacing the winner. Every
+      successful transfer records one audit entry. Do not use process-local
+      state as authority or add external dependencies.
+    actions: []
+    artifact:
+      path: custody-transfer-service.mjs
+      format: text
+      instructions: >-
+        Preserve the exported names and method signature. transfer receives
+        { assetId, fromCustodianId, toCustodianId, actorId, requestId,
+        expectedVersion, nowMs }. Perform the full decision inside
+        repository.transactAsset(assetId, callback). The transaction exposes
+        async getAsset(), canTransfer(actorId, asset, toCustodianId),
+        findByRequestId(requestId), saveAsset(draft), and
+        appendTransfer(record). findByRequestId returns the previously appended
+        transfer record, including its asset field, or undefined; return that
+        record's asset for a repeated request. Authorize before returning
+        idempotent results.
+        On success, persist the new custodian, version + 1, and updatedAt; append
+        { requestId, actorId, fromCustodianId, toCustodianId, asset: saved,
+        createdAt: nowMs }; and return the saved asset. Throw the supplied typed
+        errors for authorization, stale version, and custody mismatch.
+      template: |
+        export class TransferUnauthorizedError extends Error {
+          constructor() {
+            super("actor cannot transfer this asset");
+            this.name = "TransferUnauthorizedError";
+            this.code = "transfer-unauthorized";
+          }
+        }
+
+        export class TransferStaleVersionError extends Error {
+          constructor() {
+            super("asset version is stale");
+            this.name = "TransferStaleVersionError";
+            this.code = "transfer-stale-version";
+          }
+        }
+
+        export class TransferCustodyMismatchError extends Error {
+          constructor() {
+            super("asset is not held by the supplied custodian");
+            this.name = "TransferCustodyMismatchError";
+            this.code = "transfer-custody-mismatch";
+          }
+        }
+
+        export function createCustodyTransferService(repository) {
+          return {
+            async transfer(input) {
+              throw new Error("replace this placeholder with the authoritative transition");
+            },
+          };
+        }
+      assertions: []
+      probe:
+        timeoutMs: 10000
+        assertions:
+          - id: allowed-transfer-persists
+            description: An authorized transfer returns the repository-persisted asset and increments its version.
+            weight: 2
+          - id: transfer-is-idempotent
+            description: Repeating one request ID returns its original persisted asset without another audit entry.
+            weight: 2
+          - id: unauthorized-transfer-rejected
+            description: An unauthorized actor receives the typed error without changing custody.
+            weight: 2
+          - id: custody-mismatch-rejected
+            description: A mismatched from-custodian is rejected without mutation.
+            weight: 2
+          - id: stale-version-rejected
+            description: A stale expected version is rejected without mutation.
+            weight: 2
+          - id: concurrent-transfer-has-one-winner
+            description: Concurrent different requests with one expected version produce one winner and one typed stale failure.
+            weight: 3
+          - id: transfer-audit-preserves-winner
+            description: Exactly one audit record identifies and preserves the winning persisted asset.
+            weight: 2
+        source: |
+          import {
+            TransferCustodyMismatchError,
+            TransferStaleVersionError,
+            TransferUnauthorizedError,
+            createCustodyTransferService,
+          } from "./custody-transfer-service.mjs";
+
+          const assertions = [];
+
+          async function check(id, operation) {
+            try {
+              const result = await operation();
+              assertions.push({ id, passed: result.passed, observed: result.observed });
+            } catch (error) {
+              assertions.push({
+                id,
+                passed: false,
+                observed: error instanceof Error
+                  ? `${error.name}: ${error.message}`
+                  : String(error),
+              });
+            }
+          }
+
+          class FakeRepository {
+            constructor(authorizedActors = ["alice"]) {
+              this.authorizedActors = new Set(authorizedActors);
+              this.asset = {
+                id: "asset-1",
+                custodianId: "lender-1",
+                version: 1,
+                storageRevision: 1,
+                updatedAt: 0,
+              };
+              this.transfers = [];
+              this.locks = new Map();
+              this.nextStorageRevision = 2;
+            }
+
+            async transactAsset(assetId, operation) {
+              const previous = this.locks.get(assetId) ?? Promise.resolve();
+              let release;
+              const gate = new Promise((resolve) => { release = resolve; });
+              const current = previous.then(() => gate);
+              this.locks.set(assetId, current);
+              await previous;
+              const originalAsset = structuredClone(this.asset);
+              const originalTransfers = structuredClone(this.transfers);
+              const tx = {
+                getAsset: async () => structuredClone(this.asset),
+                canTransfer: async (actorId) => this.authorizedActors.has(actorId),
+                findByRequestId: async (requestId) =>
+                  structuredClone(this.transfers.find((row) => row.requestId === requestId)),
+                saveAsset: async (draft) => {
+                  await Promise.resolve();
+                  this.asset = {
+                    ...structuredClone(draft),
+                    storageRevision: this.nextStorageRevision++,
+                  };
+                  return structuredClone(this.asset);
+                },
+                appendTransfer: async (record) => {
+                  const persisted = {
+                    id: `transfer-${this.transfers.length + 1}`,
+                    ...structuredClone(record),
+                  };
+                  this.transfers.push(persisted);
+                  return structuredClone(persisted);
+                },
+              };
+              try {
+                return await operation(tx);
+              } catch (error) {
+                this.asset = originalAsset;
+                this.transfers = originalTransfers;
+                throw error;
+              } finally {
+                release();
+                if (this.locks.get(assetId) === current) this.locks.delete(assetId);
+              }
+            }
+          }
+
+          function transferInput(overrides = {}) {
+            return {
+              assetId: "asset-1",
+              fromCustodianId: "lender-1",
+              toCustodianId: "borrower-1",
+              actorId: "alice",
+              requestId: "request-1",
+              expectedVersion: 1,
+              nowMs: 100,
+              ...overrides,
+            };
+          }
+
+          await check("allowed-transfer-persists", async () => {
+            const repository = new FakeRepository();
+            const service = createCustodyTransferService(repository);
+            const result = await service.transfer(transferInput());
+            return {
+              passed: result.custodianId === "borrower-1"
+                && result.version === 2
+                && result.storageRevision === 2
+                && result.storageRevision === repository.asset.storageRevision
+                && repository.transfers.length === 1,
+              observed: JSON.stringify({
+                result,
+                asset: repository.asset,
+                transfers: repository.transfers,
+              }),
+            };
+          });
+
+          await check("transfer-is-idempotent", async () => {
+            const repository = new FakeRepository();
+            const service = createCustodyTransferService(repository);
+            const first = await service.transfer(transferInput());
+            const second = await service.transfer(transferInput({ nowMs: 200 }));
+            return {
+              passed: first.storageRevision === second.storageRevision
+                && repository.transfers.length === 1
+                && repository.asset.version === 2,
+              observed: JSON.stringify({ first, second, transfers: repository.transfers }),
+            };
+          });
+
+          await check("unauthorized-transfer-rejected", async () => {
+            const repository = new FakeRepository();
+            const service = createCustodyTransferService(repository);
+            let error;
+            try {
+              await service.transfer(transferInput({ actorId: "mallory" }));
+            } catch (caught) {
+              error = caught;
+            }
+            return {
+              passed: error instanceof TransferUnauthorizedError
+                && error.code === "transfer-unauthorized"
+                && repository.asset.custodianId === "lender-1"
+                && repository.transfers.length === 0,
+              observed: JSON.stringify({
+                errorName: error?.name,
+                errorCode: error?.code,
+                asset: repository.asset,
+              }),
+            };
+          });
+
+          await check("custody-mismatch-rejected", async () => {
+            const repository = new FakeRepository();
+            const service = createCustodyTransferService(repository);
+            let error;
+            try {
+              await service.transfer(transferInput({ fromCustodianId: "lender-2" }));
+            } catch (caught) {
+              error = caught;
+            }
+            return {
+              passed: error instanceof TransferCustodyMismatchError
+                && error.code === "transfer-custody-mismatch"
+                && repository.asset.custodianId === "lender-1"
+                && repository.transfers.length === 0,
+              observed: JSON.stringify({
+                errorName: error?.name,
+                errorCode: error?.code,
+                asset: repository.asset,
+              }),
+            };
+          });
+
+          await check("stale-version-rejected", async () => {
+            const repository = new FakeRepository();
+            const service = createCustodyTransferService(repository);
+            let error;
+            try {
+              await service.transfer(transferInput({ expectedVersion: 0 }));
+            } catch (caught) {
+              error = caught;
+            }
+            return {
+              passed: error instanceof TransferStaleVersionError
+                && error.code === "transfer-stale-version"
+                && repository.asset.version === 1
+                && repository.transfers.length === 0,
+              observed: JSON.stringify({
+                errorName: error?.name,
+                errorCode: error?.code,
+                asset: repository.asset,
+              }),
+            };
+          });
+
+          let concurrentSnapshot;
+          await check("concurrent-transfer-has-one-winner", async () => {
+            const repository = new FakeRepository();
+            const service = createCustodyTransferService(repository);
+            const settled = await Promise.allSettled([
+              service.transfer(transferInput({
+                requestId: "request-a",
+                toCustodianId: "borrower-a",
+              })),
+              service.transfer(transferInput({
+                requestId: "request-b",
+                toCustodianId: "borrower-b",
+              })),
+            ]);
+            const fulfilled = settled.filter(({ status }) => status === "fulfilled");
+            const rejected = settled.filter(({ status }) => status === "rejected");
+            const reason = rejected[0]?.reason;
+            concurrentSnapshot = { repository, settled };
+            return {
+              passed: fulfilled.length === 1
+                && rejected.length === 1
+                && reason instanceof TransferStaleVersionError
+                && reason.code === "transfer-stale-version"
+                && repository.asset.version === 2,
+              observed: JSON.stringify({
+                statuses: settled.map(({ status }) => status),
+                rejectedCode: reason?.code,
+                asset: repository.asset,
+              }),
+            };
+          });
+
+          await check("transfer-audit-preserves-winner", async () => {
+            const repository = concurrentSnapshot?.repository;
+            const settled = concurrentSnapshot?.settled ?? [];
+            const winner = settled.find(({ status }) => status === "fulfilled")?.value;
+            const transfer = repository?.transfers[0];
+            return {
+              passed: repository?.transfers.length === 1
+                && transfer?.asset?.storageRevision === repository?.asset.storageRevision
+                && transfer?.asset?.storageRevision === winner?.storageRevision
+                && transfer?.toCustodianId === winner?.custodianId,
+              observed: JSON.stringify({
+                asset: repository?.asset,
+                transfers: repository?.transfers,
+                winner,
+              }),
+            };
+          });
+
+          process.stdout.write(JSON.stringify({ assertions }));
+    expectations:
+      noGuidance:
+        consultedSkill: false
+        includeActions: []
+        excludeActions: []
+      skillGuidance:
+        consultedSkill: true
+        includeActions: []
+        excludeActions: []

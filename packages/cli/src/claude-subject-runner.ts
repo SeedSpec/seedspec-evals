@@ -186,14 +186,20 @@ export async function runClaudeSubject(options: {
     );
   }
   const run = createSubjectRun({
-    schemaVersion: 1,
+    schemaVersion: 2,
     runId: manifest.runId,
     ...(typeof manifest.configuration?.["sourceRunId"] === "string"
       ? { sourceRunId: manifest.configuration["sourceRunId"] }
       : {}),
     runner: { id: "claude-code-cli", version },
-    model: manifest.model.modelId,
+    requestedModel: manifest.model.modelId,
     modelSelector,
+    ...(parsedEvents.model === undefined ? {} : { servedModel: parsedEvents.model }),
+    modelIdentityStatus: parsedEvents.model === undefined
+      ? "unverified"
+      : modelMatched
+        ? "verified"
+        : "mismatch",
     reasoningEffort: "high",
     startedAt,
     finishedAt,

@@ -309,6 +309,10 @@ describe("evaluation profile CLI helpers", () => {
       stage: "authorship" as const,
       runId: `run_${"e".repeat(64)}`,
       variant: "raw-source" as const,
+      model: {
+        requested: { provider: "openai", modelId: "openai/example", parameters: {} },
+        status: "unverified" as const,
+      },
       case: { id: "axis-case", version: "1.0.0", digest },
     };
     const evidence = createProfileEvidenceEnvelope({

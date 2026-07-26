@@ -1,0 +1,486 @@
+cases:
+  - id: selective-unresolved-policy
+    kind: restraint
+    description: Ship resolved overdue behavior without inventing or over-blocking an unresolved penalty policy.
+    prompt: >-
+      Prepare the baseline workflow decision for a neighborhood lending product.
+      The resolved specification says a loan becomes overdue when its due date
+      passes and reminders are sent on overdue days 1 and 3. Staff must be able
+      to see and manage overdue loans in the baseline. The monetary penalty
+      formula is intentionally unresolved; a zero-fee default is not authorized.
+      A future adaptation may add lender-defined penalty formulas, but it is not
+      part of the baseline. Complete the artifact so an implementer knows what
+      ships, what is blocked, where policy belongs, and what must be verified.
+    actions: []
+    artifact:
+      path: workflow-decision.json
+      instructions: >-
+        Use exact machine values. overdueTransition: implement or block-all.
+        penalty.status: resolved or unresolved. penalty.behavior:
+        block-penalty-only, default-zero, or block-all-overdue. Verification
+        outcomes: allowed or rejected. Use short kebab-case identifiers for
+        boundaries and touchpoints. Use penalty-policy-unresolved when that
+        limitation applies.
+      template:
+        baseline:
+          overdueTransition: ""
+          reminderDays: []
+          penalty:
+            status: ""
+            behavior: ""
+        boundaries:
+          stateTransition: ""
+          penaltyPolicy: ""
+          penaltyTouchpoints: []
+        future:
+          lenderDefinedPenaltiesImplementedNow: null
+        verification:
+          overdueWithoutPenaltyPolicy: ""
+          penaltyAttemptWithoutPolicy: ""
+        limitations: []
+      assertions:
+        - id: overdue-still-ships
+          description: The resolved overdue transition remains in the baseline.
+          pointer: /baseline/overdueTransition
+          operator: equals
+          expected: implement
+          weight: 2
+        - id: first-reminder
+          description: The first resolved reminder day is preserved.
+          pointer: /baseline/reminderDays
+          operator: includes
+          expected: 1
+        - id: second-reminder
+          description: The second resolved reminder day is preserved.
+          pointer: /baseline/reminderDays
+          operator: includes
+          expected: 3
+        - id: no-extra-reminders
+          description: No extra reminder policy is invented.
+          pointer: /baseline/reminderDays
+          operator: array-length-at-most
+          expected: 2
+        - id: penalty-unresolved
+          description: The monetary penalty remains explicitly unresolved.
+          pointer: /baseline/penalty/status
+          operator: equals
+          expected: unresolved
+          weight: 2
+        - id: selective-block
+          description: Only penalty application is blocked by the missing policy.
+          pointer: /baseline/penalty/behavior
+          operator: equals
+          expected: block-penalty-only
+          weight: 2
+        - id: transition-boundary
+          description: The state transition has an explicit implementation boundary.
+          pointer: /boundaries/stateTransition
+          operator: not-equals
+          expected: ""
+        - id: penalty-boundary
+          description: The future penalty policy has an explicit implementation boundary.
+          pointer: /boundaries/penaltyPolicy
+          operator: not-equals
+          expected: ""
+        - id: penalty-touchpoint-present
+          description: The explicit penalty policy boundary appears in the anticipated touchpoints.
+          pointer: /boundaries/penaltyTouchpoints
+          operator: array-length-at-least
+          expected: 1
+        - id: no-future-feature
+          description: Lender-defined penalties are not implemented early.
+          pointer: /future/lenderDefinedPenaltiesImplementedNow
+          operator: equals
+          expected: false
+          weight: 2
+        - id: overdue-verification
+          description: Verification permits overdue processing without a penalty formula.
+          pointer: /verification/overdueWithoutPenaltyPolicy
+          operator: equals
+          expected: allowed
+        - id: penalty-verification
+          description: Verification rejects applying a penalty without resolved policy.
+          pointer: /verification/penaltyAttemptWithoutPolicy
+          operator: equals
+          expected: rejected
+        - id: limitation-recorded
+          description: The unresolved penalty is recorded as an honest limitation.
+          pointer: /limitations
+          operator: includes
+          expected: penalty-policy-unresolved
+    expectations:
+      noGuidance:
+        consultedSkill: false
+        includeActions: []
+        excludeActions: []
+      skillGuidance:
+        consultedSkill: true
+        includeActions: []
+        excludeActions: []
+
+  - id: collision-and-retry-semantics
+    kind: protocol
+    description: Encode atomic exclusivity without conflating idempotent retries, competing requests, and expired reservations.
+    prompt: >-
+      Design the reservation transition for a service backed by PostgreSQL.
+      Both an HTTP route and a retry worker can submit reservations. At most one
+      active reservation may exist for an item. Repeating the same request ID
+      must return the original reservation, while a different request racing for
+      the same active item must receive a conflict without changing the winner.
+      Once a reservation is expired, a new request may reserve the item. The
+      service will run in multiple processes, so a process-local mutex is not an
+      exclusivity guarantee. Complete the artifact with the shared boundary,
+      atomic enforcement, observable outcomes, and distinguishing tests.
+    actions: []
+    artifact:
+      path: workflow-decision.json
+      instructions: >-
+        Use exact machine values. entryPoints use http and retry-worker.
+        atomicity: application-lock or database-transaction. stateCheck:
+        before-transaction or inside-transaction. uniqueness: process-mutex or
+        database-active-reservation-constraint. Outcome values are
+        return-original or create-again; conflict-without-mutation or
+        overwrite-winner; allow-new-after-expiry or remain-blocked. Verification
+        case identifiers are allowed-reservation, same-request-retry,
+        concurrent-different-request, and reserve-after-expiry.
+      template:
+        entryPoints: []
+        transition:
+          boundary: ""
+          atomicity: ""
+          stateCheck: ""
+          uniqueness: ""
+        outcomes:
+          sameRequestRetry: ""
+          differentRequestCollision: ""
+          expiredReservation: ""
+        verification:
+          cases: []
+        limitations: []
+      assertions:
+        - id: shared-callers
+          description: HTTP and retry callers are both routed through the decision.
+          pointer: /entryPoints
+          operator: set-equals
+          expected:
+            - http
+            - retry-worker
+          weight: 2
+        - id: one-boundary
+          description: One explicit authoritative transition boundary is named.
+          pointer: /transition/boundary
+          operator: not-equals
+          expected: ""
+          weight: 2
+        - id: database-atomicity
+          description: The state check and write share a database transaction.
+          pointer: /transition/atomicity
+          operator: equals
+          expected: database-transaction
+          weight: 2
+        - id: state-check-inside
+          description: Current state is checked inside the atomic boundary.
+          pointer: /transition/stateCheck
+          operator: equals
+          expected: inside-transaction
+        - id: datastore-exclusivity
+          description: Active-reservation uniqueness is enforced by the datastore.
+          pointer: /transition/uniqueness
+          operator: equals
+          expected: database-active-reservation-constraint
+          weight: 2
+        - id: idempotent-retry
+          description: A repeated request returns the original reservation.
+          pointer: /outcomes/sameRequestRetry
+          operator: equals
+          expected: return-original
+          weight: 2
+        - id: competing-conflict
+          description: A competing request reports conflict without mutating the winner.
+          pointer: /outcomes/differentRequestCollision
+          operator: equals
+          expected: conflict-without-mutation
+          weight: 2
+        - id: expired-replacement
+          description: Expired reservations do not permanently block the item.
+          pointer: /outcomes/expiredReservation
+          operator: equals
+          expected: allow-new-after-expiry
+        - id: allowed-test
+          description: Verification exercises an allowed reservation.
+          pointer: /verification/cases
+          operator: includes
+          expected: allowed-reservation
+        - id: idempotency-test
+          description: Verification distinguishes an idempotent retry.
+          pointer: /verification/cases
+          operator: includes
+          expected: same-request-retry
+        - id: collision-test
+          description: Verification executes a true competing-request collision.
+          pointer: /verification/cases
+          operator: includes
+          expected: concurrent-different-request
+          weight: 2
+        - id: expiry-test
+          description: Verification covers replacement after expiry.
+          pointer: /verification/cases
+          operator: includes
+          expected: reserve-after-expiry
+    expectations:
+      noGuidance:
+        consultedSkill: false
+        includeActions: []
+        excludeActions: []
+      skillGuidance:
+        consultedSkill: true
+        includeActions: []
+        excludeActions: []
+
+  - id: evidence-claim-calibration
+    kind: protocol
+    description: Map acceptance claims only to evidence that actually distinguishes the claimed behavior.
+    prompt: >-
+      Build the acceptance evidence map for a reservation feature. The retained
+      evidence is: E1, an executed browser smoke test that renders the reserve
+      button; E2, an executed integration test that reserves an available item
+      and confirms the row persists; E3, an executed 20-client collision test
+      proving exactly one success and one unchanged winning row; E4, an
+      authorization test file that exists but was excluded from the executed
+      test command; and E5, a screenshot showing conflict text, with no keyboard
+      or assistive-technology exercise. Complete the artifact without treating
+      code presence, test names, or screenshots as stronger evidence than they
+      are.
+    actions: []
+    artifact:
+      path: acceptance-evidence.json
+      instructions: >-
+        Use supported or unverified for every claim status. Evidence arrays may
+        contain only the retained evidence IDs E1 through E5.
+        supportingEvidence contains only evidence that actually supports the
+        claim; consideredButInsufficient records relevant retained material
+        that does not prove it. Use
+        authorization-not-executed and keyboard-accessibility-not-exercised for
+        those limitations when they apply.
+      template:
+        claims:
+          interfaceRenders:
+            status: ""
+            supportingEvidence: []
+            consideredButInsufficient: []
+          allowedReservationPersists:
+            status: ""
+            supportingEvidence: []
+            consideredButInsufficient: []
+          exclusiveCollision:
+            status: ""
+            supportingEvidence: []
+            consideredButInsufficient: []
+          unauthorizedCallerRejected:
+            status: ""
+            supportingEvidence: []
+            consideredButInsufficient: []
+          conflictFeedbackKeyboardAccessible:
+            status: ""
+            supportingEvidence: []
+            consideredButInsufficient: []
+        limitations: []
+      assertions:
+        - id: render-supported
+          description: The render claim is supported by the executed browser smoke test.
+          pointer: /claims/interfaceRenders/status
+          operator: equals
+          expected: supported
+        - id: render-evidence
+          description: Only the render evidence is attached to the render claim.
+          pointer: /claims/interfaceRenders/supportingEvidence
+          operator: set-equals
+          expected:
+            - E1
+        - id: allowed-supported
+          description: Persistence is supported by the executed integration test.
+          pointer: /claims/allowedReservationPersists/status
+          operator: equals
+          expected: supported
+        - id: allowed-evidence
+          description: The persistence claim cites its distinguishing test.
+          pointer: /claims/allowedReservationPersists/supportingEvidence
+          operator: set-equals
+          expected:
+            - E2
+        - id: collision-supported
+          description: Exclusivity is supported by the executed collision test.
+          pointer: /claims/exclusiveCollision/status
+          operator: equals
+          expected: supported
+          weight: 2
+        - id: collision-evidence
+          description: The exclusivity claim cites the collision evidence.
+          pointer: /claims/exclusiveCollision/supportingEvidence
+          operator: set-equals
+          expected:
+            - E3
+          weight: 2
+        - id: authorization-unverified
+          description: An unexecuted authorization test cannot support the claim.
+          pointer: /claims/unauthorizedCallerRejected/status
+          operator: equals
+          expected: unverified
+          weight: 2
+        - id: authorization-no-evidence
+          description: The unexecuted file is not cited as executed evidence.
+          pointer: /claims/unauthorizedCallerRejected/supportingEvidence
+          operator: set-equals
+          expected: []
+        - id: authorization-insufficient-evidence
+          description: The unexecuted authorization file is retained as insufficient evidence.
+          pointer: /claims/unauthorizedCallerRejected/consideredButInsufficient
+          operator: set-equals
+          expected:
+            - E4
+        - id: accessibility-unverified
+          description: A screenshot does not establish keyboard accessibility.
+          pointer: /claims/conflictFeedbackKeyboardAccessible/status
+          operator: equals
+          expected: unverified
+          weight: 2
+        - id: accessibility-no-evidence
+          description: The screenshot is not cited as keyboard evidence.
+          pointer: /claims/conflictFeedbackKeyboardAccessible/supportingEvidence
+          operator: set-equals
+          expected: []
+        - id: accessibility-insufficient-evidence
+          description: The screenshot is retained as insufficient keyboard evidence.
+          pointer: /claims/conflictFeedbackKeyboardAccessible/consideredButInsufficient
+          operator: set-equals
+          expected:
+            - E5
+        - id: auth-limitation
+          description: Missing executed authorization evidence is reported.
+          pointer: /limitations
+          operator: includes
+          expected: authorization-not-executed
+        - id: accessibility-limitation
+          description: Missing keyboard evidence is reported.
+          pointer: /limitations
+          operator: includes
+          expected: keyboard-accessibility-not-exercised
+    expectations:
+      noGuidance:
+        consultedSkill: false
+        includeActions: []
+        excludeActions: []
+      skillGuidance:
+        consultedSkill: true
+        includeActions: []
+        excludeActions: []
+
+  - id: adaptation-without-premature-generalization
+    kind: restraint
+    description: Keep a fixed baseline correct while making one future policy change proportionate.
+    prompt: >-
+      Prepare the loan-creation decision artifact. The resolved baseline fixes
+      every loan at 14 days. Both web and import callers create loans. A future
+      adaptation challenge may allow a lender to choose 7, 14, or 30 days, but
+      the baseline must not expose that choice or build a general plugin system.
+      Persist the duration chosen by the baseline so existing loans do not
+      change if policy changes later. Complete the artifact with a localized
+      policy boundary, baseline behavior, and verification that would make the
+      later change proportionate without implementing it now.
+    actions: []
+    artifact:
+      path: workflow-decision.json
+      instructions: >-
+        Use exact machine values. durationSource is resolved-specification or
+        agent-default. persistedValue is resolved-duration-on-loan or
+        derive-current-policy-on-read. entryPoints use web and import. Name the
+        policy boundary with a short kebab-case identifier. Verification case
+        identifiers are fixed-duration-at-creation-boundary,
+        web-and-import-share-policy, existing-loan-duration-is-stable, and
+        lender-choice-ui-renders.
+      template:
+        baseline:
+          durationDays: null
+          durationSource: ""
+          persistedValue: ""
+          entryPoints: []
+        design:
+          policyBoundary: ""
+          futureChoiceImplementedNow: null
+          pluginSystemIntroduced: null
+          expectedFutureTouchpoints: []
+        verification:
+          cases: []
+        limitations: []
+      assertions:
+        - id: fixed-duration
+          description: The resolved 14-day baseline is implemented.
+          pointer: /baseline/durationDays
+          operator: equals
+          expected: 14
+          weight: 2
+        - id: specification-source
+          description: The duration is attributed to the resolved specification.
+          pointer: /baseline/durationSource
+          operator: equals
+          expected: resolved-specification
+        - id: persist-resolved-duration
+          description: Each loan stores the resolved duration value.
+          pointer: /baseline/persistedValue
+          operator: equals
+          expected: resolved-duration-on-loan
+          weight: 2
+        - id: all-creation-callers
+          description: Web and import creation paths share the decision.
+          pointer: /baseline/entryPoints
+          operator: set-equals
+          expected:
+            - web
+            - import
+        - id: localized-boundary
+          description: A concrete duration-policy boundary is named.
+          pointer: /design/policyBoundary
+          operator: not-equals
+          expected: ""
+          weight: 2
+        - id: future-not-built
+          description: Lender choice is not implemented during the baseline.
+          pointer: /design/futureChoiceImplementedNow
+          operator: equals
+          expected: false
+          weight: 2
+        - id: no-plugin-system
+          description: The narrow adaptation challenge does not cause a plugin system.
+          pointer: /design/pluginSystemIntroduced
+          operator: equals
+          expected: false
+        - id: future-touchpoint-present
+          description: The anticipated change names at least one concrete touchpoint.
+          pointer: /design/expectedFutureTouchpoints
+          operator: array-length-at-least
+          expected: 1
+        - id: baseline-test
+          description: Verification checks fixed duration at the authoritative boundary.
+          pointer: /verification/cases
+          operator: includes
+          expected: fixed-duration-at-creation-boundary
+          weight: 2
+        - id: caller-test
+          description: Verification checks both creation callers share the policy.
+          pointer: /verification/cases
+          operator: includes
+          expected: web-and-import-share-policy
+        - id: persistence-test
+          description: Verification checks existing loans retain their stored duration.
+          pointer: /verification/cases
+          operator: includes
+          expected: existing-loan-duration-is-stable
+    expectations:
+      noGuidance:
+        consultedSkill: false
+        includeActions: []
+        excludeActions: []
+      skillGuidance:
+        consultedSkill: true
+        includeActions: []
+        excludeActions: []

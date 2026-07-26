@@ -378,11 +378,45 @@ export const TechnicalEvaluationSchema = z.strictObject({
   summary: z.string().trim().min(1).max(16_000),
 });
 
+export const EvaluationSubjectModelIdentitySchema = z.strictObject({
+  requested: ModelMetadataSchema,
+  selector: z.string().trim().min(1).max(256).optional(),
+  served: z.string().trim().min(1).max(256).optional(),
+  status: z.enum(["verified", "unverified", "mismatch"]),
+}).superRefine((identity, context) => {
+  if (identity.status === "unverified" && identity.served !== undefined) {
+    context.addIssue({
+      code: "custom",
+      message: "an unverified model identity cannot claim a served model",
+      path: ["served"],
+    });
+  }
+  if (identity.status === "verified"
+    && (identity.selector === undefined || identity.served !== identity.selector)) {
+    context.addIssue({
+      code: "custom",
+      message: "verified model identity requires matching selector and served values",
+      path: ["served"],
+    });
+  }
+  if (identity.status === "mismatch"
+    && (identity.selector === undefined
+      || identity.served === undefined
+      || identity.served === identity.selector)) {
+    context.addIssue({
+      code: "custom",
+      message: "model identity mismatch requires different selector and served values",
+      path: ["served"],
+    });
+  }
+});
+
 export const EvaluationProfileSubjectSchema = z.strictObject({
   stage: EvaluationStageSchema,
   runId: RunIdSchema.optional(),
   variant: EvaluationVariantSchema.optional(),
   treatment: IdentifierSchema.optional(),
+  model: EvaluationSubjectModelIdentitySchema.optional(),
   case: z.strictObject({
     id: IdentifierSchema,
     version: SemVerSchema,
@@ -404,6 +438,9 @@ export const EvaluationProfileSubjectSchema = z.strictObject({
   }
   if (subject.runId !== undefined && subject.case === undefined) {
     context.addIssue({ code: "custom", message: "run subjects must identify their evaluation case", path: ["case"] });
+  }
+  if (subject.runId !== undefined && subject.model === undefined) {
+    context.addIssue({ code: "custom", message: "run subjects must identify the requested and served model status", path: ["model"] });
   }
 });
 

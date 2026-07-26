@@ -10,17 +10,24 @@ import {
   RunIdSchema,
   TraceBodySchema,
   calculateContractGateSummary,
+  contentId,
   createTrace,
   parseTrace,
   sha256Hex,
   variantsForStage,
   type EvaluationStage,
   type EvaluationVariant,
+  type JsonValue,
 } from "@seedspec/eval-core";
 import { SubmissionIdSchema } from "@seedspec/eval-harness";
 import { Command, InvalidArgumentError } from "commander";
 
-import { ExecutionEnvelopeSchema, ExperimentPlanSchema, type ExecutionEnvelope } from "./contracts.js";
+import {
+  ExecutionEnvelopeSchema,
+  ExperimentPlanSchema,
+  type ExecutionEnvelope,
+  type ExperimentPlan,
+} from "./contracts.js";
 import {
   bundleAuthoredInput,
   bundleGuidanceInput,
@@ -32,6 +39,17 @@ import {
   finalizeCaseQualificationFile,
   validateCaseQualificationFile,
 } from "./case-qualification.js";
+import {
+  finalizeDeterministicProbeFile,
+  runDeterministicProbe,
+} from "./deterministic-probe.js";
+import {
+  buildBehavioralSeamBrief,
+  createBehavioralSeamPlanFile,
+  finalizeBehavioralSeamResultFile,
+  runCapturedBehavioralSeam,
+  summarizeBehavioralSeamResults,
+} from "./behavioral-seam.js";
 import {
   buildBlindTechnicalReviewBrief,
   finalizeBlindTechnicalReviewFile,
@@ -48,6 +66,12 @@ import {
   verifyImplementationRun,
 } from "./implementation-verification.js";
 import {
+  finalizeEvalFeedbackLedgerFile,
+  formatEvalFeedbackLedger,
+  validateEvalFeedbackLedgerFile,
+} from "./feedback-ledger.js";
+import { createPairedRevisionStatisticsFile } from "./paired-statistics.js";
+import {
   buildPackageProfileBrief,
   buildRunProfileBrief,
   compareEvaluationProfileFiles,
@@ -58,6 +82,7 @@ import {
   validateDecisionLedgerFile,
 } from "./profile.js";
 import { createExperimentPlan } from "./plan.js";
+import { attachSkillRevisionLineage } from "./plan-lineage.js";
 import { createSkillExperimentPlan, SKILL_TREATMENTS } from "./skill-plan.js";
 import {
   createImplementationSkillExperimentPlan,
@@ -183,6 +208,58 @@ cases.command("qualification")
     ].join("\n"));
   });
 
+cases.command("probe-promote")
+  .argument("<draft>", "deterministic probe body in YAML or JSON without probeId")
+  .requiredOption("--qualification <file>", "qualified semantic discovery artifact")
+  .option("--out <file>", "final content-addressed deterministic probe")
+  .action(async (draft: string, options: { qualification: string; out?: string }) => {
+    const result = await finalizeDeterministicProbeFile({
+      draft,
+      qualification: options.qualification,
+      ...(options.out === undefined ? {} : { out: options.out }),
+    });
+    output({
+      ok: true,
+      probeId: result.probe.probeId,
+      qualificationId: result.probe.qualificationId,
+      controls: result.probe.controls.length,
+      path: result.path,
+    }, `Promoted qualified semantic discovery to deterministic probe ${result.probe.probeId} at ${result.path}.`);
+  });
+
+cases.command("probe-run")
+  .argument("<probe>", "final content-addressed deterministic probe")
+  .requiredOption("--qualification <file>", "qualification containing the bound control artifacts")
+  .option("--out <file>", "content-addressed probe result")
+  .option("--allow-unsandboxed", "allow execution only inside an externally isolated disposable environment")
+  .option("--confirm-code-execution", "explicitly authorize local deterministic probe execution")
+  .action(async (probe: string, options: {
+    qualification: string;
+    out?: string;
+    allowUnsandboxed?: boolean;
+    confirmCodeExecution?: boolean;
+  }) => {
+    if (options.confirmCodeExecution !== true) {
+      throw new Error(
+        "Probe code execution was not started. Review the probe and re-run with --confirm-code-execution.",
+      );
+    }
+    const result = await runDeterministicProbe({
+      probe,
+      qualification: options.qualification,
+      createdAt: new Date().toISOString(),
+      ...(options.out === undefined ? {} : { out: options.out }),
+      ...(options.allowUnsandboxed === true ? { allowUnsandboxed: true } : {}),
+    });
+    output({
+      ok: result.result.status === "passed",
+      probeResultId: result.result.probeResultId,
+      status: result.result.status,
+      executions: result.result.executions,
+      path: result.path,
+    }, `Deterministic probe ${result.result.probeId}: ${result.result.status}\nResult: ${result.path}`);
+  });
+
 const experiment = program.command("experiment").description("Create immutable evaluation run manifests.");
 
 experiment.command("plan")
@@ -257,6 +334,8 @@ experiment.command("skill-plan")
   .option("--max-steps <count>", "maximum Think steps per turn", parsePositiveInteger, 8)
   .option("--max-duration <duration>", "maximum wall-clock time per run (for example 30m or 1h)", parseDurationMs, DEFAULT_MAX_DURATION_MS)
   .option("--skill <file>", "package-scoped SKILL.md to deliver in controlled treatments", SHAPE_SOLUTION_INTENT_SKILL)
+  .option("--previous-plan <file>", "pair every run with the comparable run in a previous skill plan")
+  .option("--revision-hypothesis <text>", "predeclared mechanism the skill revision is expected to improve")
   .option("--out <file>", "plan output path")
   .action(async (options: {
     root: string;
@@ -268,6 +347,8 @@ experiment.command("skill-plan")
     maxSteps: number;
     maxDuration: number;
     skill: string;
+    previousPlan?: string;
+    revisionHypothesis?: string;
     out?: string;
   }) => {
     const allCases = await loadCaseLibrary(resolve(options.root));
@@ -275,7 +356,7 @@ experiment.command("skill-plan")
     const missing = options.case.filter((id) => !selected.some((entry) => entry.case.id === id));
     if (missing.length > 0) throw new Error(`Unknown case IDs: ${missing.join(", ")}`);
     const createdAt = new Date().toISOString();
-    const plan = await createSkillExperimentPlan({
+    const candidatePlan = await createSkillExperimentPlan({
       cases: selected,
       models: options.model,
       repetitions: options.repetitions,
@@ -286,6 +367,11 @@ experiment.command("skill-plan")
       maxDurationMs: options.maxDuration,
       skillPath: resolve(options.skill),
     });
+    const plan = await attachPreviousPlanIfRequested(
+      candidatePlan,
+      options.previousPlan,
+      options.revisionHypothesis,
+    );
     const defaultPath = `runs/${createdAt.replaceAll(/[:.]/g, "-")}-skill-${plan.planId.slice(0, 17)}.json`;
     const outPath = resolve(options.out ?? defaultPath);
     await mkdir(dirname(outPath), { recursive: true });
@@ -317,6 +403,8 @@ experiment.command("implementation-skill-plan")
   .option("--skill-source-repository <url>", "upstream repository recorded in the immutable manifest")
   .option("--skill-source-revision <revision>", "upstream commit recorded in the immutable manifest")
   .option("--skill-license <license>", "upstream license identifier recorded in the immutable manifest")
+  .option("--previous-plan <file>", "pair every run with the comparable run in a previous skill plan")
+  .option("--revision-hypothesis <text>", "predeclared mechanism the skill revision is expected to improve")
   .option("--out <file>", "plan output path")
   .action(async (options: {
     root: string;
@@ -335,6 +423,8 @@ experiment.command("implementation-skill-plan")
     skillSourceRepository?: string;
     skillSourceRevision?: string;
     skillLicense?: string;
+    previousPlan?: string;
+    revisionHypothesis?: string;
     out?: string;
   }) => {
     const allCases = await loadCaseLibrary(resolve(options.root));
@@ -348,7 +438,7 @@ experiment.command("implementation-skill-plan")
     const skillId = skillNameFromSource(skillSource);
     const guidanceInput = await bundleGuidanceInput(dirname(skillPath), skillId);
     const treatments = parseImplementationSkillTreatments(options.treatment);
-    const plan = await createImplementationSkillExperimentPlan({
+    const candidatePlan = await createImplementationSkillExperimentPlan({
       cases: selected,
       models: options.model,
       repetitions: options.repetitions,
@@ -371,6 +461,11 @@ experiment.command("implementation-skill-plan")
         : { skillSourceRevision: options.skillSourceRevision }),
       ...(options.skillLicense === undefined ? {} : { skillLicense: options.skillLicense }),
     });
+    const plan = await attachPreviousPlanIfRequested(
+      candidatePlan,
+      options.previousPlan,
+      options.revisionHypothesis,
+    );
     const defaultPath = `runs/${createdAt.replaceAll(/[:.]/g, "-")}-implementation-skill-${plan.planId.slice(0, 17)}.json`;
     const outPath = resolve(options.out ?? defaultPath);
     await mkdir(dirname(outPath), { recursive: true });
@@ -389,6 +484,62 @@ experiment.command("implementation-skill-plan")
     );
   });
 
+experiment.command("behavioral-seam-plan")
+  .description("Create a low-cost screening matrix over small, structured skill behaviors.")
+  .requiredOption("--skill <file>", "skill entrypoint to screen")
+  .requiredOption("--suite <file>", "behavioral seam suite in YAML or JSON")
+  .requiredOption("--model <model...>", "subject model(s)")
+  .option("--repetitions <count>", "screens per case/model/treatment", parsePositiveInteger, 3)
+  .option("--case <id...>", "run only the selected suite case IDs")
+  .option("--out <file>", "content-addressed behavioral plan")
+  .action(async (options: {
+    skill: string;
+    suite: string;
+    model: string[];
+    repetitions: number;
+    case?: string[];
+    out?: string;
+  }) => {
+    const result = await createBehavioralSeamPlanFile({
+      skill: options.skill,
+      suite: options.suite,
+      models: options.model,
+      repetitions: options.repetitions,
+      createdAt: new Date().toISOString(),
+      ...(options.case === undefined ? {} : { caseIds: options.case }),
+      ...(options.out === undefined ? {} : { out: options.out }),
+    });
+    output({
+      ok: true,
+      behavioralPlanId: result.plan.behavioralPlanId,
+      tasks: result.plan.tasks.length,
+      interpretation: result.plan.interpretation,
+      path: result.path,
+    }, [
+      `Planned ${String(result.plan.tasks.length)} low-cost behavioral seam screens at ${result.path}.`,
+      "No model was called. These screens are triage evidence, not confirmation evidence.",
+    ].join("\n"));
+  });
+
+experiment.command("behavioral-seam-brief")
+  .argument("<plan>", "content-addressed behavioral seam plan")
+  .requiredOption("--task <task-id>", "one task from the plan")
+  .requiredOption("--out <directory>", "new isolated screen directory")
+  .action(async (plan: string, options: { task: string; out: string }) => {
+    const result = await buildBehavioralSeamBrief({
+      plan,
+      taskId: options.task,
+      out: options.out,
+    });
+    output({
+      ok: true,
+      behavioralPlanId: result.plan.behavioralPlanId,
+      taskId: options.task,
+      path: result.path,
+      draftPath: result.draftPath,
+    }, `Prepared low-cost behavioral seam handoff at ${result.path}.\nNo model was called.`);
+  });
+
 experiment.command("inspect")
   .argument("<plan>", "experiment plan JSON")
   .action(async (file: string) => {
@@ -404,8 +555,19 @@ experiment.command("inspect")
         ? manifest.configuration["treatmentId"]
         : undefined,
     }));
-    output({ ok: true, planId: plan.planId, runs }, [
+    output({
+      ok: true,
+      planId: plan.planId,
+      ...(plan.lineage === undefined ? {} : { lineage: plan.lineage }),
+      runs,
+    }, [
       `Plan ${plan.planId}:`,
+      ...(plan.lineage === undefined
+        ? []
+        : [
+            `Paired revision of ${plan.lineage.previousPlanId}: ${String(plan.lineage.pairs.length)} run pairs`,
+            `Hypothesis: ${plan.lineage.hypothesis}`,
+          ]),
       ...runs.map((run) => `- ${run.runId} — ${run.caseId} / ${run.treatment ?? run.variant} / ${run.model} / repetition ${String(run.repetition)}`),
     ].join("\n"));
   });
@@ -623,6 +785,52 @@ runner.command("claude-run")
       traceId: result.run.trace?.traceId,
       path: result.path,
     }, `Captured subject run ${result.run.subjectRunId}.\nTrace: ${result.run.trace?.traceId ?? "unavailable"}\nSubject evidence: ${result.path}`);
+  });
+
+runner.command("behavioral-seam-run")
+  .description("Run and capture one prepared low-cost behavioral seam screen.")
+  .argument("<screen-directory>", "directory created by experiment behavioral-seam-brief")
+  .requiredOption("--plan <file>", "evaluator-side behavioral plan with hidden expectations")
+  .requiredOption("--runner <runner>", "codex or claude-code", parseDesktopRunner)
+  .option("--codex <file>", "Codex CLI executable", "codex")
+  .option("--claude <file>", "Claude Code CLI executable", "claude")
+  .option("--reasoning-effort <effort>", "subject reasoning effort", "low")
+  .option("--max-duration <duration>", "maximum wall-clock time for the micro-screen", parseDurationMs, 5 * 60_000)
+  .option("--confirm-model-execution", "explicitly authorize the subject model call")
+  .action(async (directory: string, options: {
+    plan: string;
+    runner: DesktopRunner;
+    codex: string;
+    claude: string;
+    reasoningEffort: string;
+    maxDuration: number;
+    confirmModelExecution?: boolean;
+  }) => {
+    if (options.confirmModelExecution !== true) {
+      throw new Error(
+        "Behavioral model execution was not started. Review the micro-screen handoff, then re-run with --confirm-model-execution.",
+      );
+    }
+    const result = await runCapturedBehavioralSeam({
+      directory,
+      plan: options.plan,
+      runner: options.runner,
+      executable: options.runner === "codex" ? options.codex : options.claude,
+      reasoningEffort: options.reasoningEffort,
+      maxDurationMs: options.maxDuration,
+    });
+    output({
+      ok: result.result.status === "passed",
+      behavioralResultId: result.result.behavioralResultId,
+      taskId: result.result.task.taskId,
+      status: result.result.status,
+      modelIdentityStatus: result.result.observation.modelIdentityStatus,
+      path: result.path,
+    }, [
+      `Captured behavioral seam ${result.result.task.taskId}: ${result.result.status}`,
+      `Model identity: ${result.result.observation.modelIdentityStatus}`,
+      `Result: ${result.path}`,
+    ].join("\n"));
   });
 
 const author = program.command("author").description("Expose pre-declared simulated author responses one question at a time.");
@@ -941,6 +1149,131 @@ evaluate.command("technical-unblind")
       `Reattached blind technical review as ${result.attachmentId} at ${result.path}.\nSubsequent profile finalization must preserve its quality vector and checks exactly.`);
   });
 
+evaluate.command("feedback-finalize")
+  .argument("<draft>", "eval-feedback ledger body JSON without feedbackLedgerId")
+  .option("--out <file>", "final content-addressed feedback ledger")
+  .action(async (draft: string, options: { out?: string }) => {
+    const result = await finalizeEvalFeedbackLedgerFile({
+      draft,
+      ...(options.out === undefined ? {} : { out: options.out }),
+    });
+    output({
+      ok: true,
+      feedbackLedgerId: result.ledger.feedbackLedgerId,
+      entries: result.ledger.entries.length,
+      path: result.path,
+    }, `Finalized machine-readable eval feedback ledger ${result.ledger.feedbackLedgerId} at ${result.path}.`);
+  });
+
+evaluate.command("feedback")
+  .argument("<ledger>", "final content-addressed eval-feedback ledger JSON")
+  .action(async (file: string) => {
+    const ledger = await validateEvalFeedbackLedgerFile(file);
+    output({
+      ok: true,
+      feedbackLedgerId: ledger.feedbackLedgerId,
+      scope: ledger.scope,
+      entries: ledger.entries,
+    }, formatEvalFeedbackLedger(ledger));
+  });
+
+evaluate.command("behavioral-seam-finalize")
+  .argument("<draft>", "structured behavioral observation JSON")
+  .requiredOption("--plan <file>", "content-addressed behavioral seam plan with hidden expectations")
+  .option("--out <file>", "content-addressed behavioral result")
+  .action(async (draft: string, options: { plan: string; out?: string }) => {
+    const result = await finalizeBehavioralSeamResultFile({
+      draft,
+      plan: options.plan,
+      createdAt: new Date().toISOString(),
+      ...(options.out === undefined ? {} : { out: options.out }),
+    });
+    output({
+      ok: result.result.status === "passed",
+      behavioralResultId: result.result.behavioralResultId,
+      status: result.result.status,
+      assertions: result.result.assertions,
+      path: result.path,
+    }, `Behavioral seam ${result.result.task.taskId}: ${result.result.status}\nResult: ${result.path}`);
+  });
+
+evaluate.command("behavioral-seam-summary")
+  .argument("<results...>", "two or more behavioral seam result JSON files")
+  .option("--out <file>", "content-addressed behavioral screening summary")
+  .action(async (files: string[], options: { out?: string }) => {
+    const summary = await summarizeBehavioralSeamResults(files);
+    const body = {
+      schemaVersion: 1,
+      createdAt: new Date().toISOString(),
+      behavioralPlanId: summary.results[0]!.behavioralPlanId,
+      evidenceTier: "screening" as const,
+      resultIds: summary.results.map(({ behavioralResultId }) => behavioralResultId).toSorted(),
+      groups: summary.groups,
+      treatmentEffects: summary.treatmentEffects,
+      interpretation:
+        "Behavioral seam results are screening evidence. Artifact score deltas can prioritize revisions but cannot confirm end-to-end skill quality.",
+    };
+    const summaryId = contentId("behavioral_summary", body as unknown as JsonValue);
+    const artifact = { ...body, summaryId };
+    const summaryPath = options.out === undefined ? undefined : resolve(options.out);
+    if (summaryPath !== undefined) {
+      await mkdir(dirname(summaryPath), { recursive: true });
+      await writeFile(summaryPath, `${JSON.stringify(artifact, null, 2)}\n`, "utf8");
+    }
+    output({
+      ok: true,
+      summaryId,
+      evidenceTier: "screening",
+      planId: summary.results[0]?.behavioralPlanId,
+      groups: summary.groups,
+      treatmentEffects: summary.treatmentEffects,
+      ...(summaryPath === undefined ? {} : { path: summaryPath }),
+    }, [
+      "Behavioral seam screening summary (not confirmation evidence):",
+      ...summary.groups.map((group) =>
+        `- ${group.caseId} / ${group.treatment} / ${group.requestedModel}: `
+        + `${String(group.passed)}/${String(group.n)} passed; `
+        + (group.qualityScore === undefined
+          ? ""
+          : `median artifact score ${group.qualityScore.median.toFixed(3)}; `)
+        + `${String(group.verifiedModelIdentity)}/${String(group.n)} model identities verified`),
+      ...summary.treatmentEffects.map((effect) =>
+        `- paired ${effect.caseId} / ${effect.requestedModel}: `
+        + `median skill delta ${effect.scoreDeltaMedian.toFixed(3)}; `
+        + `${String(effect.skillWins)} wins, ${String(effect.ties)} ties, `
+        + `${String(effect.noGuidanceWins)} losses`),
+      ...(summaryPath === undefined ? [] : [`Summary: ${summaryPath}`]),
+    ].join("\n"));
+  });
+
+evaluate.command("paired-revision-statistics")
+  .description("Summarize predeclared old/new skill pairs with medians, paired deltas, and confirmation thresholds.")
+  .argument("<plan>", "candidate plan with skill-revision lineage")
+  .argument("<profiles...>", "final profiles covering previous and candidate run IDs")
+  .option("--out <file>", "content-addressed paired statistics JSON")
+  .action(async (plan: string, profiles: string[], options: { out?: string }) => {
+    const result = await createPairedRevisionStatisticsFile({
+      plan,
+      profiles,
+      createdAt: new Date().toISOString(),
+      ...(options.out === undefined ? {} : { out: options.out }),
+    });
+    output({
+      ok: true,
+      statisticsId: result.statistics.statisticsId,
+      groups: result.statistics.groups,
+      path: result.path,
+    }, [
+      `Paired revision statistics: ${result.statistics.statisticsId}`,
+      `Hypothesis: ${result.statistics.hypothesis}`,
+      ...result.statistics.groups.map((group) =>
+        `- ${group.caseId} / ${group.guidanceDelivery} / ${group.requestedModel}: `
+        + `${String(group.completePairs)}/${String(group.plannedPairs)} complete pairs; `
+        + `${group.evidenceTier}; ${group.modelIdentityScope}`),
+      `Report: ${result.path}`,
+    ].join("\n"));
+  });
+
 evaluate.command("profile-finalize")
   .argument("<draft>", "evaluation profile body JSON without profileId")
   .option("--out <file>", "final content-addressed profile output")
@@ -1047,6 +1380,24 @@ function parsePositiveInteger(value: string): number {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 1) throw new InvalidArgumentError("must be a positive integer");
   return parsed;
+}
+
+async function attachPreviousPlanIfRequested(
+  candidate: ExperimentPlan,
+  previousPlanPath: string | undefined,
+  revisionHypothesis: string | undefined,
+): Promise<ExperimentPlan> {
+  if (previousPlanPath === undefined && revisionHypothesis === undefined) return candidate;
+  if (previousPlanPath === undefined) {
+    throw new Error("--revision-hypothesis requires --previous-plan.");
+  }
+  if (revisionHypothesis === undefined || revisionHypothesis.trim().length === 0) {
+    throw new Error("--previous-plan requires a non-empty --revision-hypothesis.");
+  }
+  const previous = ExperimentPlanSchema.parse(
+    JSON.parse(await readFile(resolve(previousPlanPath), "utf8")) as unknown,
+  );
+  return attachSkillRevisionLineage({ candidate, previous, hypothesis: revisionHypothesis });
 }
 
 function parseCounterfactualCandidate(value: string): { id: string; path: string } {

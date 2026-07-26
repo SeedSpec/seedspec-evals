@@ -219,6 +219,32 @@ The opaque view excludes the treatment, subject model, runner, traces, process
 metrics, cost, and true run identity. Once reattached, profile finalization
 requires the blinded technical vector and checks to remain unchanged.
 
+## Learn from evals without overfitting
+
+The framework now has an explicit skill-learning loop:
+
+- `experiment behavioral-seam-plan` runs small no-guidance/skill-guidance
+  screens over observable choices, structured decision artifacts, or executable
+  micro-implementations for cheap triage;
+- `evaluate feedback-finalize` records evidence, failure mechanism, owning
+  layer, proposed change, controls, and verification as machine-readable data;
+- `cases probe-promote` turns stable qualified discoveries into executable
+  probes only when both known-bad and valid-alternative controls survive; and
+- `--previous-plan` plus `--revision-hypothesis` creates first-class paired
+  skill revisions, summarized with `evaluate paired-revision-statistics`.
+
+Paired reports use medians and paired direction counts, require at least five
+complete pairs before calling an arm confirmation-eligible, keep technical
+dimensions separate, and distinguish requested model identity from a
+provider-verified served model. Behavioral seams always remain screening
+evidence. See [the eval-driven skill learning loop](docs/eval-learning-loop.md)
+for the workflow and commands.
+
+Artifact seams report weighted contract scores and paired treatment deltas.
+Executable artifacts run only against qualified hidden probes in a disposable,
+network-denied sandbox; valid-alternative and known-bad controls must establish
+that the probe distinguishes behavior before model output is trusted.
+
 Subject-authored tests can also declare `testPaths`. The evaluator may overlay
 those tests onto a content-addressed known-bad candidate and require the same
 command to fail there:

@@ -19,15 +19,17 @@ const CapturedFileSchema = z.strictObject({
 });
 
 export const SubjectRunBodySchema = z.strictObject({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   runId: RunIdSchema,
   sourceRunId: RunIdSchema.optional(),
   runner: z.strictObject({
     id: z.enum(["codex-cli", "claude-code-cli"]),
     version: z.string().trim().min(1).max(256),
   }),
-  model: z.string().trim().min(1).max(256),
+  requestedModel: z.string().trim().min(1).max(256),
   modelSelector: z.string().trim().min(1).max(256),
+  servedModel: z.string().trim().min(1).max(256).optional(),
+  modelIdentityStatus: z.enum(["verified", "unverified", "mismatch"]),
   reasoningEffort: z.string().trim().min(1).max(64),
   startedAt: IsoTimestampSchema,
   finishedAt: IsoTimestampSchema,
@@ -53,6 +55,29 @@ export const SubjectRunBodySchema = z.strictObject({
   }
   if (run.status === "succeeded" && (run.exitCode !== 0 || run.trace === undefined)) {
     context.addIssue({ code: "custom", message: "a successful subject run requires exit code zero and a finalized trace" });
+  }
+  if (run.modelIdentityStatus === "unverified" && run.servedModel !== undefined) {
+    context.addIssue({
+      code: "custom",
+      message: "an unverified model identity cannot claim a served model",
+      path: ["servedModel"],
+    });
+  }
+  if (run.modelIdentityStatus === "verified"
+    && (run.servedModel === undefined || run.servedModel !== run.modelSelector)) {
+    context.addIssue({
+      code: "custom",
+      message: "a verified model identity requires a served model matching the requested selector",
+      path: ["servedModel"],
+    });
+  }
+  if (run.modelIdentityStatus === "mismatch"
+    && (run.servedModel === undefined || run.servedModel === run.modelSelector)) {
+    context.addIssue({
+      code: "custom",
+      message: "a model identity mismatch requires a different served model",
+      path: ["servedModel"],
+    });
   }
 });
 

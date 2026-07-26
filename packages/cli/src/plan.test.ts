@@ -6,6 +6,7 @@ import { loadCaseLibrary } from "@seedspec/eval-case-library";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createExperimentPlan } from "./plan.js";
+import { attachSkillRevisionLineage } from "./plan-lineage.js";
 import { createSkillExperimentPlan, SKILL_TREATMENTS } from "./skill-plan.js";
 import {
   createImplementationSkillExperimentPlan,
@@ -457,6 +458,44 @@ describe("createExperimentPlan", () => {
     const ids = plan.envelopes.map(({ manifest }) => manifest.runId);
     expect(ids).toHaveLength(4);
     expect(new Set(ids).size).toBe(4);
+  });
+
+  it("pairs a skill revision with comparable runs from a previous plan", async () => {
+    const cases = await loadCaseLibrary(resolve("cases"));
+    const selected = cases.slice(0, 1);
+    const skillPath = await authoringSkillFixture();
+    const common = {
+      cases: selected,
+      models: ["openai/gpt-5.6-sol"],
+      repetitions: 2,
+      gatewayId: "seedspec-evals",
+      protocolVersion: "0.2.0",
+      maxSteps: 8,
+      skillPath,
+    };
+    const previous = await createSkillExperimentPlan({
+      ...common,
+      createdAt: "2026-07-22T12:00:00.000Z",
+    });
+    const candidate = await createSkillExperimentPlan({
+      ...common,
+      createdAt: "2026-07-23T12:00:00.000Z",
+    });
+    const paired = attachSkillRevisionLineage({
+      previous,
+      candidate,
+      hypothesis: "Explicit evidence prompts reduce unsupported completion claims.",
+    });
+
+    expect(paired.lineage?.previousPlanId).toBe(previous.planId);
+    expect(paired.lineage?.pairs).toHaveLength(candidate.envelopes.length);
+    expect(new Set(paired.lineage?.pairs.map(({ candidateRunId }) => candidateRunId)))
+      .toEqual(new Set(candidate.envelopes.map(({ manifest }) => manifest.runId)));
+    expect(ExperimentPlanSchema.safeParse(paired).success).toBe(true);
+
+    const tampered = structuredClone(paired);
+    tampered.lineage!.hypothesis = "A different undeclared hypothesis.";
+    expect(ExperimentPlanSchema.safeParse(tampered).success).toBe(false);
   });
 
   it("rejects plan or execution-input tampering", async () => {

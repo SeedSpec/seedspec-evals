@@ -5,12 +5,13 @@ import { createSubjectRun, parseSubjectRun } from "./subject-runs.js";
 describe("captured subject runs", () => {
   it("binds provider usage and a finalized trace into a content-addressed record", () => {
     const run = createSubjectRun({
-      schemaVersion: 1,
+      schemaVersion: 2,
       runId: `run_${"a".repeat(64)}`,
       sourceRunId: `run_${"b".repeat(64)}`,
       runner: { id: "codex-cli", version: "codex-cli 1.2.3" },
-      model: "openai/gpt-5.6-sol",
+      requestedModel: "openai/gpt-5.6-sol",
       modelSelector: "gpt-5.6-sol",
+      modelIdentityStatus: "unverified",
       reasoningEffort: "high",
       startedAt: "2026-07-22T12:00:00.000Z",
       finishedAt: "2026-07-22T12:01:00.000Z",
@@ -67,11 +68,13 @@ describe("captured subject runs", () => {
 
   it("accepts captured Claude Code subject evidence", () => {
     const run = createSubjectRun({
-      schemaVersion: 1,
+      schemaVersion: 2,
       runId: `run_${"a".repeat(64)}`,
       runner: { id: "claude-code-cli", version: "2.0.64 (Claude Code)" },
-      model: "anthropic/claude-sonnet-5",
+      requestedModel: "anthropic/claude-sonnet-5",
       modelSelector: "claude-sonnet-5",
+      servedModel: "claude-sonnet-5",
+      modelIdentityStatus: "verified",
       reasoningEffort: "default",
       startedAt: "2026-07-22T12:00:00.000Z",
       finishedAt: "2026-07-22T12:01:00.000Z",
@@ -111,11 +114,12 @@ describe("captured subject runs", () => {
 
   it("rejects a successful record without a finalized trace", () => {
     expect(() => createSubjectRun({
-      schemaVersion: 1,
+      schemaVersion: 2,
       runId: `run_${"a".repeat(64)}`,
       runner: { id: "codex-cli", version: "codex-cli 1.2.3" },
-      model: "openai/gpt-5.6-sol",
+      requestedModel: "openai/gpt-5.6-sol",
       modelSelector: "gpt-5.6-sol",
+      modelIdentityStatus: "unverified",
       reasoningEffort: "high",
       startedAt: "2026-07-22T12:00:00.000Z",
       finishedAt: "2026-07-22T12:01:00.000Z",

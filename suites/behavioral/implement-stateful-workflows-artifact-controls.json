@@ -1,0 +1,203 @@
+{
+  "selective-unresolved-policy": {
+    "validAlternative": {
+      "baseline": {
+        "overdueTransition": "implement",
+        "reminderDays": [3, 1],
+        "penalty": {
+          "status": "unresolved",
+          "behavior": "block-penalty-only"
+        }
+      },
+      "boundaries": {
+        "stateTransition": "loan-lifecycle-command",
+        "penaltyPolicy": "loan-penalty-policy",
+        "penaltyTouchpoints": ["loan-penalty-policy"]
+      },
+      "future": {
+        "lenderDefinedPenaltiesImplementedNow": false
+      },
+      "verification": {
+        "overdueWithoutPenaltyPolicy": "allowed",
+        "penaltyAttemptWithoutPolicy": "rejected"
+      },
+      "limitations": ["penalty-policy-unresolved"]
+    },
+    "knownBad": {
+      "baseline": {
+        "overdueTransition": "block-all",
+        "reminderDays": [1, 3, 7],
+        "penalty": {
+          "status": "resolved",
+          "behavior": "default-zero"
+        }
+      },
+      "boundaries": {
+        "stateTransition": "",
+        "penaltyPolicy": "",
+        "penaltyTouchpoints": []
+      },
+      "future": {
+        "lenderDefinedPenaltiesImplementedNow": true
+      },
+      "verification": {
+        "overdueWithoutPenaltyPolicy": "rejected",
+        "penaltyAttemptWithoutPolicy": "allowed"
+      },
+      "limitations": []
+    }
+  },
+  "collision-and-retry-semantics": {
+    "validAlternative": {
+      "entryPoints": ["retry-worker", "http"],
+      "transition": {
+        "boundary": "reserve-item-command",
+        "atomicity": "database-transaction",
+        "stateCheck": "inside-transaction",
+        "uniqueness": "database-active-reservation-constraint"
+      },
+      "outcomes": {
+        "sameRequestRetry": "return-original",
+        "differentRequestCollision": "conflict-without-mutation",
+        "expiredReservation": "allow-new-after-expiry"
+      },
+      "verification": {
+        "cases": [
+          "concurrent-different-request",
+          "allowed-reservation",
+          "reserve-after-expiry",
+          "same-request-retry"
+        ]
+      },
+      "limitations": []
+    },
+    "knownBad": {
+      "entryPoints": ["http"],
+      "transition": {
+        "boundary": "",
+        "atomicity": "application-lock",
+        "stateCheck": "before-transaction",
+        "uniqueness": "process-mutex"
+      },
+      "outcomes": {
+        "sameRequestRetry": "create-again",
+        "differentRequestCollision": "overwrite-winner",
+        "expiredReservation": "remain-blocked"
+      },
+      "verification": {
+        "cases": []
+      },
+      "limitations": []
+    }
+  },
+  "evidence-claim-calibration": {
+    "validAlternative": {
+      "claims": {
+        "interfaceRenders": {
+          "status": "supported",
+          "supportingEvidence": ["E1"],
+          "consideredButInsufficient": []
+        },
+        "allowedReservationPersists": {
+          "status": "supported",
+          "supportingEvidence": ["E2"],
+          "consideredButInsufficient": []
+        },
+        "exclusiveCollision": {
+          "status": "supported",
+          "supportingEvidence": ["E3"],
+          "consideredButInsufficient": []
+        },
+        "unauthorizedCallerRejected": {
+          "status": "unverified",
+          "supportingEvidence": [],
+          "consideredButInsufficient": ["E4"]
+        },
+        "conflictFeedbackKeyboardAccessible": {
+          "status": "unverified",
+          "supportingEvidence": [],
+          "consideredButInsufficient": ["E5"]
+        }
+      },
+      "limitations": [
+        "authorization-not-executed",
+        "keyboard-accessibility-not-exercised"
+      ]
+    },
+    "knownBad": {
+      "claims": {
+        "interfaceRenders": {
+          "status": "supported",
+          "supportingEvidence": ["E1"],
+          "consideredButInsufficient": []
+        },
+        "allowedReservationPersists": {
+          "status": "supported",
+          "supportingEvidence": ["E2"],
+          "consideredButInsufficient": []
+        },
+        "exclusiveCollision": {
+          "status": "supported",
+          "supportingEvidence": ["E3"],
+          "consideredButInsufficient": []
+        },
+        "unauthorizedCallerRejected": {
+          "status": "supported",
+          "supportingEvidence": ["E4"],
+          "consideredButInsufficient": []
+        },
+        "conflictFeedbackKeyboardAccessible": {
+          "status": "supported",
+          "supportingEvidence": ["E5"],
+          "consideredButInsufficient": []
+        }
+      },
+      "limitations": []
+    }
+  },
+  "adaptation-without-premature-generalization": {
+    "validAlternative": {
+      "baseline": {
+        "durationDays": 14,
+        "durationSource": "resolved-specification",
+        "persistedValue": "resolved-duration-on-loan",
+        "entryPoints": ["import", "web"]
+      },
+      "design": {
+        "policyBoundary": "resolve-loan-duration",
+        "futureChoiceImplementedNow": false,
+        "pluginSystemIntroduced": false,
+        "expectedFutureTouchpoints": [
+          "resolve-loan-duration",
+          "loan-duration-policy-tests"
+        ]
+      },
+      "verification": {
+        "cases": [
+          "existing-loan-duration-is-stable",
+          "fixed-duration-at-creation-boundary",
+          "web-and-import-share-policy"
+        ]
+      },
+      "limitations": []
+    },
+    "knownBad": {
+      "baseline": {
+        "durationDays": 30,
+        "durationSource": "agent-default",
+        "persistedValue": "derive-current-policy-on-read",
+        "entryPoints": ["web"]
+      },
+      "design": {
+        "policyBoundary": "",
+        "futureChoiceImplementedNow": true,
+        "pluginSystemIntroduced": true,
+        "expectedFutureTouchpoints": []
+      },
+      "verification": {
+        "cases": ["lender-choice-ui-renders"]
+      },
+      "limitations": []
+    }
+  }
+}

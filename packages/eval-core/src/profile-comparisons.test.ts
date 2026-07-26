@@ -12,6 +12,10 @@ function profile(variant: "raw-source" | "markdown-authored", runCharacter: stri
       stage: "authorship",
       runId: `run_${runCharacter.repeat(64)}`,
       variant,
+      model: {
+        requested: { provider: "openai", modelId: "openai/example", parameters: {} },
+        status: "unverified",
+      },
       case: { id: "comparison-case", version: "1.0.0", digest: CASE_DIGEST },
     },
     createdAt: "2026-07-22T12:00:00.000Z",
@@ -110,6 +114,12 @@ describe("profile comparisons", () => {
         runId: `run_${runCharacter.repeat(64)}`,
         variant: "seedspec-implementation",
         treatment,
+        model: {
+          requested: { provider: "openai", modelId: "openai/example", parameters: {} },
+          selector: "example",
+          served: "example",
+          status: "verified",
+        },
         case: { id: "comparison-case", version: "1.0.0", digest: CASE_DIGEST },
       },
       createdAt: "2026-07-22T12:00:00.000Z",

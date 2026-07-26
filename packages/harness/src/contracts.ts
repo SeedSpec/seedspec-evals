@@ -191,15 +191,54 @@ export const ExecutionEnvelopeSchema = z
     }
   });
 
+export const ExperimentPlanPairSchema = z
+  .strictObject({
+    pairId: z.string().regex(/^pair_[a-f0-9]{64}$/),
+    previousRunId: RunIdSchema,
+    candidateRunId: RunIdSchema,
+  })
+  .superRefine((pair, context) => {
+    const expected = contentId("pair", {
+      previousRunId: pair.previousRunId,
+      candidateRunId: pair.candidateRunId,
+    });
+    if (pair.pairId !== expected) {
+      context.addIssue({
+        code: "custom",
+        message: "pairId does not match the paired run identities",
+        path: ["pairId"],
+      });
+    }
+    if (pair.previousRunId === pair.candidateRunId) {
+      context.addIssue({
+        code: "custom",
+        message: "a revision pair must contain two distinct runs",
+        path: ["candidateRunId"],
+      });
+    }
+  });
+
+export const ExperimentPlanLineageSchema = z.strictObject({
+  relation: z.literal("skill-revision"),
+  previousPlanId: z.string().regex(/^plan_[a-f0-9]{64}$/),
+  hypothesis: z.string().trim().min(1).max(8_000),
+  pairs: z.array(ExperimentPlanPairSchema).min(1).max(10_000),
+});
+
 export const ExperimentPlanSchema = z
   .strictObject({
     schemaVersion: z.literal(1),
     planId: z.string().regex(/^plan_[a-f0-9]{64}$/),
     createdAt: z.iso.datetime({ offset: true }),
     envelopes: z.array(ExecutionEnvelopeSchema).min(1).max(10_000),
+    lineage: ExperimentPlanLineageSchema.optional(),
   })
   .superRefine((plan, context) => {
-    const body = { createdAt: plan.createdAt, envelopes: plan.envelopes };
+    const body = {
+      createdAt: plan.createdAt,
+      envelopes: plan.envelopes,
+      ...(plan.lineage === undefined ? {} : { lineage: plan.lineage }),
+    };
     const expected = contentId("plan", body as unknown as JsonValue);
     if (plan.planId !== expected) {
       context.addIssue({
@@ -207,6 +246,34 @@ export const ExperimentPlanSchema = z
         message: "planId does not match the experiment plan content",
         path: ["planId"],
       });
+    }
+    if (plan.lineage !== undefined) {
+      const currentRunIds = new Set(plan.envelopes.map(({ manifest }) => manifest.runId));
+      const candidateRunIds = plan.lineage.pairs.map(({ candidateRunId }) => candidateRunId);
+      const previousRunIds = plan.lineage.pairs.map(({ previousRunId }) => previousRunId);
+      if (new Set(candidateRunIds).size !== candidateRunIds.length) {
+        context.addIssue({
+          code: "custom",
+          message: "candidate runs may appear in only one revision pair",
+          path: ["lineage", "pairs"],
+        });
+      }
+      if (new Set(previousRunIds).size !== previousRunIds.length) {
+        context.addIssue({
+          code: "custom",
+          message: "previous runs may appear in only one revision pair",
+          path: ["lineage", "pairs"],
+        });
+      }
+      for (const [index, pair] of plan.lineage.pairs.entries()) {
+        if (!currentRunIds.has(pair.candidateRunId)) {
+          context.addIssue({
+            code: "custom",
+            message: "candidateRunId must identify a run in this plan",
+            path: ["lineage", "pairs", index, "candidateRunId"],
+          });
+        }
+      }
     }
   });
 

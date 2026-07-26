@@ -120,6 +120,14 @@ export function formatProfileComparison(comparison: ProfileComparison): string {
     `Stage: \`${comparison.stage}\`  `,
     `Comparison: \`${comparison.comparisonId}\``,
     "",
+    "## Subject model identity",
+    "",
+    "| Treatment / variant | Requested | Selector | Served | Status |",
+    "|---|---|---|---|---|",
+    ...comparison.profiles.map((profile) =>
+      `| ${profile.treatment ?? profile.variant} | ${profile.model.requested.modelId} | `
+      + `${profile.model.selector ?? "—"} | ${profile.model.served ?? "—"} | ${profile.model.status} |`),
+    "",
     "This is a descriptive comparison over predeclared case axes. It does not calculate an aggregate score or declare a winner.",
     "",
     "## Decision axes",
@@ -197,6 +205,13 @@ export function formatEvaluationProfile(profile: EvaluationProfile): string {
     ...(profile.subject.variant === undefined ? [] : [`Variant: ${profile.subject.variant}`]),
     ...(profile.subject.treatment === undefined ? [] : [`Treatment: ${profile.subject.treatment}`]),
     ...(profile.subject.runId === undefined ? [] : [`Run: ${profile.subject.runId}`]),
+    ...(profile.subject.model === undefined
+      ? []
+      : [
+          `Requested model: ${profile.subject.model.requested.modelId}`,
+          `Served model: ${profile.subject.model.served ?? "unavailable"}`,
+          `Model identity: ${profile.subject.model.status}`,
+        ]),
     ...(profile.subject.package === undefined ? [] : [`Package digest: ${profile.subject.package.digest}`]),
     "",
     "Decision landscape:",
@@ -378,6 +393,14 @@ export async function buildRunProfileBrief(options: {
     ...(typeof manifest.configuration?.["treatmentId"] === "string"
       ? { treatment: manifest.configuration["treatmentId"] }
       : {}),
+    model: {
+      requested: manifest.model,
+      ...(subjectRun === undefined ? {} : {
+        selector: subjectRun.modelSelector,
+        ...(subjectRun.servedModel === undefined ? {} : { served: subjectRun.servedModel }),
+      }),
+      status: subjectRun?.modelIdentityStatus ?? "unverified",
+    },
     case: manifest.case,
     ...(packageReference === undefined ? {} : {
       ...(packageKind === undefined ? {} : { kind: packageKind }),

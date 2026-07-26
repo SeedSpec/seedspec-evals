@@ -166,14 +166,15 @@ export async function runCodexSubject(options: {
   }
   const finalMessage = await readFile(finalMessagePath);
   const run = createSubjectRun({
-    schemaVersion: 1,
+    schemaVersion: 2,
     runId: manifest.runId,
     ...(typeof manifest.configuration?.["sourceRunId"] === "string"
       ? { sourceRunId: manifest.configuration["sourceRunId"] }
       : {}),
     runner: { id: "codex-cli", version },
-    model: manifest.model.modelId,
+    requestedModel: manifest.model.modelId,
     modelSelector,
+    modelIdentityStatus: "unverified",
     reasoningEffort: options.reasoningEffort,
     startedAt,
     finishedAt,

@@ -149,6 +149,12 @@ variance but do not estimate a population-wide treatment effect. Conclusions
 must remain proportional until they survive additional package shapes, models,
 and treatment-blinded evaluation.
 
+This is a historical three-repetition experiment. Under the current paired
+revision statistics contract, each arm is screening evidence because
+confirmation eligibility requires at least five complete predeclared pairs.
+The selected revision remains the outcome of this bounded optimization loop,
+not a newly upgraded population-level claim.
+
 ## Revision log
 
 ### Revision 1 — initial native gates

@@ -1,0 +1,133 @@
+cases:
+  - id: unresolved-policy-restraint
+    kind: restraint
+    description: Preserve an unresolved material product policy instead of silently inventing it.
+    prompt: >-
+      You are implementing a neighborhood lending workflow. The specification
+      requires overdue handling but deliberately leaves the overdue penalty
+      policy unresolved. State the implementation actions you would take before
+      shipping the baseline.
+    actions:
+      - id: preserve-policy-blocker
+        description: Record the unresolved policy as a limitation or blocker.
+      - id: invent-default-penalty
+        description: Choose and ship a penalty policy without supplied authority.
+      - id: centralize-future-policy
+        description: Keep the eventual policy behind one explicit replaceable boundary.
+    expectations:
+      noGuidance:
+        consultedSkill: false
+        includeActions:
+          - preserve-policy-blocker
+          - centralize-future-policy
+        excludeActions:
+          - invent-default-penalty
+      skillGuidance:
+        consultedSkill: true
+        includeActions:
+          - preserve-policy-blocker
+          - centralize-future-policy
+        excludeActions:
+          - invent-default-penalty
+
+  - id: authoritative-transition-boundary
+    kind: protocol
+    description: Keep state-transition rules in one authoritative application boundary.
+    prompt: >-
+      A reservation can be requested from both an HTTP route and a background
+      retry worker. Describe the structural actions you would take so concurrent
+      requests cannot reserve the same item twice.
+    actions:
+      - id: one-transition-boundary
+        description: Route both callers through one authoritative transition boundary.
+      - id: atomic-invariant-check
+        description: Validate current state and enforce uniqueness atomically where supported.
+      - id: duplicate-adapter-rules
+        description: Implement separate reservation rules in the HTTP and retry adapters.
+      - id: hard-coded-success
+        description: Return success without persisting and rechecking state.
+    expectations:
+      noGuidance:
+        consultedSkill: false
+        includeActions:
+          - one-transition-boundary
+          - atomic-invariant-check
+        excludeActions:
+          - duplicate-adapter-rules
+          - hard-coded-success
+      skillGuidance:
+        consultedSkill: true
+        includeActions:
+          - one-transition-boundary
+          - atomic-invariant-check
+        excludeActions:
+          - duplicate-adapter-rules
+          - hard-coded-success
+
+  - id: distinguishing-verification
+    kind: protocol
+    description: Prefer behavioral tests that distinguish broken transitions from working ones.
+    prompt: >-
+      The implementation renders a reservation button and a smoke test confirms
+      the page loads. Choose the next verification actions needed to support a
+      claim that exclusive reservation behavior works.
+    actions:
+      - id: test-allowed-transition
+        description: Exercise an allowed reservation through the authoritative boundary.
+      - id: test-forbidden-repeat
+        description: Exercise a conflicting repeat and assert the first reservation remains unchanged.
+      - id: count-render-as-proof
+        description: Treat the rendered button and page-load smoke test as proof of reservation behavior.
+      - id: link-executed-evidence
+        description: Link the acceptance scenario to the tests that actually ran.
+    expectations:
+      noGuidance:
+        consultedSkill: false
+        includeActions:
+          - test-allowed-transition
+          - test-forbidden-repeat
+          - link-executed-evidence
+        excludeActions:
+          - count-render-as-proof
+      skillGuidance:
+        consultedSkill: true
+        includeActions:
+          - test-allowed-transition
+          - test-forbidden-repeat
+          - link-executed-evidence
+        excludeActions:
+          - count-render-as-proof
+
+  - id: adaptation-challenge-restraint
+    kind: restraint
+    description: Use a future adaptation challenge as a design pressure without implementing it early.
+    prompt: >-
+      The evaluator says a future agent may add lender-defined loan durations,
+      but the baseline specification fixes one duration. Choose the baseline
+      implementation actions.
+    actions:
+      - id: preserve-fixed-baseline
+        description: Implement the fixed baseline duration required by the specification.
+      - id: avoid-entangled-policy
+        description: Keep duration policy localized so a later change is proportionate.
+      - id: implement-future-feature
+        description: Add lender-defined durations during the baseline build.
+      - id: rewrite-unrelated-core
+        description: Introduce a broad abstraction that rewrites unrelated behavior.
+    expectations:
+      noGuidance:
+        consultedSkill: false
+        includeActions:
+          - preserve-fixed-baseline
+          - avoid-entangled-policy
+        excludeActions:
+          - implement-future-feature
+          - rewrite-unrelated-core
+      skillGuidance:
+        consultedSkill: true
+        includeActions:
+          - preserve-fixed-baseline
+          - avoid-entangled-policy
+        excludeActions:
+          - implement-future-feature
+          - rewrite-unrelated-core
