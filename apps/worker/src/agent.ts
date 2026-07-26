@@ -35,6 +35,7 @@ import { tool, type LanguageModel, type ToolSet, type UIMessage } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 import { z } from "zod";
 
+import { assessCompletion } from "./completion-check.js";
 import { errorClass, structuredLog } from "./logging.js";
 import { createSeedSpecTools, digestPackage, seedSpecToolNamesForVariant } from "./seedspec-tools.js";
 import { boundedObservedTiming } from "./trace-timing.js";
@@ -396,7 +397,8 @@ export class SeedSpecEvalAgent extends Think<Env> {
         },
       };
     });
-    const artifactSummary = summarizeArtifactDigest(await digestPackage(this.workspace, "."));
+    const artifactDigest = await digestPackage(this.workspace, ".");
+    const artifactSummary = summarizeArtifactDigest(artifactDigest);
     events.push({
       sequence: events.length,
       timestamp: finishedAt,
@@ -408,13 +410,27 @@ export class SeedSpecEvalAgent extends Think<Env> {
         observedElapsedMs: Math.max(0, upperBound - lowerBound),
       },
     });
-    const status = latest.status === "completed"
-      ? "succeeded"
-      : latest.status === "aborted"
-        ? "cancelled"
-        : latest.status === "skipped"
-          ? "rejected"
-          : "failed";
+    const completion = assessCompletion(latest.status, config.deliverables, artifactDigest);
+    events.push({
+      sequence: events.length,
+      timestamp: finishedAt,
+      kind: "status",
+      actor: "runner",
+      name: "completion-check",
+      data: {
+        passed: completion.passed,
+        submissionStatus: completion.submissionStatus,
+        workspaceDigestAvailable: completion.workspaceDigestAvailable,
+        requiredDeliverablePaths: completion.requiredDeliverablePaths,
+        missingRequiredDeliverablePaths: completion.missingRequiredDeliverablePaths,
+        unverifiableRequiredDeliverableIds: completion.unverifiableRequiredDeliverableIds,
+        failureCodes: completion.failureCodes,
+        observedElapsedMs: Math.max(0, upperBound - lowerBound),
+      },
+    });
+    const completionLimitations = completion.unverifiableRequiredDeliverableIds.length === 0
+      ? []
+      : [`The Think adapter could not verify required deliverables without paths: ${completion.unverifiableRequiredDeliverableIds.join(", ")}.`];
     return {
       ok: true,
       error: null,
@@ -426,7 +442,7 @@ export class SeedSpecEvalAgent extends Think<Env> {
         model: { provider: providerForModel(config.model), modelId: config.model, parameters: {}, routing: { gateway: config.gatewayId } },
         startedAt,
         finishedAt,
-        status,
+        status: completion.traceStatus,
         capture: { messages: "partial", toolCalls: "full", toolResults: "full", timing: "event", usage: "tokens", artifacts: "digests", reasoning: "not-collected" },
         events,
         limitations: [
@@ -435,6 +451,7 @@ export class SeedSpecEvalAgent extends Think<Env> {
           "Event timestamps record when the Think runner durably appended each event, not when the model provider began or completed internal work.",
           "observedElapsedMs is derived from durable wall-clock event time relative to the submission start.",
           "Tool-result durationMs is reported by Think's per-tool lifecycle hook and measures server-side tool execution.",
+          ...completionLimitations,
         ],
         redactions: [],
       })),

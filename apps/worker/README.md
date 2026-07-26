@@ -18,6 +18,7 @@ All mutation bodies use `Content-Type: application/json`. Validation errors retu
 | `GET` | `/v1/runs/:runId/submissions?status=&limit=` | List submission ledger records. |
 | `GET` | `/v1/runs/:runId/submissions/:submissionId` | Inspect one submission. |
 | `DELETE` | `/v1/runs/:runId/submissions/:submissionId` | Idempotently cancel pending/running work and return its current inspection. |
+| `GET` | `/v1/runs/:runId/trace` | Export the terminal run trace, workspace digest, and required-deliverable completion check. |
 
 A submit body has this shape. The CLI generates the full content-addressed manifest; it is abbreviated here only for readability:
 
@@ -57,6 +58,8 @@ A submit body has this shape. The CLI generates the full content-addressed manif
 ```
 
 The actual `manifest` must satisfy the full `RunManifestSchema`; abbreviated manifests are rejected. Its content-addressed ID and payload digests must match the execution configuration. `trustedInstructions` are placed in the system prompt. `untrustedMaterial` is placed only in an explicitly untrusted user-data envelope. Simulated author responses stay outside that envelope and are available only through the exact-match `ask_author` tool; an unknown question ID returns no answer.
+
+Think submission status and evaluation outcome are distinct. A `completed` submission means the model turn reached a terminal state. Trace export reports `succeeded` only when the workspace can also be represented by a portable digest and every required deliverable has an adapter-verifiable path that exists in the artifact inventory. The trace records this decision as `completion-check`. This is a delivery and integrity gate, not a semantic-quality judgment; rubric and hidden-expectation evaluators remain responsible for deciding whether delivered content is correct, safe, and useful.
 
 ## Safety and current scope
 

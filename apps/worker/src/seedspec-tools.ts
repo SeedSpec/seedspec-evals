@@ -24,6 +24,19 @@ const AREAS = [
 
 type Diagnostic = { code: string; path: string; message: string };
 type Reference = { label: string; path: string; expected: "file" | "exists" };
+export type PortablePackageDigest =
+  | {
+      ok: true;
+      algorithm: "seedspec-package-sha256-v1";
+      digest: string;
+      fileCount: number;
+      files: Array<{ path: string; digest: string; size: number }>;
+    }
+  | {
+      ok: false;
+      code: "SYMLINK_NOT_PORTABLE" | "PATH_NOT_PORTABLE" | "PATH_OUTSIDE_ROOT" | "PATH_CASE_COLLISION";
+      paths: string[];
+    };
 type ValidationResult = {
   ok: boolean;
   check: string;
@@ -147,18 +160,41 @@ export async function checkPackage(workspace: WorkspaceLike, root: string): Prom
     ...result(errors.length === 0, errors, warnings),
     manifest: { id: manifest["id"], version: manifest["version"], kind },
     referencedEntries: references.length,
-    digest: isRecord(packageDigest) ? packageDigest["digest"] ?? null : null,
+    digest: packageDigest.ok ? packageDigest.digest : null,
   };
 }
 
-export async function digestPackage(workspace: WorkspaceLike, root: string): Promise<unknown> {
+export async function digestPackage(workspace: WorkspaceLike, root: string): Promise<PortablePackageDigest> {
   const normalizedRoot = root === "." ? "." : root.replace(/\/+$/, "");
   const prefix = normalizedRoot === "." ? "" : `${normalizedRoot}/`;
   const entries = await workspace.glob(`${prefix}**/*`);
-  const files = entries.filter((entry) => entry.type === "file");
-  const unsupported = entries.filter((entry) => entry.type === "symlink");
-  if (unsupported.length > 0) return { ok: false, code: "SYMLINK_NOT_PORTABLE", paths: unsupported.map((entry) => entry.path).sort() };
-  const relative = files.map((entry) => ({ entry, path: prefix === "" ? entry.path : entry.path.slice(prefix.length) }));
+  const normalizedEntries = entries.map((entry) => ({
+    entry,
+    path: normalizeWorkspaceEntryPath(entry.path),
+  }));
+  const outsideRoot = prefix === ""
+    ? []
+    : normalizedEntries.filter(({ path }) => path !== normalizedRoot && !path.startsWith(prefix));
+  if (outsideRoot.length > 0) {
+    return {
+      ok: false,
+      code: "PATH_OUTSIDE_ROOT",
+      paths: outsideRoot.map(({ entry }) => entry.path).sort(),
+    };
+  }
+  const files = normalizedEntries.filter(({ entry }) => entry.type === "file");
+  const unsupported = normalizedEntries.filter(({ entry }) => entry.type === "symlink");
+  if (unsupported.length > 0) {
+    return {
+      ok: false,
+      code: "SYMLINK_NOT_PORTABLE",
+      paths: unsupported.map(({ path }) => path).sort(),
+    };
+  }
+  const relative = files.map(({ entry, path }) => ({
+    entry,
+    path: prefix === "" ? path : path.slice(prefix.length),
+  }));
   const invalid = relative.filter(({ path }) => !isSafePackagePath(path));
   if (invalid.length > 0) return { ok: false, code: "PATH_NOT_PORTABLE", paths: invalid.map(({ path }) => path).sort() };
   const collisions = findCaseCollisions(relative.map(({ path }) => path));
@@ -367,7 +403,7 @@ async function implementationResourceErrors(workspace: WorkspaceLike, root: stri
       if (skillSource !== null && !hasValidSkillFrontmatter(skillSource)) errors.push({ code: "IMPLEMENTATION_RESOURCE_SKILL_INVALID", path: entrypointPath, message: `Skill resource ${id} requires YAML frontmatter with non-empty name and description.` });
     }
     const digest = await digestPackage(workspace, joinRoot(root, bundlePath));
-    const actualDigest = isRecord(digest) ? digest["digest"] : null;
+    const actualDigest = digest.ok ? digest.digest : null;
     if (actualDigest !== bundled["digest"]) errors.push({ code: "IMPLEMENTATION_RESOURCE_DIGEST_MISMATCH", path: bundlePath, message: `Bundled resource ${id} digest does not match its contents.` });
   }
   return errors;
@@ -428,6 +464,9 @@ function asRecordArray(value: unknown): Record<string, unknown>[] { return Array
 function stringArray(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []; }
 function isSafeRoot(root: string): boolean { return root === "." || isSafePackagePath(root); }
 function isSafePackagePath(path: string): boolean { return /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*\/?$/.test(path) && !path.includes("\\") && !path.includes("\0"); }
+function normalizeWorkspaceEntryPath(path: string): string {
+  return path.startsWith("/") ? path.slice(1) : path;
+}
 function joinRoot(root: string, path: string): string { const normalizedRoot = root === "." ? "." : root.replace(/\/+$/, ""); return normalizedRoot === "." ? path : `${normalizedRoot}/${path}`; }
 function compareUtf8(left: string, right: string): number { const encoder = new TextEncoder(); const a = encoder.encode(left); const b = encoder.encode(right); for (let index = 0; index < Math.min(a.length, b.length); index += 1) { const delta = (a[index] ?? 0) - (b[index] ?? 0); if (delta !== 0) return delta; } return a.length - b.length; }
 function findCaseCollisions(paths: string[]): string[] { const seen = new Map<string, string>(); const collisions = new Set<string>(); for (const path of paths) { const key = path.toLowerCase(); const previous = seen.get(key); if (previous !== undefined && previous !== path) { collisions.add(previous); collisions.add(path); } else seen.set(key, path); } return [...collisions].sort(); }
