@@ -10,7 +10,7 @@
     "deploy:dry": "wrangler deploy --dry-run --outdir dist/worker"
   },
   "dependencies": {
-    "@cloudflare/think": "0.13.0",
+    "@cloudflare/think": "0.15.1",
     "@seedspec/protocol": "file:../../vendor/protocol",
     "@seedspec/eval-core": "0.2.0",
     "@seedspec/eval-harness": "0.2.0",
