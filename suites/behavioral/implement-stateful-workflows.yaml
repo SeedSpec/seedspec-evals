@@ -1,7 +1,34 @@
+execution:
+  runtime:
+    mode: active-entrypoint
+    target: The selected supported Codex or Claude Code CLI runner.
+    preservedBehavior: >-
+      Native prompts, model decisions, skill consultation, and final response
+      remain inside the selected runner.
+  dependencies:
+    - id: requested-model
+      mode: live
+      binding: network
+      behavior: Return inference for the exact model requested by each task.
+      source: The requested model selector recorded in the behavioral task.
+      effects: read-only
+      treatments: [no-guidance, skill-guidance]
+    - id: candidate-skill
+      mode: frozen
+      binding: filesystem
+      behavior: Provide the exact content-addressed guidance only to the skill treatment.
+      source: The skill source and digest stored in the immutable behavioral plan.
+      effects: read-only
+      treatments: [skill-guidance]
+
 cases:
   - id: unresolved-policy-restraint
     kind: restraint
     description: Preserve an unresolved material product policy instead of silently inventing it.
+    design:
+      capability: Preserve unresolved material policy while localizing its future implementation boundary.
+      necessity: The request asks for shipping actions even though no penalty policy has authority.
+      success: Observable choices preserve the blocker and boundary while excluding an invented penalty.
     prompt: >-
       You are implementing a neighborhood lending workflow. The specification
       requires overdue handling but deliberately leaves the overdue penalty
@@ -33,6 +60,10 @@ cases:
   - id: authoritative-transition-boundary
     kind: protocol
     description: Keep state-transition rules in one authoritative application boundary.
+    design:
+      capability: Route competing callers through one authoritative atomic transition boundary.
+      necessity: Separate HTTP and retry paths can otherwise pass without exercising shared concurrency control.
+      success: Observable choices use one boundary and atomic enforcement while excluding duplicated rules and false success.
     prompt: >-
       A reservation can be requested from both an HTTP route and a background
       retry worker. Describe the structural actions you would take so concurrent
@@ -67,6 +98,10 @@ cases:
   - id: distinguishing-verification
     kind: protocol
     description: Prefer behavioral tests that distinguish broken transitions from working ones.
+    design:
+      capability: Select evidence that distinguishes exclusive reservation behavior from superficial rendering.
+      necessity: The supplied smoke evidence can pass without executing the claimed state transition.
+      success: Observable choices exercise allowed and conflicting transitions and link executed evidence without accepting rendering as proof.
     prompt: >-
       The implementation renders a reservation button and a smoke test confirms
       the page loads. Choose the next verification actions needed to support a
@@ -101,6 +136,10 @@ cases:
   - id: adaptation-challenge-restraint
     kind: restraint
     description: Use a future adaptation challenge as a design pressure without implementing it early.
+    design:
+      capability: Preserve a fixed baseline while keeping one future policy change proportionate.
+      necessity: The future challenge can induce premature feature work or broad abstraction without restraint.
+      success: Observable choices implement the fixed baseline and localize policy while excluding the future feature and unrelated rewrites.
     prompt: >-
       The evaluator says a future agent may add lender-defined loan durations,
       but the baseline specification fixes one duration. Choose the baseline

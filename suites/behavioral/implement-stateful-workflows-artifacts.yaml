@@ -1,7 +1,34 @@
+execution:
+  runtime:
+    mode: active-entrypoint
+    target: The selected supported Codex or Claude Code CLI runner.
+    preservedBehavior: >-
+      Native prompts, model decisions, skill consultation, and artifact
+      production remain inside the selected runner.
+  dependencies:
+    - id: requested-model
+      mode: live
+      binding: network
+      behavior: Return inference for the exact model requested by each task.
+      source: The requested model selector recorded in the behavioral task.
+      effects: read-only
+      treatments: [no-guidance, skill-guidance]
+    - id: candidate-skill
+      mode: frozen
+      binding: filesystem
+      behavior: Provide the exact content-addressed guidance only to the skill treatment.
+      source: The skill source and digest stored in the immutable behavioral plan.
+      effects: read-only
+      treatments: [skill-guidance]
+
 cases:
   - id: selective-unresolved-policy
     kind: restraint
     description: Ship resolved overdue behavior without inventing or over-blocking an unresolved penalty policy.
+    design:
+      capability: Separate resolved overdue behavior from an unresolved monetary policy.
+      necessity: A superficially complete artifact can invent a penalty or block unrelated resolved behavior.
+      success: Independent relationship checks preserve reminders and operations, isolate the penalty, and reject premature policy.
     prompt: >-
       Prepare the baseline workflow decision for a neighborhood lending product.
       The resolved specification says a loan becomes overdue when its due date
@@ -121,6 +148,10 @@ cases:
   - id: collision-and-retry-semantics
     kind: protocol
     description: Encode atomic exclusivity without conflating idempotent retries, competing requests, and expired reservations.
+    design:
+      capability: Distinguish idempotent retries, competing requests, and expiry within one atomic reservation boundary.
+      necessity: A generic success or mutex design can pass prose review without preserving the required state distinctions.
+      success: Independent relationship checks require shared authority, durable atomic enforcement, typed outcomes, and distinguishing tests.
     prompt: >-
       Design the reservation transition for a service backed by PostgreSQL.
       Both an HTTP route and a retry worker can submit reservations. At most one
@@ -240,6 +271,10 @@ cases:
   - id: evidence-claim-calibration
     kind: protocol
     description: Map acceptance claims only to evidence that actually distinguishes the claimed behavior.
+    design:
+      capability: Calibrate acceptance claims to the strength of executed evidence.
+      necessity: File names, screenshots, and smoke tests can satisfy proxy checks without proving the claimed behavior.
+      success: Independent relationship checks accept only evidence that executes the relevant behavior and preserve explicit limitations.
     prompt: >-
       Build the acceptance evidence map for a reservation feature. The retained
       evidence is: E1, an executed browser smoke test that renders the reserve
@@ -378,6 +413,10 @@ cases:
   - id: adaptation-without-premature-generalization
     kind: restraint
     description: Keep a fixed baseline correct while making one future policy change proportionate.
+    design:
+      capability: Localize a future duration policy without exposing or implementing it in the baseline.
+      necessity: The adaptation prompt can reward premature configuration or an unnecessary plugin system.
+      success: Independent relationship checks preserve the fixed persisted duration, shared entry points, localized policy, and bounded future change.
     prompt: >-
       Prepare the loan-creation decision artifact. The resolved baseline fixes
       every loan at 14 days. Both web and import callers create loans. A future

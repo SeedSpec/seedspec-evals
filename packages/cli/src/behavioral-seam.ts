@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, extname, resolve } from "node:path";
 
 import {
+  BehavioralExecutionContractSchema,
   BehavioralSeamCaseSchema,
   BehavioralSeamObservationSchema,
   BehavioralSeamPlanSchema,
@@ -36,6 +37,7 @@ import {
 } from "./subject-runner.js";
 
 const SuiteInputSchema = z.strictObject({
+  execution: BehavioralExecutionContractSchema,
   cases: z.array(BehavioralSeamCaseSchema).min(1).max(256),
 });
 
@@ -94,11 +96,12 @@ export async function createBehavioralSeamPlanFile(options: {
     }
   }
   const plan = createBehavioralSeamPlan({
-    schemaVersion: 1,
+    schemaVersion: 2,
     createdAt: options.createdAt,
     skill,
     models: [...options.models],
     repetitions: options.repetitions,
+    execution: suite.execution,
     cases: selectedCases,
     tasks,
     interpretation:

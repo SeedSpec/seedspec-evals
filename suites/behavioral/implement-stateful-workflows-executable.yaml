@@ -1,7 +1,35 @@
+execution:
+  runtime:
+    mode: active-entrypoint
+    target: The selected supported Codex or Claude Code CLI runner.
+    preservedBehavior: >-
+      Native prompts, model decisions, skill consultation, and module
+      implementation remain inside the selected runner. The harness executes
+      hidden probes only after delivery.
+  dependencies:
+    - id: requested-model
+      mode: live
+      binding: network
+      behavior: Return inference for the exact model requested by each task.
+      source: The requested model selector recorded in the behavioral task.
+      effects: read-only
+      treatments: [no-guidance, skill-guidance]
+    - id: candidate-skill
+      mode: frozen
+      binding: filesystem
+      behavior: Provide the exact content-addressed guidance only to the skill treatment.
+      source: The skill source and digest stored in the immutable behavioral plan.
+      effects: read-only
+      treatments: [skill-guidance]
+
 cases:
   - id: executable-reservation-transition
     kind: protocol
     description: Implement an authoritative, atomic reservation transition as a small executable module.
+    design:
+      capability: Implement one durable reservation transition with authorization, idempotency, conflict, and expiry semantics.
+      necessity: The hidden probe invokes competing adapters and failure paths that placeholders or process-local authority cannot satisfy.
+      success: The executable probe observes the required state transitions and rejects known broken concurrency and authorization behavior.
     prompt: >-
       Complete the reservation service module. Both an HTTP adapter and a retry
       worker will call this one service. At most one active reservation may
@@ -284,6 +312,10 @@ cases:
   - id: executable-async-guard-freshness
     kind: protocol
     description: Implement asynchronous authorization without using stale state or losing cross-key updates.
+    design:
+      capability: Revalidate asynchronous authority against fresh state while preserving concurrent updates across keys.
+      necessity: Cached pre-await state and whole-state replacement can pass simple happy paths while violating freshness or losing updates.
+      success: The executable probe observes rejection after authority changes and preservation of independent concurrent updates.
     prompt: >-
       Complete the community access service module. Authorization is
       asynchronous and community membership or listing ownership may change
@@ -707,6 +739,10 @@ cases:
   - id: executable-state-outbox-recovery
     kind: fallback
     description: Implement an atomic state transition plus outbox record that recovers safely from a transient enqueue failure.
+    design:
+      capability: Roll back state, idempotency, and outbox effects together after a transient enqueue failure.
+      necessity: Happy-path or process-local recovery can pass without proving atomic rollback and safe retry.
+      success: The executable probe observes no residual mutation after failure and exactly one state change and event after retry.
     prompt: >-
       Complete the shipment-readiness service module. Both an HTTP action and a
       reconciliation worker call this service after payment. An authorized actor
@@ -1047,6 +1083,10 @@ cases:
   - id: executable-custody-transfer
     kind: protocol
     description: Implement an authorized, versioned custody transfer with idempotency and concurrent stale-write protection.
+    design:
+      capability: Enforce authorization, expected custody, versioning, idempotency, and audit integrity in one transfer boundary.
+      necessity: Independent adapter logic or stale writes can appear successful without preserving the winning asset and audit record.
+      success: The executable probe observes one concurrent winner, typed rejection of stale work, replay stability, and one matching audit entry.
     prompt: >-
       Complete the custody-transfer service module. One authoritative service is
       called by both web and import adapters. A transfer is allowed only when

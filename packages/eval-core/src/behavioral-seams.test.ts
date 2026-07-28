@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BehavioralExecutionContractSchema,
   BehavioralSeamCaseSchema,
   contentId,
   createBehavioralSeamPlan,
@@ -24,7 +25,7 @@ describe("behavioral seam screening", () => {
       return { taskId: contentId("behavior_task", body as unknown as JsonValue), ...body };
     });
     const plan = createBehavioralSeamPlan({
-      schemaVersion: 1,
+      schemaVersion: 2,
       createdAt: "2026-07-24T12:00:00.000Z",
       skill: {
         id: "shape-solution-intent",
@@ -33,10 +34,39 @@ describe("behavioral seam screening", () => {
       },
       models: ["openai/example"],
       repetitions: 1,
+      execution: {
+        runtime: {
+          mode: "active-entrypoint",
+          target: "The selected supported CLI runner.",
+          preservedBehavior: "The runner retains its native prompts, tools, and control flow.",
+        },
+        dependencies: [{
+          id: "requested-model",
+          mode: "live",
+          binding: "network",
+          behavior: "Return inference for the requested model.",
+          source: "The requested model recorded in each behavioral task.",
+          effects: "read-only",
+          treatments: ["no-guidance", "skill-guidance"],
+        }, {
+          id: "candidate-skill",
+          mode: "frozen",
+          binding: "filesystem",
+          behavior: "Provide the treatment guidance without modifying it during the run.",
+          source: "The content-addressed skill stored in the behavioral plan.",
+          effects: "read-only",
+          treatments: ["skill-guidance"],
+        }],
+      },
       cases: [{
         id: "ask-before-policy",
         kind: "protocol",
         description: "Escalate an unresolved material product choice.",
+        design: {
+          capability: "Preserve an unresolved material policy.",
+          necessity: "The task asks for a workflow while withholding the policy.",
+          success: "The selected actions preserve the policy boundary and reject invention.",
+        },
         prompt: "Specify a lending workflow without inventing its overdue policy.",
         actions: [{
           id: "ask-policy",
@@ -106,6 +136,11 @@ describe("behavioral seam screening", () => {
       id: "selective-policy-restraint",
       kind: "restraint",
       description: "Implement the resolved workflow while isolating one unresolved policy.",
+      design: {
+        capability: "Separate resolved workflow behavior from unresolved policy.",
+        necessity: "The artifact must ship resolved behavior without inventing the missing policy.",
+        success: "Independent relationship checks accept the resolved behavior and reject invention.",
+      },
       prompt: "Produce the requested workflow decision artifact.",
       actions: [],
       artifact: {
@@ -177,5 +212,75 @@ describe("behavioral seam screening", () => {
       expected: "concurrent-collision",
       weight: 1,
     }).passed).toBe(true);
+  });
+
+  it("rejects unsafe live dependencies and unreset isolated mutations", () => {
+    const base = {
+      id: "requested-model",
+      binding: "network" as const,
+      behavior: "Return inference for the requested model.",
+      source: "The requested model recorded in each behavioral task.",
+      treatments: ["no-guidance", "skill-guidance"] as const,
+    };
+    expect(() => BehavioralExecutionContractSchema.parse({
+      runtime: {
+        mode: "active-entrypoint",
+        target: "The selected supported CLI runner.",
+        preservedBehavior: "The runner retains its native behavior.",
+      },
+      dependencies: [{
+        ...base,
+        mode: "live",
+        effects: "isolated-mutation",
+        reset: "Reset after the run.",
+      }],
+    })).toThrow(/live dependencies must be read-only/);
+    expect(() => BehavioralExecutionContractSchema.parse({
+      runtime: {
+        mode: "active-entrypoint",
+        target: "The selected supported CLI runner.",
+        preservedBehavior: "The runner retains its native behavior.",
+      },
+      dependencies: [{
+        ...base,
+        mode: "simulated",
+        effects: "isolated-mutation",
+      }],
+    })).toThrow(/require a reset contract/);
+  });
+
+  it("requires reconstruction limits and dependency coverage for both treatments", () => {
+    expect(() => BehavioralExecutionContractSchema.parse({
+      runtime: {
+        mode: "reconstruction",
+        target: "A reduced agent loop.",
+        preservedBehavior: "The loop preserves the task prompt.",
+      },
+      dependencies: [{
+        id: "candidate-skill",
+        mode: "frozen",
+        binding: "filesystem",
+        behavior: "Provide treatment guidance.",
+        source: "A content-addressed skill.",
+        effects: "read-only",
+        treatments: ["skill-guidance"],
+      }],
+    })).toThrow();
+    expect(() => BehavioralExecutionContractSchema.parse({
+      runtime: {
+        mode: "active-entrypoint",
+        target: "The selected supported CLI runner.",
+        preservedBehavior: "The runner retains its native behavior.",
+      },
+      dependencies: [{
+        id: "candidate-skill",
+        mode: "frozen",
+        binding: "filesystem",
+        behavior: "Provide treatment guidance.",
+        source: "A content-addressed skill.",
+        effects: "read-only",
+        treatments: ["skill-guidance"],
+      }],
+    })).toThrow(/no-guidance/);
   });
 });
