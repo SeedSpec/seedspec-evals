@@ -24,9 +24,16 @@ export const protocolSchemaNames = Object.freeze([
   "seedspec.schema.json",
   "application.schema.json",
   "feature.schema.json",
+  "component.schema.json",
   "project.schema.json",
   "component-index.schema.json",
   "artifact-index.schema.json",
+  "context-index.schema.json",
+  "context-request.schema.json",
+  "context-bundle.schema.json",
+  "context-preparation-receipt.schema.json",
+  "context-use-receipt.schema.json",
+  "integration-descriptor.schema.json",
   "artifact-selections.schema.json",
   "configuration-selections.schema.json",
   "applied-intent-input.schema.json",
@@ -53,7 +60,7 @@ export const protocolSchemaNames = Object.freeze([
 ]);
 
 export const schemaDirectory = fileURLToPath(
-  new URL("../schemas/v0.2/", import.meta.url)
+  new URL("../schemas/v0.3/", import.meta.url)
 );
 export const protocolDocumentDirectory = fileURLToPath(
   new URL("../documents/", import.meta.url)

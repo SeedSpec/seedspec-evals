@@ -44,7 +44,9 @@ async function directoryDigest(directory) {
   return `sha256:${aggregate.digest("hex")}`;
 }
 
-const releaseVersion = "0.2.0";
+const evaluationReleaseVersion = (await readJson(path.join(root, "package.json"))).version;
+const expectedProtocolRelease = "0.3.0";
+const expectedProtocolFamily = "0.3";
 const packageFiles = [
   "package.json",
   "packages/cli/package.json",
@@ -56,12 +58,12 @@ const packageFiles = [
 ];
 for (const relativePath of packageFiles) {
   const packageJson = await readJson(path.join(root, relativePath));
-  assert(packageJson.version === releaseVersion,
-    `${relativePath} must use ${releaseVersion}`);
+  assert(packageJson.version === evaluationReleaseVersion,
+    `${relativePath} must use ${evaluationReleaseVersion}`);
   for (const [name, version] of Object.entries(packageJson.dependencies ?? {})) {
     if (name.startsWith("@seedspec/eval")) {
-      assert(version === releaseVersion,
-        `${relativePath} must pin ${name} to ${releaseVersion}`);
+      assert(version === evaluationReleaseVersion,
+        `${relativePath} must pin ${name} to ${evaluationReleaseVersion}`);
     }
   }
 }
@@ -69,9 +71,14 @@ for (const relativePath of packageFiles) {
 const snapshot = await readJson(path.join(vendorRoot, "snapshot.json"));
 const protocolPackage = await readJson(path.join(vendorRoot, "package.json"));
 const manifest = await readJson(path.join(vendorRoot, "protocol-release.json"));
-assert(snapshot.version === releaseVersion, "Frozen protocol snapshot must use 0.2.0");
-assert(protocolPackage.version === releaseVersion, "Vendored protocol package must use 0.2.0");
-assert(manifest.release_id === releaseVersion, "Vendored release manifest must use 0.2.0");
+assert(snapshot.version === expectedProtocolRelease,
+  `Frozen protocol snapshot must use ${expectedProtocolRelease}`);
+assert(protocolPackage.version === expectedProtocolRelease,
+  `Vendored protocol package must use ${expectedProtocolRelease}`);
+assert(manifest.release_id === expectedProtocolRelease,
+  `Vendored release manifest must use ${expectedProtocolRelease}`);
+assert(manifest.protocol_family === expectedProtocolFamily,
+  `Vendored protocol family must use ${expectedProtocolFamily}`);
 assert(snapshot.sourceDigest === await directoryDigest(vendorRoot),
   "Vendored protocol bytes do not match snapshot.json");
 if (process.env.SEEDSPEC_REQUIRE_CLEAN_PROTOCOL_SNAPSHOT === "1") {
@@ -79,7 +86,7 @@ if (process.env.SEEDSPEC_REQUIRE_CLEAN_PROTOCOL_SNAPSHOT === "1") {
     "Release verification requires a protocol snapshot from a clean source checkout");
 }
 
-const schemaRoot = path.join(vendorRoot, "schemas/v0.2");
+const schemaRoot = path.join(vendorRoot, `schemas/v${manifest.protocol_family}`);
 const schemaNames = (await readdir(schemaRoot))
   .filter((name) => name.endsWith(".schema.json"))
   .sort();
@@ -97,7 +104,7 @@ for (const entry of manifest.documents) {
 }
 
 console.log(
-  `Evaluation toolchain ${releaseVersion} uses the exact protocol snapshot: `
+  `Evaluation toolchain ${evaluationReleaseVersion} uses protocol ${manifest.release_id}: `
   + `${schemaNames.length} schemas, ${manifest.documents.length} documents, `
   + `${snapshot.sourceDirty ? "working-tree bytes recorded" : "clean source revision"}.`
 );

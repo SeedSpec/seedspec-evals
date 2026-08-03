@@ -24,13 +24,15 @@ const packageJson = JSON.parse(await readFile(resolve(sourcePackage, "package.js
 if (packageJson.name !== "@seedspec/protocol") {
   throw new Error(`Expected @seedspec/protocol at ${sourcePackage}`);
 }
+const protocolRelease = JSON.parse(
+  await readFile(resolve(sourcePackage, "protocol-release.json"), "utf8")
+);
 
 await rm(destination, { recursive: true, force: true });
 await mkdir(destination, { recursive: true });
 for (const entry of [
   "package.json",
   "README.md",
-  "schemas",
   "src",
   "documents",
   "protocol-release.json",
@@ -38,6 +40,13 @@ for (const entry of [
 ]) {
   await cp(resolve(sourcePackage, entry), resolve(destination, entry), { recursive: true });
 }
+const schemaFamily = `v${protocolRelease.protocol_family}`;
+await mkdir(resolve(destination, "schemas"), { recursive: true });
+await cp(
+  resolve(sourcePackage, "schemas", schemaFamily),
+  resolve(destination, "schemas", schemaFamily),
+  { recursive: true }
+);
 
 const sourceDigest = await digestDirectory(destination);
 

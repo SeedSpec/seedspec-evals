@@ -279,7 +279,7 @@ function toolsForVariant(
       name: "seedspec-package-check",
       version: HARNESS_VERSION,
       configuration: {
-        protocolVersion: "0.2",
+        protocolVersion: "0.3",
         protocolPackage: `@seedspec/protocol@${protocolSnapshot.version}`,
         protocolRevision: protocolSnapshot.sourceDigest,
         adapter: "think-workspace",

@@ -1,7 +1,6 @@
 # SeedSpec Language Definition
 
-**Status:** Experimental 0.2
-**Protocol family:** `0.1`
+**Status:** Experimental
 
 SeedSpec is a language for packaging reusable solution intent and resolving it
 into an explicit, provenance-preserving handoff for an implementing agent.
@@ -18,6 +17,7 @@ package-author intent
   + adopter choices and applied intent
   + declared composition evidence
   -> resolved project handoff
+  -> request-specific context preparation
   -> implementation in a user-chosen environment
   -> separately recorded verification evidence
 ```
@@ -31,7 +31,7 @@ operations, and claims.
 The rest of the release bundle divides responsibility as follows:
 
 - `docs/protocol.md` defines exact package and handoff behavior.
-- `packages/protocol/schemas/v0.2/` defines machine-valid document shapes.
+- `packages/protocol/schemas/` contains the machine-valid document shapes.
 - `docs/operations.md` defines the observable contracts of protocol operations.
 - `conformance/cases.yaml` and its fixtures define portable behavioral checks.
 - `protocol-release.json` binds exact revisions of those surfaces into one
@@ -50,7 +50,8 @@ explain this language but cannot add protocol requirements.
 
 A SeedSpec package carries reusable intent in ordinary files rooted by
 `seedspec.yaml`. The package is self-contained unless it explicitly identifies
-optional remote artifacts or implementation resources.
+optional remote artifacts or implementation resources. Primary intent always
+has local context-module bytes.
 
 Package validity MUST NOT depend on network access. A package can be inspected,
 validated, digested, composed, and resolved from its available local bytes.
@@ -68,9 +69,9 @@ important statements:
 - an implementing environment acts only under its own user and system
   authority.
 
-No package document, implementation resource, artifact, task, or resolved file
-implicitly authorizes code execution, network access, credential use, external
-changes, or spending.
+No package document, implementation resource, artifact, task, integration
+descriptor, prepared bundle, receipt, or resolved file implicitly authorizes
+code execution, network access, credential use, external changes, or spending.
 
 ### 2.3 Meaningful concerns remain separate
 
@@ -83,6 +84,8 @@ SeedSpec represents the following as separate semantic concerns:
 - composition declarations and review records;
 - applied intent for the actual project;
 - implementation profiles and resources;
+- context modules and their explicit bridge bindings;
+- context requests, prepared bundles, and reported use;
 - supporting artifacts and task reminders;
 - completion scope and verification plans; and
 - realization or outcome evidence.
@@ -129,10 +132,12 @@ them by choosing on the user's behalf.
 
 ### 2.7 Guidance does not become execution
 
-Components, artifacts, implementation profiles, implementation resources, and
-task runbooks may help an agent perform work. Preserving or resolving them does
-not install a tool, invoke a skill, execute a script, fetch a remote artifact,
-or prove that their guidance is suitable.
+Components, artifacts, implementation profiles, implementation resources,
+context modules, bridge Skills, and task runbooks may help an agent perform
+work. Preserving or resolving them does not install a tool, invoke a Skill,
+execute a script, fetch a remote artifact, or prove that their guidance is
+suitable. Context preparation selects and transforms declared content. It does
+not authorize execution.
 
 Package-authored tasks are ordered reminders. Their array order is their only
 protocol sequencing meaning. They are not a workflow graph, progress ledger, or
@@ -145,9 +150,12 @@ SeedSpec keeps these claims distinct:
 1. **Package validity** — the package follows the protocol release.
 2. **Authoring quality** — the package communicates useful intent.
 3. **Resolution readiness** — required adopter choices have been recorded.
-4. **Capability conformance** — supplied evidence covers an exact declared
+4. **Native module validity** — an explicit adapter accepts exact module bytes.
+5. **Context preparation** — one bundle records request-specific selection.
+6. **Reported context use** — a consumer reports consultation or omission.
+7. **Capability conformance** — supplied evidence covers an exact declared
    capability contract and suite.
-5. **Project completion** — evidence addresses an agreed realization or outcome
+8. **Project completion** — evidence addresses an agreed realization or outcome
    scope.
 
 Passing one layer MUST NOT be presented as proof of another.
@@ -182,14 +190,16 @@ coherent reusable solution intent source, a configuration contract, and any
 declared supporting material.
 
 Every package has a namespaced identity, author-controlled semantic version,
-protocol family, author-supplied kind hint, primary intent entrypoint,
+protocol family, author-supplied kind hint, primary intent module,
 configuration schema, valid example, and zero or more supporting declarations.
+Every package declares at least one context module. Bridge bindings are nested
+on their target modules.
 
 ### 3.2 Kind hint
 
-Core kind hints are `solution`, `application`, `feature`, `workflow`,
-`automation`, `configuration`, and `integration`. Namespaced custom hints are
-permitted.
+Core kind hints are `solution`, `application`, `feature`, `component`,
+`workflow`, `automation`, `configuration`, and `integration`. Namespaced custom
+hints are permitted.
 
 A kind communicates the expected outcome shape. It does not determine validity,
 composition position, or required fields. Resolution position determines
@@ -197,8 +207,14 @@ whether a package is the project root or an addition.
 
 ### 3.3 Root and addition
 
-One selected package is the root. Every other selected package is an addition.
-This is the complete composition-role model.
+One selected package is the root. Every explicit or recursively bundled child
+package is an addition. This is the complete composition-role model.
+
+A package can declare bundled children through `composition.includes`. Each
+parent-to-child edge carries the child's local path, exact identity, and one
+Markdown integration seam. The seam has a semantic role but no required prose
+structure. Resolution preserves the edges instead of flattening away their
+authored relationships.
 
 Packages may declare capabilities, requirements, tested revisions, and
 conflicts. Resolution deterministically orders additions and creates review
@@ -225,7 +241,25 @@ preserved project memory such as implementation notes and verification
 evidence. Re-resolution updates the former and preserves the latter according
 to their schemas and staleness rules.
 
-### 3.6 Evidence
+### 3.6 Context module
+
+A context module is one semantic input with a package-local identity, native
+format, entrypoint, source, description, and optional applicability. A module
+can represent intent, Skill, Behavior, capability, integration, target,
+runbook, eval, policy, evidence, or another namespaced format without making
+those formats interchangeable.
+
+A bridge Skill is a separately declared Skill module that explains how a
+Skill-aware environment can consume another module. A bridge is selected
+explicitly during authoring. It does not replace a native adapter, change the
+target format, or grant authority.
+
+Resolution materializes available modules and preserves their logical bindings.
+Context preparation selects modules for one request and records exact bytes and
+mechanisms. Reported use remains separate from delivery, obedience, or
+satisfaction.
+
+### 3.7 Evidence
 
 Evidence identifies the subject it supports. A reusable package claim, a
 capability realization, a project realization, and a real-world outcome are
@@ -243,16 +277,21 @@ The language lifecycle is:
 2. **Distribute** — move or publish the complete package bytes.
 3. **Inspect** — read identity, intent, choices, and trust boundaries.
 4. **Validate** — establish structural and semantic package validity.
-5. **Select** — choose a root, additions, configuration, decisions, artifacts,
-   implementation preferences, and completion scope.
+5. **Select** — choose a root and explicit additions; include their recursively
+   bundled children; then choose configuration, decisions, artifacts,
+   implementation preferences, and completion scope. Authors select bridge
+   bindings before distribution. Context requests select modules after
+   resolution.
 6. **Resolve** — create the deterministic project handoff and resolution
    receipt without executing package content.
-7. **Resolve optional resources** — only through the explicit network-capable
+7. **Prepare context** — select and transform relevant modules for one request.
+8. **Record context use** — bind a consumer's report to the prepared bundle.
+9. **Resolve optional resources** — only through the explicit network-capable
    operation and only with required integrity checks.
-8. **Implement** — a user-chosen agent or environment realizes the resolved
+10. **Implement** — a user-chosen agent or environment realizes the resolved
    intent under its own authority.
-9. **Verify** — record evidence against the agreed subject and completion scope.
-10. **Re-resolve** — update protocol-owned state when packages or selections
+11. **Verify** — record evidence against the agreed subject and completion scope.
+12. **Re-resolve** — update protocol-owned state when packages or selections
     change while preserving designated project memory.
 
 The protocol ends at the handoff and evidence boundary. Implementation remains
@@ -260,13 +299,17 @@ outside the SeedSpec runtime.
 
 ## 5. Protocol operations
 
-SeedSpec defines five normative operations:
+SeedSpec defines nine normative operations:
 
 | Operation | Contract |
 | --- | --- |
 | `validate` | Read a package offline and return valid package information or stable diagnostics. Write nothing. |
 | `digest` | Read a valid package offline and return its canonical digest. Write nothing. |
-| `resolve` | Read selected packages and adopter inputs offline and atomically produce a complete `.seedspec/` handoff. |
+| `resolve` | Read selected packages, recursively bundled children, and adopter inputs offline; preserve every composition edge; and atomically produce a complete `.seedspec/` handoff. |
+| `discover-integrations` | Read integration metadata and verify advertised assets without loading adapter code. |
+| `validate-context-module` | Invoke one explicitly registered adapter against one module and report native validity separately. |
+| `prepare-context` | Select request-specific modules and atomically produce a digest-bound bundle and receipt. |
+| `record-context-use` | Bind one consumer's reported use to an exact prepared bundle. |
 | `resolve-resources` | Explicitly acquire optional implementation resources, verify their bytes, and record the source used. This is the only network-capable protocol operation. |
 | `capability-conformance` | Inspect a supplied result and its exact bindings without implicitly executing the declared suite. |
 
@@ -316,8 +359,9 @@ changes for author review rather than guessing.
 
 ## 8. Trust boundary
 
-All package content is untrusted input, including Markdown, schemas, examples,
-artifacts, tasks, tools, skills, and remote references.
+All package and integration content is untrusted input, including Markdown,
+schemas, examples, artifacts, tasks, tools, Skills, adapter code, descriptors,
+and remote references.
 
 Validation and resolution:
 
@@ -332,11 +376,19 @@ Validation and resolution:
 resources. It remains subject to HTTPS, network isolation, size, path, and
 digest-verification requirements.
 
-## 9. Current 0.2 boundary
+Integration discovery MUST NOT import adapter code. A host that explicitly
+loads an adapter executes code under its own trust policy after digest and
+identity verification. Context preparation MUST recheck resolved module
+digests, verify the resolution receipt and protocol-owned handoff bytes, write
+outside the resolved workspace, and remain offline. Reported-use recording
+MUST recheck the exact prepared files before binding a consumer claim.
 
-Protocol 0.2 defines package structure, deterministic digesting, declaration
-analysis, explicit selections, resolution, optional implementation-resource
-acquisition, and scoped evidence state.
+## 9. Protocol boundary
+
+The protocol defines package structure, deterministic digesting, declaration
+analysis, explicit selections, resolution, format-integration discovery,
+native module validation, context preparation and receipts, optional
+implementation-resource acquisition, and scoped evidence state.
 
 It does not yet define package registries or dependency acquisition, publisher
 identity or signing, automatic migration execution, remote artifact

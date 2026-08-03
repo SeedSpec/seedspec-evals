@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seedspec.dev/releases/0.3.0/schemas/context-index.schema.json",
+  "title": "Resolved SeedSpec Context Index 0.3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol_version", "modules"],
+  "properties": {
+    "protocol_version": { "const": "0.3" },
+    "modules": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/resolvedModule" }
+    }
+  },
+  "$defs": {
+    "namespacedId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:\\.[a-z0-9][a-z0-9-]*){2,}$"
+    },
+    "localId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "qualifiedModuleId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:\\.[a-z0-9][a-z0-9-]*){2,}/[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "relativePath": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9][A-Za-z0-9._-]*)*/?$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "contextPurpose": {
+      "oneOf": [
+        { "enum": ["author", "implement", "review", "evaluate", "verify", "operate"] },
+        { "$ref": "#/$defs/namespacedId" }
+      ]
+    },
+    "contextAudience": {
+      "oneOf": [
+        { "enum": ["authoring-agent", "implementing-agent", "target-agent", "reviewer", "evaluator", "operator", "end-user"] },
+        { "$ref": "#/$defs/namespacedId" }
+      ]
+    },
+    "applicability": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "purposes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/contextPurpose" }
+        },
+        "audiences": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/contextAudience" }
+        },
+        "capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/namespacedId" }
+        },
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/namespacedId" }
+        }
+      },
+      "minProperties": 1
+    },
+    "moduleSource": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "path"],
+          "properties": {
+            "kind": { "const": "package" },
+            "path": { "$ref": "#/$defs/relativePath" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id"],
+          "properties": {
+            "kind": { "const": "artifact" },
+            "id": { "$ref": "#/$defs/localId" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id"],
+          "properties": {
+            "kind": { "const": "resource" },
+            "id": { "$ref": "#/$defs/namespacedId" }
+          }
+        }
+      ]
+    },
+    "resolvedBridge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["skill"],
+      "properties": {
+        "skill": { "$ref": "#/$defs/qualifiedModuleId" },
+        "applies_to": { "$ref": "#/$defs/applicability" },
+        "description": { "type": "string", "minLength": 1, "maxLength": 500 }
+      }
+    },
+    "resolvedModule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "package",
+        "package_digest",
+        "id",
+        "qualified_id",
+        "role",
+        "format",
+        "description",
+        "entrypoint",
+        "source",
+        "availability"
+      ],
+      "properties": {
+        "package": { "$ref": "#/$defs/namespacedId" },
+        "package_digest": { "$ref": "#/$defs/digest" },
+        "id": { "$ref": "#/$defs/localId" },
+        "qualified_id": { "$ref": "#/$defs/qualifiedModuleId" },
+        "role": { "enum": ["primary-intent", "supporting"] },
+        "format": { "$ref": "#/$defs/namespacedId" },
+        "description": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "entrypoint": { "$ref": "#/$defs/relativePath" },
+        "format_version": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "conforms_to": { "type": "string", "format": "uri" },
+        "source": { "$ref": "#/$defs/moduleSource" },
+        "availability": { "enum": ["materialized", "declared"] },
+        "root": { "$ref": "#/$defs/relativePath" },
+        "url": { "type": "string", "format": "uri" },
+        "content_digest": { "$ref": "#/$defs/digest" },
+        "content_digest_scope": { "enum": ["entrypoint", "module"] },
+        "applies_to": { "$ref": "#/$defs/applicability" },
+        "bridges": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/resolvedBridge" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "availability": { "const": "materialized" } },
+            "required": ["availability"]
+          },
+          "then": { "required": ["root", "content_digest", "content_digest_scope"] }
+        }
+      ]
+    }
+  }
+}

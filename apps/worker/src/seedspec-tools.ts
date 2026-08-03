@@ -1,6 +1,6 @@
 import type { WorkspaceLike } from "@cloudflare/think";
 import type { EvaluationStage, EvaluationVariant } from "@seedspec/eval-core";
-import seedSpecManifestSchema from "@seedspec/protocol/schemas/v0.2/seedspec.schema.json" with { type: "json" };
+import seedSpecManifestSchema from "@seedspec/protocol/schemas/v0.3/seedspec.schema.json" with { type: "json" };
 import { Ajv2020, type ErrorObject } from "ajv/dist/2020.js";
 import { tool, type ToolSet } from "ai";
 import { parse as parseYaml } from "yaml";
@@ -8,7 +8,7 @@ import { z } from "zod";
 
 import { FROZEN_PROTOCOL_SNAPSHOT } from "./protocol-snapshot.generated.js";
 
-const PROTOCOL_VERSION = "0.2";
+const PROTOCOL_VERSION = "0.3";
 const PROTOCOL_PACKAGE_VERSION = FROZEN_PROTOCOL_SNAPSHOT.version;
 const TOOL_FORMAT_VERSION = "0.2.0";
 const KINDS = ["solution", "application", "feature", "workflow", "automation", "configuration", "integration"] as const;
@@ -71,7 +71,7 @@ export function createSeedSpecTools(
   if (["raw-source", "markdown-authored"].includes(variant)) return {};
   const shared = {
     seedspec_package_check: tool({
-      description: "Validate a SeedSpec 0.2 package in the Think workspace using the canonical @seedspec/protocol manifest schema plus package references, semantics, configuration, resources, and digest checks.",
+      description: "Validate a SeedSpec 0.3 package in the Think workspace using the canonical @seedspec/protocol manifest schema plus package references, semantics, configuration, resources, and digest checks.",
       inputSchema: z.strictObject({ root: RootSchema }),
       execute: async ({ root }) => checkPackage(workspace, root),
     }),
@@ -279,10 +279,8 @@ function result(ok: boolean, errors: Diagnostic[], warnings: Diagnostic[]): Vali
 }
 
 function collectReferences(manifest: Record<string, unknown>): Reference[] {
-  const definition = asRecord(manifest["definition"]);
   const configuration = asRecord(manifest["configuration"]);
   const references: Reference[] = [
-    { label: "definition.entrypoint", path: String(definition["entrypoint"]), expected: "file" },
     { label: "configuration.schema", path: String(configuration["schema"]), expected: "file" },
     { label: "configuration.example", path: String(configuration["example"]), expected: "file" },
   ];
@@ -301,6 +299,29 @@ function collectReferences(manifest: Record<string, unknown>): Reference[] {
   for (const artifact of artifacts) {
     const path = artifact["path"];
     if (typeof path === "string") references.push({ label: `artifacts.${String(artifact["id"])}.path`, path, expected: "exists" });
+  }
+  const resources = asRecordArray(asRecord(manifest["implementation_resources"])["resources"]);
+  for (const module of asRecordArray(asRecord(manifest["context"])["modules"])) {
+    const source = asRecord(module["source"]);
+    const entrypoint = String(module["entrypoint"]);
+    const moduleId = String(module["id"]);
+    if (source["kind"] === "package" && typeof source["path"] === "string") {
+      references.push({ label: `context.modules.${moduleId}.source.path`, path: source["path"], expected: "exists" });
+      if (!source["path"].endsWith(`/${entrypoint}`) && source["path"] !== entrypoint) {
+        references.push({ label: `context.modules.${moduleId}.entrypoint`, path: joinPath(source["path"], entrypoint), expected: "file" });
+      }
+    } else if (source["kind"] === "artifact") {
+      const artifact = artifacts.find((candidate) => candidate["id"] === source["id"]);
+      if (typeof artifact?.["path"] === "string") {
+        references.push({ label: `context.modules.${moduleId}.entrypoint`, path: moduleEntrypointPath(artifact["path"], entrypoint), expected: "file" });
+      }
+    } else if (source["kind"] === "resource") {
+      const resource = resources.find((candidate) => candidate["id"] === source["id"]);
+      const bundled = asRecord(resource?.["bundled"]);
+      if (typeof bundled["path"] === "string") {
+        references.push({ label: `context.modules.${moduleId}.entrypoint`, path: joinPath(bundled["path"], entrypoint), expected: "file" });
+      }
+    }
   }
   return references.toSorted((left, right) => compareUtf8(left.path, right.path));
 }
@@ -359,12 +380,42 @@ function manifestSemanticErrors(manifest: Record<string, unknown>): string[] {
     if (!artifactIds.has(to)) details.push(`relationships references unknown target artifact ${to}`);
   }
 
+  const modules = asRecordArray(asRecord(manifest["context"])["modules"]);
+  const moduleIds = new Set(modules.map((module) => String(module["id"])));
+  for (const id of duplicateIds(modules)) details.push(`context.modules repeats ${id}`);
+  const primaryModule = asRecord(manifest["definition"])["module"];
+  if (!moduleIds.has(String(primaryModule))) details.push(`definition.module references unknown context module ${String(primaryModule)}`);
+  for (const module of modules) {
+    const source = asRecord(module["source"]);
+    if (source["kind"] === "artifact" && !artifactIds.has(String(source["id"]))) {
+      details.push(`context module ${String(module["id"])} references unknown artifact ${String(source["id"])}`);
+    }
+    if (source["kind"] === "resource" && !resourceIds.has(String(source["id"]))) {
+      details.push(`context module ${String(module["id"])} references unknown implementation resource ${String(source["id"])}`);
+    }
+    for (const bridge of asRecordArray(module["bridges"])) {
+      if (!moduleIds.has(String(bridge["skill"]))) {
+        details.push(`context module ${String(module["id"])} references unknown bridge Skill ${String(bridge["skill"])}`);
+      }
+    }
+  }
+
   const conflicts = asRecord(manifest["conflicts"]);
   const packageConflicts = asRecordArray(conflicts["packages"]);
   if (packageConflicts.some((conflict) => conflict["id"] === manifest["id"])) details.push("a package cannot conflict with itself");
   for (const id of duplicateIds(packageConflicts)) details.push(`conflicts.packages repeats ${id}`);
   for (const id of duplicateIds(asRecordArray(conflicts["capabilities"]))) details.push(`conflicts.capabilities repeats ${id}`);
   return [...new Set(details)];
+}
+
+function joinPath(root: string, entrypoint: string): string {
+  return `${root.replace(/\/$/u, "")}/${entrypoint}`;
+}
+
+function moduleEntrypointPath(sourcePath: string, entrypoint: string): string {
+  return sourcePath.endsWith(`/${entrypoint}`) || sourcePath === entrypoint
+    ? sourcePath
+    : joinPath(sourcePath, entrypoint);
 }
 
 async function implementationResourceErrors(workspace: WorkspaceLike, root: string, manifest: Record<string, unknown>): Promise<Diagnostic[]> {

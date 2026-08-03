@@ -1,6 +1,6 @@
 {
   "name": "@seedspec/protocol",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Schemas and metadata for portable, agent-ready SeedSpec packages",
   "keywords": [
     "seedspec",
@@ -16,13 +16,13 @@
     "./conformance-bundle.json": "./conformance-bundle.json",
     "./protocol-release.json": "./protocol-release.json",
     "./documents/*": "./documents/*",
-    "./schemas/*": "./schemas/*"
+    "./schemas/v0.3/*": "./schemas/v0.3/*"
   },
   "files": [
     "protocol-release.json",
     "conformance-bundle.json",
     "documents",
-    "schemas",
+    "schemas/v0.3",
     "src",
     "README.md"
   ],

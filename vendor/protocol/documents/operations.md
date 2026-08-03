@@ -24,8 +24,9 @@ Every operation:
 
 **Purpose:** Determine whether one package follows the exact protocol release.
 
-**Reads:** The package directory, its manifest, and package-local files required
-by validation.
+**Reads:** The complete package directory, its manifest, package-local files
+required by validation, locally available context-module entrypoints and bridge
+Skill frontmatter, and every recursively bundled child package.
 
 **Writes:** Nothing.
 
@@ -70,10 +71,10 @@ A lower-level directory-digest utility is not the protocol `digest` operation.
 **Purpose:** Convert selected packages and recorded adopter inputs into one
 durable project handoff.
 
-**Reads:** A valid root package, zero or more valid additions, and any supplied
-configuration selections, applied intent, completion scope, technical
-preferences, artifact selections, decision answers, or implementation-profile
-preferences.
+**Reads:** A valid root package, zero or more valid explicit additions, every
+recursively bundled child, and any supplied configuration selections, applied
+intent, completion scope, technical preferences, artifact selections, decision
+answers, or implementation-profile preferences.
 
 **Writes:** One `.seedspec/` workspace and, when missing, the project-root
 `AGENTS.md` handoff notice defined by the reference tooling.
@@ -81,8 +82,14 @@ preferences.
 **Network:** Forbidden.
 
 **Success:** Produces schema-valid resolved state, deterministic protocol-owned
-files, preserved project-memory files, and `resolution-receipt.json`. The
-project status is `ready` or `needs-input`.
+files, preserved parent-to-child composition edges and integration Markdown,
+preserved project-memory files, and `resolution-receipt.json`. The project
+status is `ready` or `needs-input`.
+
+Success also produces `context-index.yaml`, materializes locally available
+module bytes under `context/`, and binds the index and directories into the
+resolution receipt. Declared remote module sources remain unavailable until
+their source operation makes verified bytes available.
 
 **Failure:** Leaves the previously complete `.seedspec/` workspace unchanged.
 When no previous workspace exists, failure leaves no `.seedspec/` workspace.
@@ -100,8 +107,107 @@ A failed resolve never publishes a partially updated handoff.
   new handoff.
 
 Resolution analyzes declarations and records review. It does not install a
-provider, execute an artifact, consult a skill, or observe the actual
-realization.
+provider, execute an artifact, consult a Skill, prepare request-specific
+context, or observe the actual realization.
+
+## `discover-integrations`
+
+**Purpose:** Report format integrations compatible with declared context
+modules.
+
+**Reads:** One valid package and explicitly supplied local integration
+descriptors and assets.
+
+**Writes:** Nothing.
+
+**Network:** Forbidden.
+
+**Success:** Reports compatible and incompatible integrations, exact descriptor
+digests, advertised adapters, and default bridges.
+
+**Failure:** Returns a stable descriptor, path, digest, duplicate, or
+compatibility diagnostic.
+
+**Repeat behavior:** Identical package, descriptor, and asset bytes produce the
+same discovery result.
+
+Discovery validates metadata and asset identity. It MUST NOT import adapter
+code, install a Skill, or modify the package.
+
+## `validate-context-module`
+
+**Purpose:** Apply explicit format-specific validation to one context module.
+
+**Reads:** One valid package, one declared module with local bytes, and one
+explicitly registered compatible adapter.
+
+**Writes:** Nothing.
+
+**Network:** Forbidden.
+
+**Success:** Reports the package, qualified module identity, source digest,
+adapter identity, validity, issues, and optional summary.
+
+**Failure:** Returns a stable module, availability, adapter, ambiguity, or
+adapter-result diagnostic.
+
+**Repeat behavior:** Determinism beyond the exact input bytes and adapter
+version is an adapter claim, not a core protocol claim.
+
+Native validity does not replace SeedSpec package validity.
+
+## `prepare-context`
+
+**Purpose:** Prepare request-specific context from one resolved project.
+
+**Reads:** `context-index.yaml`, the bound resolution receipt, materialized
+module bytes, one valid context request, and any adapters explicitly registered
+by the host.
+
+**Writes:** One context-bundle directory containing prepared module files,
+selected source files, bridge assets, `context-bundle.yaml`, and
+`preparation-receipt.json`.
+
+**Network:** Forbidden.
+
+**Success:** Verifies the resolution receipt, protocol-owned handoff bytes, and
+source digests; applies deterministic applicability; selects native adapter,
+bridge Skill, or plain-Markdown mechanisms; validates the bundle and receipt;
+and commits the separate output atomically.
+
+**Failure:** Leaves the previous complete output unchanged. It never publishes
+a partial bundle.
+
+**Repeat behavior:** The same exact release, resolved bytes, request, adapter
+versions, and adapter results produce the same bundle identity. A use receipt
+is not part of preparation identity.
+
+Preparation does not execute scripts, install Skills, use credentials, access
+the network, or authorize external effects.
+
+## `record-context-use`
+
+**Purpose:** Record what one consumer reports doing with a prepared bundle.
+
+**Reads:** One valid bundle, its preparation receipt, and one use report that
+covers every prepared module.
+
+**Writes:** One `context-use-receipt.json` at the caller-selected location.
+
+**Network:** Forbidden.
+
+**Success:** Rechecks bundle and receipt identities plus all prepared output,
+source, and bridge bytes. It then binds the consumer claim to the exact
+preparation receipt and bundle. Each module is `consulted`,
+`partially-consulted`, or `skipped`.
+
+**Failure:** Does not change the prepared bundle or publish a partial receipt.
+
+**Repeat behavior:** The receipt ID binds the reported subject. `observed_at`
+records when the claim was written.
+
+This operation records telemetry. It does not prove compliance, correctness,
+or outcome success.
 
 ## `resolve-resources`
 
