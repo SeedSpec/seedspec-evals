@@ -95,6 +95,19 @@ network-denied sandbox. Summaries retain per-arm score distributions and paired
 skill wins, ties, losses, and median score deltas. Manual finalization is
 available for already captured evidence:
 
+Behavioral plan schema version 2 adds two design boundaries before execution:
+
+- every seam declares the capability, why the prompt makes that capability
+  necessary, and the independently observable success condition; and
+- every suite declares whether the selected runner uses its active entrypoint
+  or a reconstruction, then classifies each dependency as `live`, `frozen`, or
+  `simulated` with its binding, provenance, effects, and treatment availability.
+
+Live dependencies must be read-only. Mutable dependencies must be isolated and
+declare how state resets. A reconstruction must name the behavior it cannot
+preserve. These design records remain evaluator-only; the subject receives the
+scenario and output contract, not the success definition or dependency ledger.
+
 Use `--case` to rerun only seams affected by a skill or contract revision. This
 keeps a saturated regression guard from consuming the same budget as a seam
 that is still producing information.

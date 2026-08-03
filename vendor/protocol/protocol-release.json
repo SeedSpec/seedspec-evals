@@ -1,170 +1,202 @@
 {
   "manifest_version": "1",
-  "protocol_family": "0.2",
-  "release_id": "0.2.0",
+  "protocol_family": "0.3",
+  "release_id": "0.3.0",
   "status": "experimental",
   "schema_package": {
     "name": "@seedspec/protocol",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "schemas": [
     {
-      "path": "packages/protocol/schemas/v0.2/application.schema.json",
-      "digest": "sha256:1e8f65cb106033491b40a3cd123ae5a5eecc6573435b3c29437448dadd03027b"
+      "path": "packages/protocol/schemas/v0.3/application.schema.json",
+      "digest": "sha256:0b9c64704464334f65f55812e4b40e8a071888060d8b02ab54a23a00670333c1"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/applied-intent-input.schema.json",
-      "digest": "sha256:4a2af648b558cd48202c17eb8217588a577b29bf51337c7de6df9dca8a6d03e0"
+      "path": "packages/protocol/schemas/v0.3/applied-intent-input.schema.json",
+      "digest": "sha256:6db75d3333e16b64f5775a0c0dec06ebcdaf075a64efdbca5c2573d92dfc7714"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/artifact-index.schema.json",
-      "digest": "sha256:cce961233d4c747f060e99eba304ca7d0a1b32f1b0f88e4208b0044a67c674dd"
+      "path": "packages/protocol/schemas/v0.3/artifact-index.schema.json",
+      "digest": "sha256:d82952e8aa14e2a610e62d82c0b9d62a49acc10c2e934fafd93c8796ca64808e"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/artifact-selections.schema.json",
-      "digest": "sha256:93a05f4c52286a82fef864a70dd8c83056ac63a91b42066a38211381b5469420"
+      "path": "packages/protocol/schemas/v0.3/artifact-selections.schema.json",
+      "digest": "sha256:7fe82e5eabaea62f03298a616c0e45d2c5000e8533ff7e9bd4ca9ac5cca9ebce"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/capability-conformance-result.schema.json",
-      "digest": "sha256:5a1701a1563e210a8b8ec7dbfa24564d6d4bc266b43fc0d2f3e60da1bd49ac09"
+      "path": "packages/protocol/schemas/v0.3/capability-conformance-result.schema.json",
+      "digest": "sha256:0118a55db7a76e4f364ebcb6003367f0a80d364bbd2623a874b167acafed331b"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/capability-conformance-suite.schema.json",
-      "digest": "sha256:affb400b285cfeebe4a876eb9cf4eb9f95736b425d2fa44579976c20e9c66def"
+      "path": "packages/protocol/schemas/v0.3/capability-conformance-suite.schema.json",
+      "digest": "sha256:7fff15b0cc31eeb3be7630c92e10fbd65e05e8ff5c2e1428c42aee2f6db4f85c"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/capability-scenarios.schema.json",
-      "digest": "sha256:e3ecc23ed4857310ad1c189b1d4be352df0aa1ac0d07500b7885dcd10b5da09a"
+      "path": "packages/protocol/schemas/v0.3/capability-scenarios.schema.json",
+      "digest": "sha256:4228e8c1df6a47e90d297e18b95a0d5be10fde60e94119e03baa3bb0f4230114"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/completion-scope-input.schema.json",
-      "digest": "sha256:4e8c97d9b0a335a8cacc899c25fcccfb73cffa1d9790c04f8806a5c41958df4c"
+      "path": "packages/protocol/schemas/v0.3/completion-scope-input.schema.json",
+      "digest": "sha256:a24822a1e584cf410bc400db0426dd7e3db16bc374309da2ddb1b5b08123f84d"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/completion-scope.schema.json",
-      "digest": "sha256:2d2edc10538a3139dbe95afea9384aad0c747fbf0ac88c58074678bb088eec29"
+      "path": "packages/protocol/schemas/v0.3/completion-scope.schema.json",
+      "digest": "sha256:47708b5e95da243ae6143216a0b211178f4318a80c3758b818d020e8ce805914"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/component-index.schema.json",
-      "digest": "sha256:2f24c486cf718f78ac3a23b0c30606c67789b9a672e740712b35d676644606a2"
+      "path": "packages/protocol/schemas/v0.3/component-index.schema.json",
+      "digest": "sha256:86ffd92c998313a3c1eb12ba1e21120258c750d5fe6af121e104084f3307c684"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/configuration-selections.schema.json",
-      "digest": "sha256:d186e7ecc9d8d4d32bc580358d085d74c3608c9ef96f287caf6eeec47ee858c2"
+      "path": "packages/protocol/schemas/v0.3/component.schema.json",
+      "digest": "sha256:dbf22ecc8c6898794e3f53473547e049ff1866aa9ce9392bc619e27f6a5e6198"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/conformance-report.schema.json",
-      "digest": "sha256:2d1936a00e1337e97e555fc5bcb52257e5c7bd351e6f6a231e691dc05f97415b"
+      "path": "packages/protocol/schemas/v0.3/configuration-selections.schema.json",
+      "digest": "sha256:eb0ab9cd45a4341b509cef57078aae45a08ea731b10fedeba741491423f66ee0"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/conformance.schema.json",
-      "digest": "sha256:02eb8e9857dfa51486d341bedc3f7c2e07e56e3d84c49711c9f1bb71d5a90769"
+      "path": "packages/protocol/schemas/v0.3/conformance-report.schema.json",
+      "digest": "sha256:f48adaad50713adb7f0af82d8fd9c4cc7c58aecfc1967720e1c43e857b7fd457"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/feature.schema.json",
-      "digest": "sha256:e3300cc6bf586be8e8663f367864b726a4daa163d62cde06c8cb7438a6c691f2"
+      "path": "packages/protocol/schemas/v0.3/conformance.schema.json",
+      "digest": "sha256:65f0282ef4a47336f5bef4669b30563bc6417e01ce9fc7953b43895616022b8d"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/implementation-profile-state.schema.json",
-      "digest": "sha256:9e34bc73949b96836d3df976421ab7b38a97e6ca3499189a43cf87c7d585c67c"
+      "path": "packages/protocol/schemas/v0.3/context-bundle.schema.json",
+      "digest": "sha256:f4f599d537403b03bb0afa1cd4a896ab61cd6c2012c89838a31d7ea2720ed961"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/implementation-resource-index.schema.json",
-      "digest": "sha256:403f1f1c6c2f9329d1450d5b3e6698c241fc8497faaa6bd000191dd14a294480"
+      "path": "packages/protocol/schemas/v0.3/context-index.schema.json",
+      "digest": "sha256:693c80bc04a3162f2bc9e00312512cdedcaa7cfe5b5c864415fd22854790d0e3"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/implementation-resource-manifest.schema.json",
-      "digest": "sha256:cf05dfab07176f5eee9e88224e3ba06e61e1fd71c817c2969de13306ebc86039"
+      "path": "packages/protocol/schemas/v0.3/context-preparation-receipt.schema.json",
+      "digest": "sha256:a2c01a300f2428be1796c2bccfa241088cb4420c42075c460ff774f94d6966e8"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/implementation-resource-state.schema.json",
-      "digest": "sha256:dbfa17bdb6fe03fe004fcbb04d960bc68ecdb6edce6a506fa9b6ce6baafacb67"
+      "path": "packages/protocol/schemas/v0.3/context-request.schema.json",
+      "digest": "sha256:c5823c61a99506a40d9c9e31a87cf7f8db281935be2a80bc47adf4cc5e51228e"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/lock.schema.json",
-      "digest": "sha256:975eabf099c02916de2dd82bb9c36246e32a526d6cc59b7a320f3df48cff2e63"
+      "path": "packages/protocol/schemas/v0.3/context-use-receipt.schema.json",
+      "digest": "sha256:f9bc72ea8a5efedbd072de3a4a0fc91097c429c6db81fc9d25fa9d6915a604f6"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/project.schema.json",
-      "digest": "sha256:eac0925b20952c0887dc4929f578ed5891c12c366d81ea5d7ad7ed607f3d5ad6"
+      "path": "packages/protocol/schemas/v0.3/feature.schema.json",
+      "digest": "sha256:522e33ef58ca063e9867333108120749a7b832ebfce77b675e3d51afd6ccc2dc"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/protocol-release.schema.json",
-      "digest": "sha256:7f3c74450e874cef763a433889255d854da298d9744451ed46167bfd6f03c09f"
+      "path": "packages/protocol/schemas/v0.3/implementation-profile-state.schema.json",
+      "digest": "sha256:2bd3d203ca8be98bda6c1ea5ab68090e208485384721f9fca89e2c0c33f8d774"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/resolution-receipt.schema.json",
-      "digest": "sha256:f47f1ad14b7f175693e4db4708aa30f6d40741fd01d5770ff9c6584912762267"
+      "path": "packages/protocol/schemas/v0.3/implementation-resource-index.schema.json",
+      "digest": "sha256:5196f254e64dfd0637cc670708ea4c3db3b8ea503769259732532f48c3bc1f4e"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/resolved-config.schema.json",
-      "digest": "sha256:fc79fbdc8f29a6c79747d96f9d626095e253acd9691b5b12126e26f9e8bbc5ad"
+      "path": "packages/protocol/schemas/v0.3/implementation-resource-manifest.schema.json",
+      "digest": "sha256:ef3bf9870e780f5abb4d4add536a9b52d251364525695fe900279c8a52e6df49"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/resolved-intent.schema.json",
-      "digest": "sha256:d07aac42a06b42785177a0733632293673b0d50e8dbdbcc37da7ba3cd706fc70"
+      "path": "packages/protocol/schemas/v0.3/implementation-resource-state.schema.json",
+      "digest": "sha256:edf39ff824e1b46caa3054b6f1af777f7f6ad8555122705551406d65f1570bec"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/seedspec.schema.json",
-      "digest": "sha256:d61a5676136d5fc51268e241cd059e11222fa58507dd0587effed58aa5b2f788"
+      "path": "packages/protocol/schemas/v0.3/integration-descriptor.schema.json",
+      "digest": "sha256:7cb10e1839f5a0cf74a83304f42a309682f3ae24da5e1c6c6f6c7de0eabf8984"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/task-index.schema.json",
-      "digest": "sha256:d3768e7e3f201abadac0f1d95aa6057c18c7432f2187167a710bd8cc5696d9cf"
+      "path": "packages/protocol/schemas/v0.3/lock.schema.json",
+      "digest": "sha256:6de0557006f9cb36ed62df3e49cf5a37aead58dd4b9f86c1b042b8c38e5a1fb0"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/task-runbook.schema.json",
-      "digest": "sha256:0f47fcb6d820c677e456fd832541b4587a1e72defdd937bea72fac3c8f414baf"
+      "path": "packages/protocol/schemas/v0.3/project.schema.json",
+      "digest": "sha256:f9bbc04d7fec12a71da9d13b4610b7e56c49638e70955c133c4b47fabca44c67"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/technical-preferences.schema.json",
-      "digest": "sha256:aa0682ee7d60e99e42d7cac0f51fc630646f1bc11c1b03c95476dd247ba12ad7"
+      "path": "packages/protocol/schemas/v0.3/protocol-release.schema.json",
+      "digest": "sha256:bd4c67dfe61f2b367b279a1db951a770664f83ef3ef996d06b7f7367b62797f9"
     },
     {
-      "path": "packages/protocol/schemas/v0.2/verification-state.schema.json",
-      "digest": "sha256:49d4a554019b71a602992ae16c6c774d3686a56366d07832aa3299104a25929c"
+      "path": "packages/protocol/schemas/v0.3/resolution-receipt.schema.json",
+      "digest": "sha256:4b9eed4b3beb74332a3bfb047187303e54751ec847d6092b56ad28b27a87bf43"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.3/resolved-config.schema.json",
+      "digest": "sha256:127a6196bc05f86d8dece23d66d848699234a1ef1ccf2256d9226b12631e9ecd"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.3/resolved-intent.schema.json",
+      "digest": "sha256:1c9208b62bed2f01a1145df9634fd34a67b7341ba43cae4a1e8cfc08d2eabdd0"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.3/seedspec.schema.json",
+      "digest": "sha256:2b2743e6bc3da4c77c033eb9c199c3547380d41d3e3ab3a2b1af1ec78522dd6b"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.3/task-index.schema.json",
+      "digest": "sha256:cf57a2808933940cdd82fb08acce3759787185fade7e2b503c9085dc2f45ad0e"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.3/task-runbook.schema.json",
+      "digest": "sha256:b23ffd3064aeb7459208525739b84862f09a1993fdb28105df6963b1615c3794"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.3/technical-preferences.schema.json",
+      "digest": "sha256:cb92d2b28e457db52f6a3875f1a167632e63efed1168031a4e7712723904394b"
+    },
+    {
+      "path": "packages/protocol/schemas/v0.3/verification-state.schema.json",
+      "digest": "sha256:7dfc4e7c71603abcf2fb3a6079cb1a18372bca70e0a8fb2c592506bbf589e5ed"
     }
   ],
   "documents": [
     {
       "path": "documents/01-language.md",
-      "digest": "sha256:5e2ba6cc662d133904154023f710947ff85f119f5b238257f5b74b80b84c2ac1"
+      "digest": "sha256:a765d466c7a6465c309200d051e467fa8fe35a33faac485c204d0d6ded712273"
     },
     {
       "path": "documents/protocol.md",
-      "digest": "sha256:d566dfbbe37a0d01acc5104f0c83d866eb4b4376e399ede2293c8d727005ff4e"
+      "digest": "sha256:8c4ba9dea5bc688e4de01f862ad08571a5e4159e4292f0932f02fd3e086242a6"
     },
     {
       "path": "documents/operations.md",
-      "digest": "sha256:e7412d8853a987514997d78a637304dd6f58722440181fc0210109ee3eca8800"
+      "digest": "sha256:c9bba1821860a3dc9237ee9557a2f18ff3ece733f6d2f5a008af5cc1d6173582"
     },
     {
       "path": "documents/migrations.md",
-      "digest": "sha256:8dcad9296bb88c64957719ddd7d7be3be1396f4023dd2f52d47310e014e03a51"
+      "digest": "sha256:ebeafd1f42f84649e91b5e913e751e773ec08742978bf6eee8bad9b29f10b313"
     }
   ],
   "operations": [
     "validate",
     "digest",
     "resolve",
+    "discover-integrations",
+    "validate-context-module",
+    "prepare-context",
+    "record-context-use",
     "resolve-resources",
     "capability-conformance"
   ],
   "conformance": {
-    "suite_version": "0.2.0",
+    "suite_version": "0.3.0",
     "index": "conformance/cases.yaml",
     "bundle": "conformance-bundle.json",
-    "index_digest": "sha256:1e3b6418217937b78acaf952c81f1fefd0c72a23ba7cf2f4f04d3c02b7563821",
-    "bundle_digest": "sha256:4698023ace66dd64e9b19a927079ac1a98674797a81292e7aaa28cdedf48e27a"
+    "index_digest": "sha256:3bc846ee4d6878ee2220e1392d4fe979f7db92624ef7cad61270fcf5626953f8",
+    "bundle_digest": "sha256:344043bd3bf33fe015d35be4bc09536925e6ba106124c0d719e8ce27d0a62cd3"
   },
   "implementations": {
     "runtime": {
       "name": "@seedspec/runtime",
-      "version": "0.2.0"
+      "version": "0.3.0"
     },
     "cli": {
       "name": "@seedspec/cli",
-      "version": "0.2.0"
+      "version": "0.3.0"
     }
   },
   "source": {
@@ -172,13 +204,14 @@
   },
   "compatibility": [
     {
+      "from_release": "0.2.3",
+      "status": "unsupported",
+      "notes": "Protocol 0.3 is a clean authoring cut. Reauthor the package with a required primary context module and regenerate all resolved handoffs."
+    },
+    {
       "from_release": "0.1.0-alpha.6",
-      "status": "migrate",
-      "notes": "Set protocol_version to 0.2, revalidate package source, and regenerate resolved handoffs to receive exact 0.2.0 release binding and resolution receipts.",
-      "migration": {
-        "id": "protocol-0-2",
-        "guide": "documents/migrations.md"
-      }
+      "status": "unsupported",
+      "notes": "Protocol 0.3 does not provide an automatic migration from design-preview packages. Reauthor against the 0.3 schemas."
     }
   ]
 }

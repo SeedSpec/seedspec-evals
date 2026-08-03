@@ -47,13 +47,16 @@ A migrator MUST preserve content and provenance, prefer moves or precise field
 rewrites over delete-and-recreate behavior, and refuse to guess when intent
 cannot be inferred safely.
 
-Protocol release `0.2.0` declares a migration from the last `0.1` design
-preview. The package-source change updates `protocol_version` from `0.1` to
-`0.2`; resolved handoffs must be regenerated. The reference CLI provides
-`seedspec upgrade <package> --to 0.2.0 --dry-run` and requires an explicit
-`--write` mode before changing source.
+Protocol release `0.3.0` is a clean authoring cut. It declares earlier exact
+releases unsupported. The required primary context module, unified module
+inventory, explicit source forms, and nested bridge bindings require authors to
+reauthor package structure against the `0.3` schemas. Resolved handoffs must be
+regenerated.
+
+The reference CLI recognizes retired package shapes and returns
+`UNSUPPORTED_PROTOCOL_MIGRATION`. It does not rewrite them. This boundary is
+intentional while SeedSpec has no external adopters.
 
 Authoring workspaces are local process records rather than package content.
-Their instruction, result, and state formats also move to `0.2`. Start a new
-guided preparation workspace for the migrated package instead of copying a
-`0.1` authoring state forward.
+Historical authoring records remain readable under their own format rules, but
+they do not make an old package valid under Protocol 0.3.

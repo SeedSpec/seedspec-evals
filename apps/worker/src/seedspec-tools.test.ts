@@ -50,13 +50,22 @@ function rootRelativeWorkspace(files: Record<string, string>): WorkspaceLike {
 
 const files = {
   "seedspec.yaml": [
-    "protocol_version: '0.2'",
+    "protocol_version: '0.3'",
     "id: dev.seedspec.test-package",
     "name: Test package",
     "version: 0.1.0",
     "kind: application",
     "definition:",
-    "  entrypoint: spec.md",
+    "  module: primary-intent",
+    "context:",
+    "  modules:",
+    "    - id: primary-intent",
+    "      format: org.seedspec.intent.markdown",
+    "      description: Primary intent.",
+    "      entrypoint: spec.md",
+    "      source:",
+    "        kind: package",
+    "        path: spec.md",
     "configuration:",
     "  schema: config.schema.json",
     "  example: config.example.yaml",
@@ -74,7 +83,7 @@ describe("Think SeedSpec workspace tools", () => {
       ok: true,
       canonicalManifestSchema: {
         package: "@seedspec/protocol",
-        version: "0.2.0",
+        version: "0.3.0",
       },
       packageValidationAdapter: "think-workspace",
       manifest: { id: "dev.seedspec.test-package", kind: "application" },

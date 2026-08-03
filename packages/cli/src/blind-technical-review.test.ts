@@ -49,7 +49,7 @@ describe("treatment-blinded technical review", () => {
       models: ["openai/subject-model-that-must-be-hidden"],
       repetitions: 1,
       gatewayId: "seedspec-evals",
-      protocolVersion: "0.2.0",
+      protocolVersion: "0.3.0",
       createdAt: "2026-07-24T12:00:00.000Z",
       maxSteps: 6,
       authoredInput,

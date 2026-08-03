@@ -13,3 +13,9 @@ Each suite owns its structured scenarios, trusted runner scope, untrusted or
 buyer-facing inputs, deterministic observation contract, and retained evidence
 requirements. Model runs remain explicit and must preserve exact suite,
 instruction, runner, model, environment, and tool identities.
+
+Behavioral suites also own an execution contract. It records active-entrypoint
+or reconstruction fidelity and classifies dependencies as live, frozen, or
+simulated. Each seam records one capability, why the task requires it, and an
+independently observable success condition. These fields guide case review and
+remain hidden from the subject.

@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seedspec.dev/releases/0.3.0/schemas/context-request.schema.json",
+  "title": "SeedSpec Context Preparation Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["request_version", "summary", "purpose", "audiences"],
+  "properties": {
+    "request_version": { "const": "1" },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 4000 },
+    "purpose": { "$ref": "#/$defs/contextPurpose" },
+    "audiences": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/contextAudience" }
+    },
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/namespacedId" }
+    },
+    "targets": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/namespacedId" }
+    },
+    "include_modules": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/moduleSelector" }
+    },
+    "exclude_modules": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/moduleSelector" }
+    },
+    "adapter_selections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["module", "adapter"],
+        "properties": {
+          "module": { "$ref": "#/$defs/moduleSelector" },
+          "adapter": { "$ref": "#/$defs/namespacedId" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "namespacedId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:\\.[a-z0-9][a-z0-9-]*){2,}$"
+    },
+    "localId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "qualifiedModuleId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:\\.[a-z0-9][a-z0-9-]*){2,}/[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "moduleSelector": {
+      "oneOf": [
+        { "$ref": "#/$defs/localId" },
+        { "$ref": "#/$defs/qualifiedModuleId" }
+      ]
+    },
+    "contextPurpose": {
+      "oneOf": [
+        { "enum": ["author", "implement", "review", "evaluate", "verify", "operate"] },
+        { "$ref": "#/$defs/namespacedId" }
+      ]
+    },
+    "contextAudience": {
+      "oneOf": [
+        { "enum": ["authoring-agent", "implementing-agent", "target-agent", "reviewer", "evaluator", "operator", "end-user"] },
+        { "$ref": "#/$defs/namespacedId" }
+      ]
+    }
+  }
+}

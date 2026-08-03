@@ -16,6 +16,93 @@ import { EvaluatorUsageSchema } from "./evaluator-runs.js";
 
 export const BehavioralSeamTreatmentSchema = z.enum(["no-guidance", "skill-guidance"]);
 
+export const BehavioralDependencyModeSchema = z.enum(["live", "frozen", "simulated"]);
+
+export const BehavioralDependencyBindingSchema = z.enum([
+  "in-process",
+  "network",
+  "mcp",
+  "cli",
+  "filesystem",
+  "browser",
+]);
+
+export const BehavioralDependencySchema = z.strictObject({
+  id: IdentifierSchema,
+  mode: BehavioralDependencyModeSchema,
+  binding: BehavioralDependencyBindingSchema,
+  behavior: z.string().trim().min(1).max(4_000),
+  source: z.string().trim().min(1).max(2_000),
+  effects: z.enum(["read-only", "isolated-mutation"]),
+  reset: z.string().trim().min(1).max(2_000).optional(),
+  treatments: z.array(BehavioralSeamTreatmentSchema).min(1).max(2),
+}).superRefine((dependency, context) => {
+  if (new Set(dependency.treatments).size !== dependency.treatments.length) {
+    context.addIssue({
+      code: "custom",
+      message: "dependency treatments must be unique",
+      path: ["treatments"],
+    });
+  }
+  if (dependency.mode === "live" && dependency.effects !== "read-only") {
+    context.addIssue({
+      code: "custom",
+      message: "live dependencies must be read-only; simulate mutations instead",
+      path: ["effects"],
+    });
+  }
+  if (dependency.effects === "isolated-mutation" && dependency.reset === undefined) {
+    context.addIssue({
+      code: "custom",
+      message: "isolated mutation dependencies require a reset contract",
+      path: ["reset"],
+    });
+  }
+});
+
+export const BehavioralRuntimeSchema = z.discriminatedUnion("mode", [
+  z.strictObject({
+    mode: z.literal("active-entrypoint"),
+    target: z.string().trim().min(1).max(2_000),
+    preservedBehavior: z.string().trim().min(1).max(4_000),
+  }),
+  z.strictObject({
+    mode: z.literal("reconstruction"),
+    target: z.string().trim().min(1).max(2_000),
+    preservedBehavior: z.string().trim().min(1).max(4_000),
+    unsupportedBehavior: z.string().trim().min(1).max(4_000),
+  }),
+]);
+
+export const BehavioralExecutionContractSchema = z.strictObject({
+  runtime: BehavioralRuntimeSchema,
+  dependencies: z.array(BehavioralDependencySchema).min(1).max(64),
+}).superRefine((execution, context) => {
+  const dependencyIds = execution.dependencies.map(({ id }) => id);
+  if (new Set(dependencyIds).size !== dependencyIds.length) {
+    context.addIssue({
+      code: "custom",
+      message: "behavioral execution dependency IDs must be unique",
+      path: ["dependencies"],
+    });
+  }
+  for (const treatment of BehavioralSeamTreatmentSchema.options) {
+    if (!execution.dependencies.some((dependency) => dependency.treatments.includes(treatment))) {
+      context.addIssue({
+        code: "custom",
+        message: `behavioral execution must declare at least one dependency for ${treatment}`,
+        path: ["dependencies"],
+      });
+    }
+  }
+});
+
+export const BehavioralSeamDesignSchema = z.strictObject({
+  capability: z.string().trim().min(1).max(4_000),
+  necessity: z.string().trim().min(1).max(4_000),
+  success: z.string().trim().min(1).max(4_000),
+});
+
 const BehavioralExpectationSchema = z.strictObject({
   consultedSkill: z.boolean(),
   includeActions: z.array(IdentifierSchema).max(64),
@@ -138,6 +225,7 @@ export const BehavioralSeamCaseSchema = z.strictObject({
   id: IdentifierSchema,
   kind: z.enum(["activation", "restraint", "protocol", "fallback"]),
   description: z.string().trim().min(1).max(4_000),
+  design: BehavioralSeamDesignSchema,
   prompt: z.string().trim().min(1).max(16_000),
   actions: z.array(z.strictObject({
     id: IdentifierSchema,
@@ -204,7 +292,7 @@ export const BehavioralSeamTaskSchema = z
   });
 
 export const BehavioralSeamPlanBodySchema = z.strictObject({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   createdAt: IsoTimestampSchema,
   skill: z.strictObject({
     id: IdentifierSchema,
@@ -213,6 +301,7 @@ export const BehavioralSeamPlanBodySchema = z.strictObject({
   }),
   models: z.array(z.string().trim().min(1).max(256)).min(1).max(64),
   repetitions: z.number().int().positive().max(100),
+  execution: BehavioralExecutionContractSchema,
   cases: z.array(BehavioralSeamCaseSchema).min(1).max(256),
   tasks: z.array(BehavioralSeamTaskSchema).min(1).max(100_000),
   interpretation: z.literal(
